@@ -1,60 +1,74 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 
+import { ArchiveCard } from '@/components/archive/archive-card'
+import { Container } from '@/components/layout/container'
+import { PageHeader } from '@/components/layout/page-header'
+import { ArchiveCardSkeleton } from '@/components/state/archive-card-skeleton'
+import { EmptyState } from '@/components/state/empty-state'
+import { ErrorState } from '@/components/state/error-state'
 import { marketplaceListQuery, toUserMessage } from '@/lib/api'
+import { useI18n } from '@/lib/i18n'
 
 export const Route = createFileRoute('/')({
   component: CatalogPage,
 })
 
 /**
- * Временный каталог: проверяет сквозную работу API-слоя и моков.
- * Полноценная страница с сортировками и дизайном придёт на S3.
+ * Каталог на дизайн-языке S2. Сортировки, поиск и переход на страницу архива
+ * приходят на S3–S4; здесь показан сам список и три его состояния.
  */
 function CatalogPage() {
-  const { data, isPending, isError, error } = useQuery(marketplaceListQuery({ sort: 'popular_week' }))
+  const { t, format } = useI18n()
+  const { data, isPending, isError, error, refetch } = useQuery(
+    marketplaceListQuery({ sort: 'popular_week' }),
+  )
+
+  const total = data?.total ?? 0
 
   return (
-    <section className="space-y-6">
-      <div className="space-y-2">
-        <h1 className="font-heading text-3xl font-semibold tracking-tight">Marketplace</h1>
-        <p className="text-muted-foreground max-w-prose">
-          Защищённые архивы <code>.slr</code>. Скачать может любой без регистрации, открыть — только
-          после оплаты в USDC внутри SolArch Viewer.
-        </p>
-      </div>
+    <Container>
+      <PageHeader
+        title={t.catalog.title}
+        lead={t.catalog.lead}
+        aside={
+          data && (
+            <p className="numeric text-muted-foreground text-sm">
+              {format.count(total)} {t.units.archives(total)}
+            </p>
+          )
+        }
+      />
 
-      {isPending && <p className="text-muted-foreground text-sm">Загрузка каталога…</p>}
+      {isPending && (
+        <div className="space-y-3" aria-busy="true" aria-label={t.catalog.loading}>
+          <ArchiveCardSkeleton />
+          <ArchiveCardSkeleton />
+          <ArchiveCardSkeleton />
+        </div>
+      )}
 
       {isError && (
-        <p className="text-destructive text-sm" role="alert">
-          {toUserMessage(error)}
-        </p>
+        <ErrorState
+          title={t.catalog.error.title}
+          message={toUserMessage(error)}
+          onRetry={() => void refetch()}
+        />
       )}
 
       {data && data.items.length === 0 && (
-        <p className="text-muted-foreground text-sm">Пока не опубликовано ни одного архива.</p>
+        <EmptyState title={t.catalog.empty.title} body={t.catalog.empty.body} />
       )}
 
       {data && data.items.length > 0 && (
-        <ul className="grid gap-3 sm:grid-cols-2">
+        <ul className="space-y-3">
           {data.items.map((archive) => (
-            <li key={archive.archive_id} className="rounded-lg border p-4">
-              <h2 className="font-medium">{archive.title}</h2>
-              <p className="text-muted-foreground mt-1 line-clamp-2 text-sm">
-                {archive.short_description}
-              </p>
-              <div className="text-muted-foreground mt-3 flex items-center gap-4 text-xs">
-                <span className="text-foreground font-medium">
-                  {archive.price.amount} {archive.price.currency}
-                </span>
-                <span>{archive.file_count} файлов</span>
-                <span>{archive.metrics.paid_unlocks} покупок</span>
-              </div>
+            <li key={archive.archive_id}>
+              <ArchiveCard archive={archive} />
             </li>
           ))}
         </ul>
       )}
-    </section>
+    </Container>
   )
 }
