@@ -5,7 +5,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
 
 import { I18nProvider } from '@/lib/i18n'
-import { queryClient } from '@/lib/query-client'
+import { handleUnauthorized, queryClient } from '@/lib/query-client'
 import { routeTree } from './routeTree.gen'
 
 import './index.css'
@@ -15,6 +15,15 @@ const router = createRouter({
   context: { queryClient },
   defaultPreload: 'intent',
   scrollRestoration: true,
+})
+
+/**
+ * Истёкшая сессия обнуляется в кеше запросов, а увести человека наружу умеет
+ * только роутер: `invalidate` перезапускает guard кабинета, и дальше срабатывает
+ * тот же путь, что и для обычного гостя.
+ */
+handleUnauthorized(() => {
+  void router.invalidate()
 })
 
 declare module '@tanstack/react-router' {
@@ -33,6 +42,10 @@ async function enableMocking() {
 
   const { worker } = await import('@/mocks/browser')
   await worker.start({ onUnhandledRequest: 'bypass' })
+
+  // Без расширения в браузере вход пройти нечем, а проверять его надо каждый день.
+  const { registerDemoWallet } = await import('@/mocks/demo-wallet')
+  registerDemoWallet()
 }
 
 const rootElement = document.getElementById('root')

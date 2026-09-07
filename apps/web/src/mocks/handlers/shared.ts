@@ -5,7 +5,7 @@ import type {
   MarketplaceArchiveDetail,
   MarketplaceArchiveListItem,
 } from '@/lib/api/types'
-import { MOCK_CREATOR, db, type MockArchive } from '../db'
+import { db, type MockArchive } from '../db'
 
 /** Абсолютный путь эндпоинта для MSW. */
 export function route(path: string): string {
@@ -40,7 +40,7 @@ export function toListItem(archive: MockArchive): MarketplaceArchiveListItem {
     title: archive.title,
     short_description: archive.short_description,
     cover_url: archive.cover_url,
-    creator: { display_name: MOCK_CREATOR.display_name ?? 'Creator' },
+    creator: { display_name: archive.creator_display_name },
     price: archive.price,
     file_count: archive.file_count,
     size_bytes: archive.size_bytes,

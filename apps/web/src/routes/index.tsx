@@ -3,7 +3,6 @@ import { Link, createFileRoute } from '@tanstack/react-router'
 
 import { ArchiveCard } from '@/components/archive/archive-card'
 import { CatalogPagination } from '@/components/catalog/catalog-pagination'
-import { HowItWorks } from '@/components/catalog/how-it-works'
 import { SearchField } from '@/components/catalog/search-field'
 import { SortNav } from '@/components/catalog/sort-nav'
 import { Container } from '@/components/layout/container'
@@ -33,7 +32,7 @@ export const Route = createFileRoute('/')({
  * `sort` (`docs/roles/02_MARKETPLACE_FRONTEND.md` §4).
  */
 function CatalogPage() {
-  const { t, format } = useI18n()
+  const { t } = useI18n()
   const search = Route.useSearch()
   const { sort, q, page } = resolveCatalogSearch(search)
 
@@ -44,32 +43,21 @@ function CatalogPage() {
     placeholderData: keepPreviousData,
   })
 
-  const total = data?.total ?? 0
   const pages = data ? pageCount(data.total, data.per_page) : 1
   const searching = q !== ''
 
   return (
     <Container>
-      <PageHeader
-        title={t.catalog.title}
-        lead={t.catalog.lead}
-        aside={
-          data && (
-            <p className="numeric text-muted-foreground text-sm">
-              {format.count(total)} {t.units.archives(total)}
-            </p>
-          )
-        }
-      />
-
-      <HowItWorks className="mb-10" />
+      <PageHeader title={t.catalog.title} lead={t.catalog.lead} />
 
       {/* Поиск и сортировка стоят отдельными строками: в русской локали пять
           подписей сортировки занимают почти всю меру ширины, и в одной строке
           с полем поиска они разваливались бы переносом. */}
       <div className="mb-6 space-y-3">
         <SearchField value={q} />
-        <SortNav active={sort} className="-ml-2.5" />
+        {/* Без отрицательного отступа: активный чип нарисован рамкой, и сдвиг
+            «под текст» выносил бы её за общую левую кромку страницы. */}
+        <SortNav active={sort} />
       </div>
 
       {isPending && (

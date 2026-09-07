@@ -15,11 +15,6 @@ const plural = makePlural('en')
 export const en = {
   localeName: 'English',
 
-  brand: {
-    /** Одна строка, объясняющая механику продукта целиком. */
-    tagline: 'Sealed files, open catalog',
-  },
-
   nav: {
     catalog: 'Catalog',
     viewer: 'Get the Viewer',
@@ -31,31 +26,13 @@ export const en = {
   },
 
   footer: {
-    mechanic:
-      'An .slr file downloads for free and travels like any other file. Paying in USDC inside the SolArch Viewer is what opens it.',
-    fee: 'Creators keep 95% of every sale.',
+    rights: (year: number) => `© ${year} SolArch`,
   },
 
   catalog: {
     title: 'Catalog',
     lead: 'Take any archive without an account. Payment happens later, in the desktop Viewer, once the file is already yours.',
     loading: 'Loading the catalog',
-
-    /** Три шага механики. Landing обязан объяснять продукт (роль §3.1). */
-    steps: [
-      {
-        title: 'Take the file',
-        body: 'Every .slr leaves the catalog for free and without an account. Keep it, copy it, pass it on.',
-      },
-      {
-        title: 'Open it in the Viewer',
-        body: 'The container stays sealed until the desktop SolArch Viewer opens it on your computer.',
-      },
-      {
-        title: 'Pay once in USDC',
-        body: 'One payment unlocks the archive on one device. The creator keeps 95% of it.',
-      },
-    ],
 
     sort: {
       label: 'Sort',
@@ -68,7 +45,7 @@ export const en = {
 
     search: {
       label: 'Search the catalog',
-      placeholder: 'Search by title or description',
+      placeholder: 'Title, author or description',
       clear: 'Clear the search',
     },
 
@@ -97,10 +74,44 @@ export const en = {
     download: 'Download .slr',
     price: 'Price',
     free: 'Free to download',
-    openedIn: 'Opens in the SolArch Viewer after payment',
     loading: 'Loading the archive',
     about: 'About this archive',
     back: 'Back to the catalog',
+
+    /** Главный вопрос гостя на этой странице: где и когда с него возьмут деньги. */
+    payment: (price: string) =>
+      `You pay ${price} later, inside the SolArch Viewer on your own computer — never in this browser. SolArch covers the Solana network fees.`,
+
+    files: {
+      title: 'Contents',
+      loading: 'Loading the file list',
+      error: 'The file list did not load. The archive itself is fine.',
+      empty: 'This archive has no files yet.',
+    },
+
+    terms: {
+      title: 'What paying gives you',
+      devices: {
+        term: (count: number) => (count === 1 ? 'One device' : `${count} devices`),
+        body: (count: number) =>
+          count === 1
+            ? 'The archive unlocks on the computer you pay from. Another computer needs another unlock.'
+            : `One payment unlocks the archive on up to ${count} computers.`,
+      },
+      export: {
+        term: 'No export',
+        body: 'Files open inside the Viewer. Saving them back out is not part of the license.',
+      },
+      exportAllowed: {
+        term: 'Export allowed',
+        body: 'The Viewer lets you save the files out of the archive.',
+      },
+      watermark: {
+        term: 'Watermarked',
+        body: 'Every page you open carries your wallet and license id, so a leaked copy points back to it.',
+      },
+    },
+
     error: {
       title: 'The archive did not load',
     },
@@ -110,17 +121,16 @@ export const en = {
     },
   },
 
+  /** Подписи под числами — строчными: это хвост числа, а не заголовок. */
   metrics: {
-    views: 'Views',
-    downloads: 'Downloads',
-    unlocks: 'Unlocks',
-    files: 'Files',
+    views: 'views',
+    downloads: 'downloads',
+    unlocks: 'unlocks',
     size: 'size',
   },
 
   units: {
     files: (count: number) => plural(count, { one: 'file', other: 'files' }),
-    archives: (count: number) => plural(count, { one: 'archive', other: 'archives' }),
     views: (count: number) => plural(count, { one: 'view', other: 'views' }),
     downloads: (count: number) => plural(count, { one: 'download', other: 'downloads' }),
     unlocks: (count: number) => plural(count, { one: 'unlock', other: 'unlocks' }),
@@ -149,6 +159,52 @@ export const en = {
     platform: 'SolArch fee',
     networkFees: 'SolArch covers Solana network fees. The buyer pays the archive price and nothing else.',
     immutable: 'The price is fixed when the archive is created and cannot be changed later.',
+  },
+
+  /**
+   * Вход автора. Главное, что должен снять текст, — страх: подпись сообщения
+   * похожа на подтверждение перевода, хотя не переводит ничего.
+   */
+  auth: {
+    title: 'Sign in with your wallet',
+    lead: 'SolArch has no passwords. You sign a short message, and that signature proves the wallet is yours. It moves no funds and gives SolArch no right to spend anything.',
+    keyNote: 'Your private key stays inside the wallet. The message you sign is shown here in full before the wallet asks for it.',
+
+    choose: 'Choose your wallet',
+    connecting: (wallet: string) => `Waiting for ${wallet} to connect`,
+
+    message: {
+      title: 'The message you are signing',
+      hint: 'Read it before you sign. SolArch never asks you to sign something you cannot see.',
+      wallet: 'Signing wallet',
+      sign: 'Sign the message',
+      signing: (wallet: string) => `Waiting for ${wallet} to sign`,
+      verifying: 'Checking the signature',
+      back: 'Use another wallet',
+    },
+
+    declined: (wallet: string) =>
+      `${wallet} did not sign the message. Nothing was sent — you can sign again.`,
+    failed: 'The wallet did not respond. Try again, or choose another wallet.',
+    verifyFailed: 'SolArch could not verify that signature. Ask for a new message and sign it again.',
+    serverFailed: 'SolArch did not answer. Try again in a moment.',
+
+    noWallets: {
+      title: 'No Solana wallet in this browser',
+      body: 'SolArch works with any wallet that follows the Solana Wallet Standard — Phantom and Solflare are the common ones. Install one, then come back to this page.',
+      reload: 'I installed one, look again',
+    },
+
+    session: {
+      account: 'Your wallet',
+      signOut: 'Sign out',
+    },
+  },
+
+  dashboard: {
+    title: 'Your archives',
+    lead: 'Every archive you create shows up here with its status, price and metrics.',
+    signedInAs: 'Signed in as',
   },
 
   common: {

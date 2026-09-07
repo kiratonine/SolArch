@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ArchiveCard } from '@/components/archive/archive-card'
+import { WalletAddress } from '@/components/auth/wallet-address'
 import { LanguageSwitch } from '@/components/layout/language-switch'
 import { I18nProvider, useI18n } from '@/lib/i18n'
 import { PriceBreakdown } from '@/components/archive/price-breakdown'
@@ -166,5 +167,21 @@ describe('состояния', () => {
     expect(screen.getByRole('alert')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(onRetry).toHaveBeenCalledOnce()
+  })
+})
+
+describe('адрес кошелька', () => {
+  const WALLET = '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU'
+
+  it('сокращает адрес серединой и держит полный в подсказке', () => {
+    renderWithI18n(<WalletAddress address={WALLET} />)
+
+    expect(screen.getByText('7xKX…gAsU')).toHaveAttribute('title', WALLET)
+  })
+
+  it('показывает адрес целиком, когда его нужно сверить', () => {
+    renderWithI18n(<WalletAddress address={WALLET} full />)
+
+    expect(screen.getByText(WALLET)).toBeInTheDocument()
   })
 })

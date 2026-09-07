@@ -17,6 +17,13 @@ import type {
 
 export interface MockArchive extends CreatorArchive {
   files: PublicFileEntry[]
+  /** Имя автора. В контракте это `creator.display_name` публичного ответа. */
+  creator_display_name: string
+  /**
+   * Владелец архива. Поля нет в контракте: оно нужно самому моку, чтобы кабинет
+   * автора показывал свои архивы, а не весь каталог. Наружу не отдаётся.
+   */
+  owner_id: string
 }
 
 export interface MockUpload {
@@ -81,18 +88,44 @@ function sheet(path: string, sizeKb: number): PublicFileEntry {
   }
 }
 
+/**
+ * Обложка-заглушка как data URI.
+ *
+ * Настоящие обложки грузит автор (открытый вопрос Q3), но без единой обложки в моке
+ * весь путь отрисовки был бы мёртвым кодом. Картинка нарочно схематична — лист,
+ * расчерченный волосяными линиями, и печать посередине: это заглушка, а не дизайн.
+ */
+function cover(hue: number): string {
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">` +
+    `<rect width="1200" height="630" fill="hsl(${hue} 24% 93%)"/>` +
+    `<g stroke="hsl(${hue} 20% 80%)" stroke-width="2">` +
+    `<path d="M0 210h1200M0 420h1200M400 0v630M800 0v630"/></g>` +
+    `<circle cx="600" cy="315" r="84" fill="hsl(38 74% 62%)"/>` +
+    `<circle cx="600" cy="315" r="84" fill="none" stroke="hsl(38 46% 36%)" stroke-width="6"/>` +
+    `</svg>`
+
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`
+}
+
 interface SeedInput {
   id: string
   slug: string | null
   title: string
   short: string
   description: string
+  /** Имя автора. У каждого архива своё: каталог с одним автором на все карточки
+   *  не даёт увидеть ни как ведёт себя длинное имя, ни что автор вообще меняется. */
+  creator: string
+  /** Архив принадлежит тому автору, который логинится в кабинете. */
+  mine?: boolean
   amount: string
   views: number
   downloads: number
   paid: number
   files: PublicFileEntry[]
   createdAt: string
+  cover?: string
   marketplace_status?: MockArchive['marketplace_status']
   technical_status?: MockArchive['technical_status']
 }
@@ -104,7 +137,7 @@ function seedArchive(input: SeedInput): MockArchive {
     title: input.title,
     short_description: input.short,
     description: input.description,
-    cover_url: null,
+    cover_url: input.cover ?? null,
     technical_status: input.technical_status ?? 'ready',
     marketplace_status: input.marketplace_status ?? 'published',
     price: { amount: input.amount, currency: 'USDC' },
@@ -117,6 +150,8 @@ function seedArchive(input: SeedInput): MockArchive {
     metrics: { views: input.views, downloads: input.downloads, paid_unlocks: input.paid },
     created_at: input.createdAt,
     files: input.files,
+    creator_display_name: input.creator,
+    owner_id: input.mine ? MOCK_CREATOR.id : `usr_${input.id}`,
   }
 }
 
@@ -124,6 +159,8 @@ function seed(): MockArchive[] {
   return [
     seedArchive({
       id: 'arc_solana_course',
+      creator: 'Aurora Labs',
+      mine: true,
       slug: 'solana-program-security',
       title: 'Solana Program Security',
       short: 'Аудит смарт-контрактов Solana: чек-листы, разборы уязвимостей, шаблоны отчётов.',
@@ -135,15 +172,19 @@ function seed(): MockArchive[] {
       downloads: 4210,
       paid: 612,
       createdAt: '2026-04-12T09:00:00Z',
+      // Корень, папка и вложенная папка сразу: опись обязана читаться на всех трёх.
       files: [
+        pdf('read-me-first.pdf', 64),
         pdf('security/00-intro.pdf', 820),
         pdf('security/01-account-model.pdf', 1640),
         pdf('security/02-signer-checks.pdf', 1200),
-        sheet('security/risk-matrix.xlsx', 96),
+        sheet('security/checklists/audit-checklist.xlsx', 112),
+        sheet('security/checklists/risk-matrix.xlsx', 96),
       ],
     }),
     seedArchive({
       id: 'arc_brand_kit',
+      creator: 'Studio Kirn',
       slug: 'nebula-brand-kit',
       title: 'Nebula Brand Kit',
       short: 'Айдентика для web3-проекта: логотипы, палитры, типографика, гайдлайны.',
@@ -155,6 +196,7 @@ function seed(): MockArchive[] {
       downloads: 2870,
       paid: 421,
       createdAt: '2026-05-02T12:30:00Z',
+      cover: cover(258),
       files: [
         pdf('brand/guidelines.pdf', 5400),
         image('brand/logo-primary.png', 340),
@@ -164,6 +206,7 @@ function seed(): MockArchive[] {
     }),
     seedArchive({
       id: 'arc_trading_journal',
+      creator: 'Mara Velez',
       slug: 'quant-trading-journal',
       title: 'Quant Trading Journal',
       short: 'Система учёта сделок и разбора ошибок: таблицы, метрики, инструкция.',
@@ -179,6 +222,7 @@ function seed(): MockArchive[] {
     }),
     seedArchive({
       id: 'arc_photo_pack',
+      creator: 'Илья Соколов',
       slug: 'analog-film-pack',
       title: 'Analog Film Pack',
       short: 'Сто отсканированных плёночных кадров в высоком разрешении.',
@@ -188,6 +232,7 @@ function seed(): MockArchive[] {
       downloads: 6120,
       paid: 205,
       createdAt: '2026-06-01T17:45:00Z',
+      cover: cover(28),
       files: [
         image('film/roll-01.png', 8200),
         image('film/roll-02.png', 7900),
@@ -196,6 +241,7 @@ function seed(): MockArchive[] {
     }),
     seedArchive({
       id: 'arc_legal_templates',
+      creator: 'Brightwater Legal Collective',
       slug: 'web3-legal-templates',
       title: 'Web3 Legal Templates',
       short: 'Договоры и политики для крипто-продукта: 14 документов.',
@@ -211,6 +257,8 @@ function seed(): MockArchive[] {
     }),
     seedArchive({
       id: 'arc_anchor_cookbook',
+      creator: 'Aurora Labs',
+      mine: true,
       slug: 'solana-anchor-cookbook',
       title: 'Solana Anchor Cookbook',
       short: 'Готовые рецепты на Anchor: PDA, токен-аккаунты, тесты, деплой.',
@@ -230,6 +278,7 @@ function seed(): MockArchive[] {
     }),
     seedArchive({
       id: 'arc_ml_notebooks',
+      creator: 'Nadia Oyelaran',
       slug: 'applied-ml-notebooks',
       title: 'Applied ML Notebooks',
       short: 'Разборы прикладных задач машинного обучения с данными и выводами.',
@@ -249,6 +298,7 @@ function seed(): MockArchive[] {
     }),
     seedArchive({
       id: 'arc_type_specimens',
+      creator: 'Foundry Kolm',
       slug: 'grotesque-type-specimens',
       title: 'Grotesque Type Specimens',
       short: 'Сорок разворотов-образцов гротесков в высоком разрешении.',
@@ -260,6 +310,7 @@ function seed(): MockArchive[] {
       downloads: 1620,
       paid: 96,
       createdAt: '2026-07-02T09:40:00Z',
+      cover: cover(150),
       files: [
         image('type/spread-01.png', 6100),
         image('type/spread-02.png', 5800),
@@ -269,6 +320,7 @@ function seed(): MockArchive[] {
     }),
     seedArchive({
       id: 'arc_startup_finance',
+      creator: 'Peter Zheng',
       slug: 'startup-finance-models',
       title: 'Startup Finance Models',
       short: 'Финансовые модели раннего этапа: юнит-экономика, runway, найм.',
@@ -289,6 +341,8 @@ function seed(): MockArchive[] {
     }),
     seedArchive({
       id: 'arc_draft_notes',
+      creator: 'Aurora Labs',
+      mine: true,
       slug: null,
       title: 'Untitled research notes',
       short: 'Черновик, ещё не опубликован.',

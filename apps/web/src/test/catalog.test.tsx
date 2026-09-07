@@ -40,12 +40,16 @@ describe('каталог', () => {
     expect(titles).not.toContain('Untitled research notes')
   })
 
-  it('объясняет механику продукта до списка', async () => {
+  it('говорит, что архив забирают до оплаты, а платят в Viewer', async () => {
     renderApp()
     await cardTitles()
 
-    expect(screen.getByRole('heading', { name: 'Take the file' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Pay once in USDC' })).toBeInTheDocument()
+    // Единственное место, где это сказано на главной: подзаголовок каталога.
+    // Блок трёх шагов убран на S4, объяснения из подвала — на S5; развёрнутый
+    // рассказ уедет на отдельную страницу «как это работает».
+    expect(
+      screen.getByText(/Take any archive without an account\. Payment happens later/),
+    ).toBeInTheDocument()
   })
 
   it('применяет сортировку из адреса', async () => {
@@ -104,6 +108,13 @@ describe('каталог', () => {
       },
       { timeout: 2000 },
     )
+    await expectTitles(['Nebula Brand Kit'])
+  })
+
+  it('находит архивы по имени автора, а не только по названию', async () => {
+    // Человек чаще помнит, чей это архив, чем как он назывался.
+    renderApp({ path: '/?q=Studio%20Kirn' })
+
     await expectTitles(['Nebula Brand Kit'])
   })
 

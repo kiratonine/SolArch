@@ -2,7 +2,15 @@ import { HttpResponse, http } from 'msw'
 
 import { validatePriceInput } from '@/lib/money'
 import type { CreateArchiveRequest, UpdateArchiveRequest } from '@/lib/api/types'
-import { DEFAULT_POLICY, db, economicsFor, findById, nextId, type MockArchive } from '../db'
+import {
+  DEFAULT_POLICY,
+  MOCK_CREATOR,
+  db,
+  economicsFor,
+  findById,
+  nextId,
+  type MockArchive,
+} from '../db'
 import { apiError, requireSession, route } from './shared'
 
 function slugify(title: string): string {
@@ -21,7 +29,21 @@ export const archiveHandlers = [
     const unauthorized = requireSession()
     if (unauthorized) return unauthorized
 
-    return HttpResponse.json(db.archives.map(({ files: _files, ...archive }) => archive))
+    // Кабинет показывает свои архивы, а не весь каталог. Мок-поля наружу не уходят.
+    const ownerId = db.session?.id
+
+    return HttpResponse.json(
+      db.archives
+        .filter((archive) => archive.owner_id === ownerId)
+        .map(
+          ({
+            files: _files,
+            owner_id: _owner,
+            creator_display_name: _creator,
+            ...archive
+          }) => archive,
+        ),
+    )
   }),
 
   http.post(route('/archives'), async ({ request }) => {
@@ -65,6 +87,8 @@ export const archiveHandlers = [
       metrics: { views: 0, downloads: 0, paid_unlocks: 0 },
       created_at: new Date().toISOString(),
       files: [],
+      creator_display_name: db.session?.display_name ?? 'Creator',
+      owner_id: db.session?.id ?? MOCK_CREATOR.id,
     }
 
     db.archives.unshift(archive)

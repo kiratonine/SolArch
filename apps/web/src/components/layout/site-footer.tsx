@@ -1,23 +1,25 @@
-import { SealMark } from '@/components/brand/seal-mark'
-import { Wordmark } from '@/components/brand/wordmark'
+import { Logo } from '@/components/brand/logo'
 import { Container } from '@/components/layout/container'
 import { useI18n } from '@/lib/i18n'
 
+/**
+ * Подвал: имя продукта и год, больше ничего.
+ *
+ * Объяснения механики здесь были — и уехали отсюда сознательно. Продуктовый текст,
+ * растащенный по подвалам и подзаголовкам, читается шумом на каждой странице;
+ * его место — отдельная страница «как это работает», которую делаем позже.
+ * Пока о механике говорит подзаголовок каталога, а условия открытия — страница архива.
+ */
 export function SiteFooter() {
   const { t } = useI18n()
 
   return (
     <footer className="border-border mt-20 border-t">
-      <Container className="flex flex-col gap-5 py-8 sm:flex-row sm:gap-12">
-        <div className="flex items-center gap-2">
-          <SealMark className="size-4" />
-          <Wordmark className="text-[0.8125rem]" />
-        </div>
-
-        <div className="text-muted-foreground max-w-[58ch] space-y-1.5 text-[0.8125rem]">
-          <p>{t.footer.mechanic}</p>
-          <p>{t.footer.fee}</p>
-        </div>
+      <Container className="flex items-center justify-between gap-6 py-7">
+        <Logo markClassName="size-4" wordClassName="text-[0.8125rem]" />
+        <span className="text-muted-foreground font-mono text-xs">
+          {t.footer.rights(new Date().getFullYear())}
+        </span>
       </Container>
     </footer>
   )

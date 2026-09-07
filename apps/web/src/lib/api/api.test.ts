@@ -78,6 +78,16 @@ describe('marketplace API (guest)', () => {
     expect(descPrices).toEqual([...descPrices].sort((a, b) => b - a))
   })
 
+  it('gives each archive its own author', async () => {
+    const page = await listMarketplaceArchives()
+    const names = page.items.map((item) => item.creator.display_name)
+
+    expect(names.every((name) => name.length > 0)).toBe(true)
+    // Каталог с одним автором на все карточки не даёт увидеть ни длинное имя,
+    // ни того, что автор вообще меняется от архива к архиву.
+    expect(new Set(names).size).toBeGreaterThan(1)
+  })
+
   it('sorts by downloads', async () => {
     const page = await listMarketplaceArchives({ sort: 'most_downloaded' })
     const downloads = page.items.map((item) => item.metrics.downloads)
@@ -198,6 +208,19 @@ describe('auth API', () => {
 describe('creator archives API', () => {
   it('requires a session', async () => {
     await expect(listMyArchives()).rejects.toMatchObject({ status: 401 })
+  })
+
+  it('lists only the signed-in creator’s own archives', async () => {
+    await signIn()
+    const mine = await listMyArchives()
+    const catalog = await listMarketplaceArchives()
+
+    expect(mine.length).toBeGreaterThan(0)
+    // Кабинет — не каталог: чужие архивы в него попадать не должны.
+    expect(mine.length).toBeLessThan(catalog.total)
+    expect(mine.some((archive) => archive.title === 'Nebula Brand Kit')).toBe(false)
+    // Свой черновик, наоборот, виден только здесь.
+    expect(mine.some((archive) => archive.title === 'Untitled research notes')).toBe(true)
   })
 
   it('freezes economics at creation with a 95/5 split', async () => {
