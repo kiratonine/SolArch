@@ -1,6 +1,7 @@
 import { HttpResponse, http } from 'msw'
 
-import { validatePriceInput } from '@/lib/money'
+import { validatePriceInput, type PriceProblem } from '@/lib/money'
+import { isSolanaAddress } from '@/lib/solana-address'
 import type { CreateArchiveRequest, UpdateArchiveRequest } from '@/lib/api/types'
 import {
   DEFAULT_POLICY,
@@ -13,6 +14,18 @@ import {
   type MockArchive,
 } from '../db'
 import { apiError, requireSession, route } from './shared'
+
+/**
+ * Мок отвечает так, как ответил бы backend: своей фразой, а не ключом словаря.
+ * Форма показывает свой текст по коду ошибки и падает на это сообщение только тогда,
+ * когда код ей незнаком.
+ */
+const PRICE_MESSAGES: Record<PriceProblem, string> = {
+  required: 'Укажите цену архива',
+  format: 'Цена должна быть числом, например 10.00',
+  precision: 'USDC поддерживает не более 6 знаков после запятой',
+  notPositive: 'Цена должна быть больше нуля',
+}
 
 function slugify(title: string): string {
   return (
@@ -61,14 +74,14 @@ export const archiveHandlers = [
       return apiError(400, 'TITLE_REQUIRED', 'Укажите название архива')
     }
 
-    const priceError = validatePriceInput(body.price?.amount ?? '')
-    if (priceError) return apiError(400, 'INVALID_PRICE', priceError)
+    const priceProblem = validatePriceInput(body.price?.amount ?? '')
+    if (priceProblem) return apiError(400, 'INVALID_PRICE', PRICE_MESSAGES[priceProblem])
 
     if (body.price.currency !== 'USDC') {
       return apiError(400, 'UNSUPPORTED_CURRENCY', 'Поддерживается только USDC')
     }
 
-    if (!body.creator_payout_wallet || body.creator_payout_wallet.length < 32) {
+    if (!isSolanaAddress(body.creator_payout_wallet ?? '')) {
       return apiError(400, 'INVALID_PAYOUT_WALLET', 'Некорректный payout wallet')
     }
 

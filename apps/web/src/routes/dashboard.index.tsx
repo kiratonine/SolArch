@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute } from '@tanstack/react-router'
+import { Link, createFileRoute } from '@tanstack/react-router'
 
 import { CreatorArchiveCard } from '@/components/archive/creator-archive-card'
 import { WalletAddress } from '@/components/auth/wallet-address'
@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/layout/page-header'
 import { ArchiveCardSkeleton } from '@/components/state/archive-card-skeleton'
 import { EmptyState } from '@/components/state/empty-state'
 import { ErrorState } from '@/components/state/error-state'
+import { buttonVariants } from '@/components/ui/button'
 import { myArchivesQuery, sessionQuery, toUserMessage } from '@/lib/api'
 import type { CreatorArchive } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
@@ -54,7 +55,14 @@ function DashboardPage() {
 
   return (
     <Container>
-      <PageHeader title={t.dashboard.title} lead={t.dashboard.lead} />
+      {/* Заголовок и вход в форму делят одну строку: создание архива — то, зачем
+          в кабинет заходят чаще всего, и оно не должно ждать конца списка. */}
+      <div className="mb-10 flex flex-wrap items-start justify-between gap-4">
+        <PageHeader title={t.dashboard.title} lead={t.dashboard.lead} className="mb-0 min-w-0" />
+        <Link to="/dashboard/new" className={buttonVariants({ size: 'lg' })}>
+          {t.create.action}
+        </Link>
+      </div>
 
       {/* Полный адрес, а не сокращённый: в шапке он обрезан, а сверять кошелёк
           перед созданием архива придётся целиком. */}
@@ -81,7 +89,15 @@ function DashboardPage() {
       )}
 
       {data && data.length === 0 && (
-        <EmptyState title={t.dashboard.empty.title} body={t.dashboard.empty.body} />
+        <EmptyState
+          title={t.dashboard.empty.title}
+          body={t.dashboard.empty.body}
+          action={
+            <Link to="/dashboard/new" className={buttonVariants({ size: 'lg' })}>
+              {t.create.action}
+            </Link>
+          }
+        />
       )}
 
       {data && data.length > 0 && (

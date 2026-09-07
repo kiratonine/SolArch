@@ -25,6 +25,12 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    /**
+     * Тест обязан переживать самое долгое ожидание внутри себя. Ожидание запросов
+     * поднято до 5 с (`test/setup.ts`), и при таком же таймауте теста «не дождался»
+     * приходило как «тест завис» — без сообщения о том, чего именно не хватило.
+     */
+    testTimeout: 20_000,
     setupFiles: ['./src/test/setup.ts'],
     css: false,
     include: ['src/**/*.{test,spec}.{ts,tsx}'],

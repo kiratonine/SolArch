@@ -100,22 +100,29 @@ export function previewEconomics(price: string, feeBps: number = PLATFORM_FEE_BP
   }
 }
 
+/** Чем именно не годится введённая цена. */
+export type PriceProblem = 'required' | 'format' | 'precision' | 'notPositive'
+
 /**
- * Проверяет строку цены для формы. Возвращает текст ошибки или null.
- * Цена неизменяема после создания архива, поэтому проверяем строго.
+ * Проверяет строку цены. Возвращает причину отказа или null.
+ *
+ * Возвращается код, а не фраза: одну и ту же проверку читают форма создания —
+ * на двух языках — и мок-backend. Текст ошибки живёт в словаре, рядом с остальными
+ * словами интерфейса, и переводится вместе с ними.
+ *
+ * Проверяем строго: цена неизменяема после создания архива (ADR-004), и опечатка
+ * в ней исправляется только новым архивом.
  */
-export function validatePriceInput(value: string): string | null {
+export function validatePriceInput(value: string): PriceProblem | null {
   const trimmed = value.trim()
 
-  if (trimmed.length === 0) return 'Укажите цену архива'
-  if (!DECIMAL_PATTERN.test(trimmed)) return 'Цена должна быть числом, например 10.00'
+  if (trimmed.length === 0) return 'required'
+  if (!DECIMAL_PATTERN.test(trimmed)) return 'format'
 
   const fraction = trimmed.split('.')[1] ?? ''
-  if (fraction.length > USDC_DECIMALS) {
-    return `USDC поддерживает не более ${USDC_DECIMALS} знаков после запятой`
-  }
+  if (fraction.length > USDC_DECIMALS) return 'precision'
 
-  if (parseUsdc(trimmed) <= 0n) return 'Цена должна быть больше нуля'
+  if (parseUsdc(trimmed) <= 0n) return 'notPositive'
 
   return null
 }

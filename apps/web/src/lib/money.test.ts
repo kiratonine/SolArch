@@ -92,11 +92,18 @@ describe('validatePriceInput', () => {
     expect(validatePriceInput(' 5 ')).toBeNull()
   })
 
-  it('rejects empty, non-numeric, zero and over-precise input', () => {
-    expect(validatePriceInput('')).toBe('Укажите цену архива')
-    expect(validatePriceInput('abc')).toContain('числом')
-    expect(validatePriceInput('0')).toContain('больше нуля')
-    expect(validatePriceInput('0.00')).toContain('больше нуля')
-    expect(validatePriceInput('1.1234567')).toContain('знаков после запятой')
+  /**
+   * Возвращается код, а не готовая фраза: одну и ту же проверку читают форма
+   * на двух языках и мок-backend. Текст живёт в словаре, здесь — причина отказа.
+   */
+  it('names the problem instead of phrasing it', () => {
+    expect(validatePriceInput('')).toBe('required')
+    expect(validatePriceInput('   ')).toBe('required')
+    expect(validatePriceInput('abc')).toBe('format')
+    expect(validatePriceInput('1e3')).toBe('format')
+    expect(validatePriceInput('-1')).toBe('format')
+    expect(validatePriceInput('1.1234567')).toBe('precision')
+    expect(validatePriceInput('0')).toBe('notPositive')
+    expect(validatePriceInput('0.00')).toBe('notPositive')
   })
 })

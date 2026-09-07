@@ -235,6 +235,72 @@ export const en = {
     },
   },
 
+  create: {
+    title: 'New archive',
+    lead: 'Name the archive, set its price and say where your share goes. Files come afterwards, once the archive exists.',
+    action: 'New archive',
+    submit: 'Create archive',
+    submitting: 'Creating the archive',
+    cancel: 'Cancel',
+
+    fields: {
+      title: {
+        label: 'Title',
+        hint: 'Buyers read it in the catalog and at the top of the archive page.',
+      },
+      shortDescription: {
+        label: 'Short description',
+        hint: 'The single line under the title in the catalog.',
+      },
+      description: {
+        label: 'Description',
+        hint: 'The long version, shown on the archive page. You can write it later.',
+      },
+      price: {
+        label: 'Price',
+        hint: 'The buyer pays this and nothing else.',
+      },
+      payoutWallet: {
+        label: 'Payout wallet',
+        hint: 'Your share goes straight to this address. SolArch never holds it.',
+        own: 'This is the wallet you signed in with.',
+      },
+    },
+
+    /** Счётчик длины: он же несёт предел, поэтому в тексте ошибки числа нет. */
+    counter: (used: number, max: number) => `${used} / ${max}`,
+
+    policy: {
+      title: 'What the buyer gets',
+      devices: 'One device',
+      devicesBody: 'A license opens the archive on a single device. This holds for every archive on SolArch.',
+      export: {
+        label: 'Let buyers export files',
+        body: 'Leave it off and the files stay inside the Viewer.',
+      },
+      watermark: {
+        label: 'Stamp a watermark',
+        body: 'The Viewer marks every page with the license it was opened under.',
+      },
+    },
+
+    errors: {
+      'titleRequired': 'Name the archive.',
+      'titleTooLong': 'The title is longer than the catalog can show.',
+      'shortDescriptionRequired': 'Write the line that goes under the title.',
+      'shortDescriptionTooLong': 'This line is longer than the catalog can show.',
+      'descriptionTooLong': 'The description is longer than the page can hold.',
+      'priceRequired': 'Set the price.',
+      'priceFormat': 'Write the price as a number, for example 10.00.',
+      'pricePrecision': 'USDC keeps six decimal places, no more.',
+      'priceNotPositive': 'The price has to be above zero.',
+      'payoutWalletRequired': 'Enter the address your share goes to.',
+      'payoutWalletInvalid': 'This is not a Solana address.',
+    },
+
+    failed: 'The archive was not created.',
+  },
+
   common: {
     retry: 'Try again',
     notFound: {
