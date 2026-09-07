@@ -7,11 +7,13 @@ import {
   createArchiveResponseSchema,
   creatorArchiveListSchema,
   creatorArchiveSchema,
+  publicFileListResponseSchema,
 } from './types'
 import type {
   CreateArchiveRequest,
   CreateArchiveResponse,
   CreatorArchive,
+  PublicFileListResponse,
   UpdateArchiveRequest,
 } from './types'
 
@@ -44,6 +46,27 @@ export function listMyArchives(signal?: AbortSignal): Promise<CreatorArchive[]> 
 
 export function getMyArchive(archiveId: string, signal?: AbortSignal): Promise<CreatorArchive> {
   return apiRequest(`/archives/${encodeURIComponent(archiveId)}`, { signal, schema: creatorArchiveSchema })
+}
+
+/**
+ * Опись файлов собственного архива.
+ *
+ * ДОПУЩЕНИЕ (открытый вопрос Q15): в `docs/API.md` описи для автора нет вовсе.
+ * `GET /v1/archives/:archiveId` отдаёт только `file_count` и `size_bytes`, а разбор
+ * по `display_path` есть лишь у опубликованного архива — на публичном эндпоинте
+ * по slug. До публикации slug'а не существует, то есть автор не может увидеть,
+ * что backend распаковал из его ZIP, до того как выставит архив на витрину.
+ * Считаем, что это `GET /v1/archives/:archiveId/files` с той же формой ответа,
+ * что и публичный listing.
+ */
+export function getMyArchiveFiles(
+  archiveId: string,
+  signal?: AbortSignal,
+): Promise<PublicFileListResponse> {
+  return apiRequest(`/archives/${encodeURIComponent(archiveId)}/files`, {
+    signal,
+    schema: publicFileListResponseSchema,
+  })
 }
 
 /** Меняет только редактируемые метаданные. Цену изменить нельзя — её здесь нет. */
@@ -109,6 +132,19 @@ export function myArchiveQuery(archiveId: string) {
   return queryOptions({
     queryKey: queryKeys.archives.detail(archiveId),
     queryFn: ({ signal }) => getMyArchive(archiveId, signal),
+  })
+}
+
+/**
+ * Опись собственного архива.
+ *
+ * `staleTime` здесь нет намеренно: содержимое меняется ровно тогда, когда автор
+ * загружает файлы, и после каждой удачной загрузки запрос сбрасывается вручную.
+ */
+export function myArchiveFilesQuery(archiveId: string) {
+  return queryOptions({
+    queryKey: queryKeys.archives.files(archiveId),
+    queryFn: ({ signal }) => getMyArchiveFiles(archiveId, signal),
   })
 }
 

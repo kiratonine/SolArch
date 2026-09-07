@@ -13,11 +13,11 @@ import { renderApp } from '@/test/render'
  *
  * Проверяется настоящий путь: guard пропускает вошедшего, форма собирает тело
  * запроса по контракту, мок замораживает экономику и отдаёт `archive_id`, автор
- * возвращается в кабинет и видит там свой новый черновик.
+ * попадает на страницу созданного архива — туда, где у архива появятся файлы.
  */
 
 describe('создание архива', () => {
-  it('создаёт архив и возвращает автора в кабинет', async () => {
+  it('создаёт архив и ведёт автора к загрузке файлов', async () => {
     db.session = MOCK_CREATOR
     const user = userEvent.setup()
 
@@ -29,10 +29,15 @@ describe('создание архива', () => {
 
     await user.click(screen.getByRole('button', { name: 'Create archive' }))
 
+    // Адрес страницы — id, который вернул backend: своего архив ещё не знает.
     await waitFor(() => {
-      expect(router.state.location.pathname).toBe('/dashboard')
+      expect(router.state.location.pathname).toBe(`/dashboard/${db.archives[0]?.archive_id}`)
     })
-    expect(await screen.findByRole('heading', { name: 'Field Notes on Rust' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Field Notes on Rust', level: 1 }),
+    ).toBeInTheDocument()
+    // Пустой архив открывается там, где его наполняют.
+    expect(screen.getByRole('button', { name: 'Choose files' })).toBeInTheDocument()
 
     // Мок — это backend: смотрим, что до него доехало.
     expect(db.archives[0]).toMatchObject({

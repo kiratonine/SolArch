@@ -221,7 +221,7 @@ export const en = {
     loading: 'Loading your archives',
 
     card: {
-      yourShare: 'your share',
+      payout: 'payout',
       created: (date: string) => `created ${date}`,
       publicPage: 'Open the public page',
     },
@@ -233,11 +233,85 @@ export const en = {
     error: {
       title: 'Your archives did not load',
     },
+
+    /** Страница одного архива: всё, что автор делает с ним после создания. */
+    detail: {
+      back: 'All archives',
+      loading: 'Loading the archive',
+      missing: {
+        title: 'No such archive',
+        body: 'This archive does not exist, or it belongs to another creator.',
+      },
+      error: {
+        title: 'The archive did not load',
+      },
+
+      build: {
+        title: 'The container',
+
+        draft: {
+          title: 'Nothing sealed yet',
+          body: 'Add the files you are selling. SolArch packs them into a sealed .slr on its servers — nothing is encrypted in your browser.',
+        },
+        uploading: {
+          title: 'Sending your files',
+          body: 'Keep this page open until the last file is through.',
+        },
+        processing: {
+          title: 'SolArch is building the container',
+          body: 'Your files are on the server. This page updates itself when the build finishes.',
+        },
+        ready: {
+          title: 'The container is built',
+          body: 'The .slr is packed and can be downloaded. Anyone can copy it around; only a paid licence opens it in the Viewer.',
+        },
+        failed: {
+          title: 'The container was not built',
+          body: 'Nothing was published. Fix the file the message names and upload it again.',
+        },
+
+        download: 'Download the .slr',
+        publishNote: 'Putting the archive in the catalog comes as a separate step.',
+      },
+
+      files: {
+        title: 'Inside the archive',
+        loading: 'Loading the file list',
+        error: 'The file list did not load.',
+        empty: 'The archive holds no files yet.',
+      },
+    },
+
+    upload: {
+      title: 'Add files',
+      body: 'A ZIP keeps the folders you built inside it — SolArch unpacks it on the server. Single files land at the root of the archive.',
+      formats: 'PDF, PNG, JPG, WebP, DOCX, XLSX or a ZIP.',
+      choose: 'Choose files',
+      drop: 'or drop them here',
+      dropping: 'Drop the files',
+
+      queue: 'Files being sent',
+      status: {
+        queued: 'Waiting',
+        done: 'Sent',
+        canceled: 'Canceled',
+        failed: 'Not sent',
+      },
+      progress: (name: string) => `Sending ${name}`,
+      cancel: 'Cancel',
+      retry: 'Send again',
+
+      refused: {
+        title: 'These files were not taken',
+        unsupportedType: 'the Viewer cannot show this format',
+        empty: 'the file is empty',
+      },
+    },
   },
 
   create: {
     title: 'New archive',
-    lead: 'Name the archive, set its price and say where your share goes. Files come afterwards, once the archive exists.',
+    lead: 'Name the archive, set its price and say where the payout goes. Files come afterwards, once the archive exists.',
     action: 'New archive',
     submit: 'Create archive',
     submitting: 'Creating the archive',
@@ -262,7 +336,7 @@ export const en = {
       },
       payoutWallet: {
         label: 'Payout wallet',
-        hint: 'Your share goes straight to this address. SolArch never holds it.',
+        hint: 'The payout goes straight to this address. SolArch never holds it.',
         own: 'This is the wallet you signed in with.',
       },
     },
@@ -294,7 +368,7 @@ export const en = {
       'priceFormat': 'Write the price as a number, for example 10.00.',
       'pricePrecision': 'USDC keeps six decimal places, no more.',
       'priceNotPositive': 'The price has to be above zero.',
-      'payoutWalletRequired': 'Enter the address your share goes to.',
+      'payoutWalletRequired': 'Enter the address the payout goes to.',
       'payoutWalletInvalid': 'This is not a Solana address.',
     },
 

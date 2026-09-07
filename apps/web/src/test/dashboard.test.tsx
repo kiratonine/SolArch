@@ -155,6 +155,20 @@ describe('список своих архивов', () => {
     ).toBeNull()
   })
 
+  it('ведёт из карточки в сам архив', async () => {
+    db.session = MOCK_CREATOR
+
+    renderApp({ path: '/dashboard' })
+    await screen.findByRole('heading', { name: 'Untitled research notes' })
+
+    // Ссылкой сделан заголовок: он и отвечает на вопрос «какой это архив».
+    expect(
+      within(card('Untitled research notes')).getByRole('link', {
+        name: 'Untitled research notes',
+      }),
+    ).toHaveAttribute('href', '/dashboard/arc_draft_notes')
+  })
+
   it('не выдаёт полей, которых нет в контракте', async () => {
     db.session = MOCK_CREATOR
 

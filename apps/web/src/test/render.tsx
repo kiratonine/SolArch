@@ -47,6 +47,11 @@ export function renderWithRouter(
       path: '/archives/$slug',
       component: () => null,
     }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/dashboard/$archiveId',
+      component: () => null,
+    }),
   ]
 
   const router = createRouter({

@@ -63,7 +63,8 @@ const SERVER_FIELDS: Record<string, CreateArchiveField> = {
  * пересчитывается на каждый ввод — автор видит свою долю до нажатия кнопки, а не после.
  *
  * Файлы сюда не загружаются. Архив сначала возникает как запись и только потом
- * получает содержимое (S8) — так у загрузки есть, к чему прикрепляться.
+ * получает содержимое — так у загрузки есть, к чему прикрепляться. Поэтому кнопка
+ * ведёт не обратно в список, а на страницу созданного архива, где эти файлы и ждут.
  */
 function NewArchivePage() {
   const { t } = useI18n()
@@ -99,10 +100,12 @@ function NewArchivePage() {
 
   const mutation = useMutation({
     mutationFn: createArchive,
-    onSuccess: async () => {
+    onSuccess: async (created) => {
       // Список кабинета устарел: в нём нет нового черновика.
       await queryClient.invalidateQueries({ queryKey: queryKeys.archives.list() })
-      await navigate({ to: '/dashboard' })
+      // Пустой архив бесполезен, и следующий шаг у него ровно один — файлы.
+      // Автор попадает прямо туда, где их загружают, а не обратно в список.
+      await navigate({ to: '/dashboard/$archiveId', params: { archiveId: created.archive_id } })
     },
     onError: (error: unknown) => {
       setServerProblem({

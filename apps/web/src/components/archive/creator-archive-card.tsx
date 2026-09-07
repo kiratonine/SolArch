@@ -14,9 +14,9 @@ import { cn } from '@/lib/utils'
  * От каталожной отличается тем, что показывает не витрину, а хозяйство: оба статуса
  * порознь, долю автора рядом с ценой и причину, по которой сборка не удалась.
  *
- * Карточка не ссылка: страницы архива у автора пока нет, а ссылка в никуда хуже
- * её отсутствия. Единственная ссылка здесь ведёт туда, где архив уже существует
- * для постороннего, — на его публичную страницу.
+ * Ссылкой сделан заголовок, а не вся карточка: внутри есть вторая ссылка — на
+ * публичную страницу, — и вложить её во внешнюю нельзя. Заголовок отвечает на тот
+ * же вопрос, что и вся карточка: «этот архив», поэтому ведёт в него.
  *
  * Манифест одинаков у всех карточек, даже когда весь он в нулях: одинаковые колонки
  * позволяют сравнивать архивы взглядом вниз по списку, а «0 просмотров» у черновика —
@@ -48,7 +48,13 @@ export function CreatorArchiveCard({
         <div className="flex items-start justify-between gap-6">
           <div className="min-w-0">
             <h3 className="font-sans text-[1.0625rem] leading-snug font-semibold tracking-[-0.01em]">
-              {archive.title}
+              <Link
+                to="/dashboard/$archiveId"
+                params={{ archiveId: archive.archive_id }}
+                className="focus-visible:outline-none hover:underline hover:underline-offset-4"
+              >
+                {archive.title}
+              </Link>
             </h3>
 
             {/* Два статуса стоят рядом, но не сливаются: технический описывает файл,
@@ -64,7 +70,7 @@ export function CreatorArchiveCard({
             {/* Доля автора — второе место, где теме разрешён янтарь. Число приходит
                 из `economics` backend и здесь ничего не пересчитывается. */}
             <p className="text-muted-foreground mt-1 text-xs whitespace-nowrap">
-              {t.dashboard.card.yourShare}{' '}
+              {t.dashboard.card.payout}{' '}
               <span className="numeric text-seal-ink font-medium">
                 {archive.economics.creator_share}
               </span>

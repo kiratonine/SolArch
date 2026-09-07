@@ -136,6 +136,18 @@ export const archiveHandlers = [
     return HttpResponse.json(rest)
   }),
 
+  // ДОПУЩЕНИЕ Q15: описи собственного архива нет в docs/API.md, а автору она нужна
+  // до публикации — иначе он не видит, что backend распаковал из его ZIP.
+  http.get(route('/archives/:archiveId/files'), ({ params }) => {
+    const unauthorized = requireSession()
+    if (unauthorized) return unauthorized
+
+    const archive = findById(String(params.archiveId))
+    if (!archive) return apiError(404, 'ARCHIVE_NOT_FOUND', 'Archive not found')
+
+    return HttpResponse.json({ files: archive.files })
+  }),
+
   http.patch(route('/archives/:archiveId'), async ({ params, request }) => {
     const unauthorized = requireSession()
     if (unauthorized) return unauthorized

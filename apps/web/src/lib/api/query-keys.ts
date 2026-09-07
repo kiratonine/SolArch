@@ -21,6 +21,7 @@ export const queryKeys = {
     all: ['archives'] as const,
     list: () => ['archives', 'list'] as const,
     detail: (archiveId: string) => ['archives', 'detail', archiveId] as const,
+    files: (archiveId: string) => ['archives', 'files', archiveId] as const,
     analytics: (archiveId: string, period: AnalyticsPeriod) =>
       ['archives', 'analytics', archiveId, period] as const,
   },
