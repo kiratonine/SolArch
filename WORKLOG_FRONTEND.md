@@ -60,8 +60,13 @@ TanStack Router                типобезопасные роуты и search
 Tailwind CSS
 shadcn/ui на Base UI           Base UI — дефолт shadcn с релиза 2026-07
 MSW                            мок backend на уровне сети; те же хендлеры в тестах
+zod                            схемы DTO = контракт + рантайм-проверка ответов
 Структура                      apps/web как npm workspace (INTEGRATION.md §2)
 ```
+
+Одобрены к использованию, но ещё не подключены (ставим по месту применения):
+`react-hook-form` + `zod` резолвер — на S7 (форма создания архива);
+`zustand` — только если появится клиентское состояние, которое не покрывает TanStack Query.
 
 Проверено по актуальной документации: `npx shadcn@latest init -t vite` даёт шаблон Vite;
 CLI v4 поддерживает флаг `--base` для выбора примитивов, Base UI идёт по умолчанию.
@@ -76,7 +81,7 @@ CLI v4 поддерживает флаг `--base` для выбора прими
 | # | Этап | Статус | Комментарий |
 |---|------|--------|-------------|
 | S0 | Скелет `apps/web` | **done** | Vite 8, React 19, TS 6, Tailwind v4, shadcn/Base UI, TanStack Query+Router, MSW, Vitest, oxlint |
-| S1 | Typed API client + mock-слой (`lib/api/*`) по `docs/API.md` | todo | Без mock-слоя дальше двигаться нельзя |
+| S1 | Typed API client + mock-слой (`lib/api/*`) по `docs/API.md` | **done** | zod-схемы как контракт, MSW с состоянием, 35 тестов |
 | S2 | Дизайн-язык: тема shadcn, layout, базовые компоненты | todo | Тему потом можно заменить готовым шаблоном с shadcn |
 | S3 | Public: Landing / Catalog + сортировки + состояния | todo | loading/empty/error |
 | S4 | Public: Archive Page + file listing + metrics + CTA Download `.slr` | todo | Гость без логина |
@@ -166,9 +171,9 @@ Remote:      https://github.com/kiratonine/SolArch  — ещё пустой, Н�
 Локально:    git инициализирован, две ветки
   main                       c8599a9  docs/ + корневой workspace + .gitignore + README
   feat/marketplace-frontend  72f6cb5  apps/web + CLAUDE.md + WORKLOG (текущая)
-apps/web:    скелет собран и проверен
+apps/web:    скелет + API-слой + моки; сборка, линт и тесты зелёные
 Backend:     недоступен → работаем на MSW
-Этап:        S0 done → следующий S1
+Этап:        S0, S1 done → следующий S2
 ```
 
 Проверено на S0: `npm run build`, `npm run test`, `npm run lint` проходят;
@@ -194,6 +199,11 @@ Backend:     недоступен → работаем на MSW
 | F7 | TanStack Router | 2026-09-07 | Один вендор с Query; типобезопасные search params — сортировка каталога живёт в URL |
 | F8 | MSW для мока backend | 2026-09-07 | Клиент сразу пишется как боевой; на S12 моки просто выключаются; хендлеры переиспользуются в тестах и E2E |
 | F9 | `apps/web` как npm workspace | 2026-09-07 | `INTEGRATION.md` §2 закрепляет `apps/web` за нашей веткой; готово к слиянию трёх веток |
+| F10 | DTO в snake_case, как на проводе | 2026-09-07 | Файл сверяется с `docs/API.md` построчно; нет тихих ошибок маппинга при интеграции |
+| F11 | zod-схемы как источник типов и рантайм-проверки ответов | 2026-09-07 | Бэкенда нет; расхождение с контрактом падает на границе сети с внятным сообщением, а не как `undefined` в компоненте |
+| F12 | Расчёт денег на `bigint` в base units | 2026-09-07 | `PAYMENTS.md` §5 запрещает float; комиссия вниз, автору остаток — `creator + platform === price` всегда |
+| F13 | Мок с состоянием в памяти, а не статика | 2026-09-07 | Иначе невозможно проверить переходы draft → uploading → processing → ready → published |
+| F14 | oxlint вместо ESLint | 2026-09-07 | Дефолт `create-vite@9`; быстрее и меньше конфигурации |
 
 > Решения, затрагивающие общий контракт, сюда не пишем — они идут в `docs/DECISIONS.md`
 > после согласования с командой (`docs/INTEGRATION.md` §14).
@@ -213,6 +223,19 @@ Backend:     недоступен → работаем на MSW
 | Q5 | Есть ли публичный агрегат метрик всего маркетплейса для Landing (роль §3.1)? | backend | open |
 | Q6 | Откуда фронт берёт ссылку на дистрибутив Viewer (`Download SolArch Viewer`)? | viewer/backend | open |
 | Q7 | CORS и домены: фронт и API на разных origin? Влияет на cookie-сессию (SameSite) | backend | open |
+| Q8 | Нет эндпоинта списка архивов автора, хотя раздел My Archives обязателен (роль §6.1). Предполагаем `GET /v1/archives` | backend | open |
+| Q9 | Правило округления комиссии: `PAYMENTS.md` §5 требует «детерминированное и покрытое тестами», но направление не задано. Мы отсекаем комиссию вниз, автору — остаток. Нужно совпадение с backend до копейки | backend | open |
+
+Как эти вопросы закрыты в коде до ответов: каждое допущение помечено комментарием
+`ДОПУЩЕНИЕ (открытый вопрос QN)` и вынесено в одно место, чтобы правка была точечной.
+
+```text
+Q1  lib/api/config.ts     API_CREDENTIALS = 'include' (cookie-сессия)
+Q2  lib/api/uploads.ts    поддержаны оба транспорта: signed URL и через API
+Q4  lib/api/types.ts      paginatedSchema: items/page/per_page/total/has_more
+Q8  lib/api/archives.ts   listMyArchives → GET /v1/archives
+Q9  lib/money.ts          комиссия floor, автору остаток
+```
 
 ---
 
@@ -253,3 +276,29 @@ Backend:     недоступен → работаем на MSW
 **Следующий шаг:** S1 — typed API client в `lib/api/` и наполнение MSW-хендлеров
 по `docs/API.md`. От ответов на Q1–Q7 этап не блокируется: спорные места закрываем
 адаптерами, но Q1 (формат сессии) стоит выяснить до S5.
+
+### Сессия 2 (продолжение) — S1 выполнен
+
+Запушено в GitHub: `main` и `feat/marketplace-frontend`.
+
+Сделано:
+- `lib/money.ts` — расчёты USDC на `bigint`, превью split 95/5, валидация цены.
+- `lib/api/` — `config`, `errors`, `http`, `types`, `query-keys`, `auth`, `marketplace`,
+  `archives`, `uploads`, `analytics`, `index`. Все запросы идут через одну функцию `apiRequest`.
+- zod-схемы описывают все ответы; типы выводятся через `z.infer`, дублирования нет.
+  Несоответствие ответа контракту поднимает `ContractError` прямо на границе сети.
+- Загрузка файлов на `XMLHttpRequest` — только он даёт прогресс отправки (роль §9).
+- MSW: 5 модулей хендлеров + база в памяти с 6 архивами-фикстурами.
+  Реально работают сортировки, скрытие черновиков, логин, create, publish/unpublish,
+  переход `processing → ready`, запрет смены цены.
+- Тесты: 35 штук. Покрыты деньги, публичный каталог, приватность полей,
+  сортировки, auth, неизменяемость цены, публикация, аналитика, проверка контракта.
+
+Проверено: `tsc -b`, `oxlint`, `vitest` (35/35), `vite build` — всё зелёное.
+Каталог отрисован в браузере из мока, в консоли ноль ошибок.
+
+Новые открытые вопросы: Q8 (нет эндпоинта списка архивов автора),
+Q9 (направление округления комиссии).
+
+**Следующий шаг:** S2 — дизайн-язык: тема, сетка, шапка/подвал, базовые компоненты
+(карточка архива, блок метрик, price breakdown, состояния loading/empty/error).

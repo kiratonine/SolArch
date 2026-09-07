@@ -50,3 +50,6 @@ Thumbs.db
 
 # playwright mcp artifacts
 .playwright-mcp/
+
+# vitest json output (rtk hook)
+.vitest/
