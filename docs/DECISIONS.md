@@ -164,3 +164,45 @@ device limit
 SolArch provides practical DRM + device licensing + watermark.
 
 It does not guarantee prevention of screenshots, recording, reverse engineering or photographing the screen.
+
+---
+
+## ADR-018 — Desktop Viewer localization
+
+Hackathon/MVP версия SolArch Desktop Viewer поддерживает два языка:
+
+```text
+Russian
+English
+```
+
+Windows installer обязан предоставить пользователю явный выбор `Русский` / `English` до установки.
+
+Выбранный язык installer становится начальной locale Viewer и сохраняется как локальная пользовательская настройка.
+
+Viewer должен позволять переключать язык между Russian и English после установки без переустановки приложения.
+
+Localization распространяется на системный UI SolArch Viewer:
+
+- locked/payment/license states;
+- errors;
+- dialogs;
+- settings;
+- internal viewer controls;
+- application notifications.
+
+Localization не изменяет protected content или creator-provided metadata.
+
+SolArch не выполняет автоматический перевод:
+
+```text
+PDF/DOCX/XLSX content
+archive title
+archive description
+file names
+file paths
+```
+
+Language preference является локальной настройкой Desktop Viewer и не является частью `.slr` crypto format, Entitlement, Device License или Backend security decision.
+
+Все production UI strings Viewer должны проходить через единый localization/i18n layer.

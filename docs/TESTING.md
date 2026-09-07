@@ -68,6 +68,24 @@ Manual demo
 - watermark display;
 - no export action in protected mode.
 
+### 4.1 Viewer localization tests
+
+Проверить:
+
+- Russian locale загружается без missing required keys;
+- English locale загружается без missing required keys;
+- обязательные localization keys существуют в обеих locale;
+- locked state корректно отображается на Russian и English;
+- payment states корректно отображаются на Russian и English;
+- device/license states корректно отображаются на Russian и English;
+- backend/error states корректно отображаются на Russian и English;
+- PDF/image/DOCX/XLSX viewer controls корректно отображаются на Russian и English;
+- выбранный язык сохраняется между restart;
+- переключение Russian ↔ English применяется без переустановки;
+- protected content не изменяется при переключении locale;
+- creator-provided title/description/file names не переводятся автоматически;
+- production UI не зависит от отдельной Russian/English версии компонентов.
+
 ---
 
 ## 5. Frontend tests
@@ -296,6 +314,12 @@ Before presentation:
 - sample creator archive prepared;
 - Device B test prepared;
 - no secrets shown on screen.
+- installer предлагает Russian / English;
+- установка с Russian проверена;
+- установка с English проверена;
+- выбранный installer language становится initial Viewer language;
+- language preference сохраняется после restart;
+- Russian ↔ English switch в Settings проверен;
 
 ---
 
@@ -309,6 +333,8 @@ all contract tests pass
 payment negative tests pass
 full E2E passes
 Device B rejection passes
+Viewer Russian/English localization tests pass
+Windows installer language-selection flow passes
 manual demo rehearsed
 ```
 

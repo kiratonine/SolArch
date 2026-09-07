@@ -1,50 +1,56 @@
-# SolArch
+# SolArch Archive Core foundation
 
-Платформа для создания, распространения и защищённого открытия цифрового контента.
+Part 01 is **PARTIAL**: the reusable Rust foundation and clean review archive
+tool are implemented. Production `.slr` create/verify remain blocked on shared
+signature coverage/trust, fingerprint encoding, and CLI key-handoff decisions.
+See [the Part 01 report](docs/archive-core-viewer/reports/PART_01_REPORT.md).
 
-Контейнер `.slr` можно свободно скачать и переслать, но открыть его содержимое можно только
-в SolArch Viewer — после оплаты в USDC, серверной верификации платежа и активации лицензии,
-привязанной к устройству.
+## Validation
 
-```text
-Discover → Inspect → Download .slr → Open in Viewer → Pay USDC
-→ Verify on backend → Entitlement → Device License → Protected View
+```sh
+cargo fmt --check
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace
+cargo run -p solarch-cli -- --help
+node --test scripts/create-clean-archive.test.mjs
+node scripts/create-clean-archive.mjs
 ```
 
-## Документация
+The repository has no root Node package. The standalone script requires Node 20+
+and `tar`; no JavaScript dependencies or package installation are needed. If
+JavaScript tooling is added later, use pnpm exclusively.
 
-Общие договорённости команды — в [`docs/`](docs/). Порядок чтения описан в
-[`docs/README.md`](docs/README.md).
+The clean archive is written under `artifacts/` with a UTC timestamp and unique
+suffix. It includes source, tests, docs, and local `TODO/` review instructions;
+it excludes `.codex/`, `.git/`, secrets, build outputs, symlinks and artifacts.
+This is a precise filename/path filter, not a scanner able to identify arbitrary
+secrets hidden in ordinary source or documentation. Do not keep real secrets in
+reviewable source files. Source mutation detection is best effort, not a
+transactional snapshot of a concurrently hostile filesystem.
 
-> ⚠️ `docs/context/` — устаревший черновик (прежнее название продукта, прежнее расширение
-> контейнера, устаревшая бизнес-логика). Источником истины не является.
+## Core boundaries
 
-## Структура монорепозитория
+- `format`: documented, bounded v1 structural serialization and parsing. Its
+  result is explicitly **unverified**, even when parsing succeeds.
+- `paths` / `manifest`: logical path, MIME metadata, policy and chunk-reference
+  validation; no filesystem extraction or content-format parser.
+- `crypto` / `chunks`: real XChaCha20-Poly1305, fresh session-owned Content Key,
+  non-resettable nonce counter, selected chunk decryption and zeroizing buffers.
+- `builder`: prepared manifest and borrowed chunks to an encrypted in-memory
+  archive. The caller retains the session/key. Maximum content is 64 MiB for
+  this foundation API; a streaming file builder is still pending integration.
+- `signature` / `fingerprint`: strict Ed25519 verification with an explicit
+  caller trust anchor and a raw SHA-256 primitive, without claiming an external
+  archive fingerprint contract.
 
-```text
-apps/web        Marketplace Frontend   — React + Vite
-apps/api        Marketplace Backend    — NestJS
-apps/viewer     Desktop Viewer         — Tauri
-crates/         solarch-core, solarch-cli — Rust: формат .slr и криптография
-docs/           Общая документация
-```
+`cargo run -p solarch-cli -- inspect <file>` returns bounded public/structural
+metadata marked `UNVERIFIED`; it does not authenticate the container, reveal
+the manifest, or authorize decryption. It seeks to determine the actual file
+length and reads only the 96-byte prelude and public header (at most 64 KiB).
+The shared structural limit remains 1 GiB; encrypted sections are not read.
+`create` and `verify` fail with a contract-unavailable error and do not read keys.
 
-Зоны ответственности веток зафиксированы в [`docs/INTEGRATION.md`](docs/INTEGRATION.md) §2.
-
-```text
-feat/archive-core-viewer     crates/*, apps/viewer
-feat/marketplace-frontend    apps/web
-feat/marketplace-backend     apps/api, миграции БД
-```
-
-## Запуск
-
-Требуется Node.js 20+.
-
-```bash
-npm install
-npm run web          # dev-сервер фронтенда на http://localhost:5173
-npm run web:build
-npm run web:test
-npm run web:lint
-```
+Synthetic encrypted/signed fixtures are generated reproducibly only inside
+`cfg(test)` in `builder_fixture_tests.rs`. They are not production platform
+signatures or cross-branch wire fixtures. No Viewer, payment, licensing, or
+Windows-specific implementation is included in Part 01.

@@ -1,52 +1,14 @@
-# dependencies
-node_modules/
-.pnp
-.pnp.js
-
-# builds
-dist/
-build/
-out/
-target/
-*.tsbuildinfo
-
-# env / secrets
+/TODO/
+/.codex/
+/artifacts/
+/target/
+**/node_modules/
+**/dist/
+**/coverage/
 .env
 .env.*
 !.env.example
+*.log
 *.pem
 *.key
-secrets/
-
-# test / coverage
-coverage/
-.nyc_output/
-playwright-report/
-test-results/
-blob-report/
-.playwright/
-
-# caches
-.cache/
-.vite/
-.turbo/
-.eslintcache
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# editors / os
-.DS_Store
-Thumbs.db
-.idea/
-*.swp
-.vscode/*
-!.vscode/extensions.json
-!.vscode/settings.json
-
-# generated artifacts
-*.slr
-
-# playwright mcp artifacts
-.playwright-mcp/
+AGENTS.md

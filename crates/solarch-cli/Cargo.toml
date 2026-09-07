@@ -1,0 +1,13 @@
+[package]
+name = "solarch-cli"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "solarch"
+path = "src/main.rs"
+
+[dependencies]
+solarch-core = { path = "../solarch-core" }
+serde_json.workspace = true
