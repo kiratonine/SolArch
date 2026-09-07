@@ -30,14 +30,18 @@ export function createFormatters(locale: Locale): Formatters {
   const date = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', year: 'numeric' })
   const byteFormatters = new Map<string, Intl.NumberFormat>()
 
-  function byteFormatter(unit: string, maximumFractionDigits: number): Intl.NumberFormat {
-    const key = `${unit}:${maximumFractionDigits}`
+  function byteFormatter(
+    unit: string,
+    maximumFractionDigits: number,
+    unitDisplay: 'short' | 'long',
+  ): Intl.NumberFormat {
+    const key = `${unit}:${maximumFractionDigits}:${unitDisplay}`
     let formatter = byteFormatters.get(key)
     if (!formatter) {
       formatter = new Intl.NumberFormat(locale, {
         style: 'unit',
         unit,
-        unitDisplay: 'short',
+        unitDisplay,
         maximumFractionDigits,
       })
       byteFormatters.set(key, formatter)
@@ -58,9 +62,13 @@ export function createFormatters(locale: Locale): Formatters {
       // Байты — всегда целые; дальше один знак нужен только пока число меньше десяти,
       // иначе «124.7 MB» шумит там, где достаточно «125 MB».
       const fractionDigits = step === 0 ? 0 : scaled < 10 ? 1 : 0
+      // Сокращения CLDR для байта совпадают со словом и не склоняются: «0 byte»
+      // читается опечаткой, хотя это и есть короткая форма. Байтам поэтому даём
+      // длинную («0 bytes», «0 байт»); у kB и MB сокращение настоящее — им short.
+      const display = step === 0 ? 'long' : 'short'
       // Индекс всегда в границах — цикл сам его и удерживает; `?? 'byte'` стоит
       // только затем, чтобы это увидел компилятор.
-      return byteFormatter(BYTE_UNITS[step] ?? 'byte', fractionDigits).format(scaled)
+      return byteFormatter(BYTE_UNITS[step] ?? 'byte', fractionDigits, display).format(scaled)
     },
 
     date: (iso) => date.format(new Date(iso)),

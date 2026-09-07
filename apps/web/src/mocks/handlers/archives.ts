@@ -5,6 +5,7 @@ import type { CreateArchiveRequest, UpdateArchiveRequest } from '@/lib/api/types
 import {
   DEFAULT_POLICY,
   MOCK_CREATOR,
+  advanceProcessing,
   db,
   economicsFor,
   findById,
@@ -29,6 +30,9 @@ export const archiveHandlers = [
     const unauthorized = requireSession()
     if (unauthorized) return unauthorized
 
+    // Сборка идёт на стороне backend: к моменту ответа он уже мог её закончить.
+    advanceProcessing()
+
     // Кабинет показывает свои архивы, а не весь каталог. Мок-поля наружу не уходят.
     const ownerId = db.session?.id
 
@@ -40,6 +44,7 @@ export const archiveHandlers = [
             files: _files,
             owner_id: _owner,
             creator_display_name: _creator,
+            processing_done_at: _processing,
             ...archive
           }) => archive,
         ),
@@ -108,6 +113,8 @@ export const archiveHandlers = [
   http.get(route('/archives/:archiveId'), ({ params }) => {
     const unauthorized = requireSession()
     if (unauthorized) return unauthorized
+
+    advanceProcessing()
 
     const archive = findById(String(params.archiveId))
     if (!archive) return apiError(404, 'ARCHIVE_NOT_FOUND', 'Archive not found')

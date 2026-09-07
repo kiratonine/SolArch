@@ -83,10 +83,25 @@ export function ownerDownloadUrl(archiveId: string): string {
 
 // ------------------------------------------------------------ query options
 
+/**
+ * Список архивов автора.
+ *
+ * Пока хотя бы один архив собирается, список обновляется сам: `uploading` и
+ * `processing` кончаются на стороне backend, и без опроса кабинет показывал бы
+ * «обрабатывается» до тех пор, пока человек не перезагрузит страницу руками.
+ * Как только переходных архивов не остаётся, опрос прекращается.
+ */
 export function myArchivesQuery() {
   return queryOptions({
     queryKey: queryKeys.archives.list(),
     queryFn: ({ signal }) => listMyArchives(signal),
+    refetchInterval: (query) => {
+      const building = query.state.data?.some(
+        (archive) =>
+          archive.technical_status === 'uploading' || archive.technical_status === 'processing',
+      )
+      return building ? 5_000 : false
+    },
   })
 }
 

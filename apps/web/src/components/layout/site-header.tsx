@@ -1,12 +1,13 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 
+import { SignOutButton } from '@/components/auth/sign-out-button'
 import { WalletAddress } from '@/components/auth/wallet-address'
 import { Logo } from '@/components/brand/logo'
 import { Container } from '@/components/layout/container'
 import { LanguageSwitch } from '@/components/layout/language-switch'
 import { ThemeSwitch } from '@/components/layout/theme-switch'
-import { logout, queryKeys, sessionQuery } from '@/lib/api'
+import { sessionQuery } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
@@ -32,7 +33,11 @@ export function SiteHeader() {
           <Logo markClassName="size-4.5" wordClassName="text-[0.95rem]" />
         </Link>
 
-        <nav className="ml-auto flex items-center gap-3 sm:gap-4">
+        {/* Промежутки поджаты на узком экране: у вошедшего автора в строке
+            четыре органа управления и логотип, и на 375px (390 минус полоса
+            прокрутки) шапка при gap-3 вылезала за правый край вместе со всей
+            страницей. Ширину кромки трогать нельзя — она общая (F21). */}
+        <nav className="ml-auto flex items-center gap-2 sm:gap-4">
           {/* На узком экране ссылку в каталог несёт логотип: с кабинетом и выходом
               в строке пять органов управления не помещались, и шапка уезжала
               за правый край вместе со всей страницей. */}
@@ -62,7 +67,7 @@ export function SiteHeader() {
  * закреплён за деньгами.
  */
 const navLink =
-  'text-foreground hover:text-foreground/70 focus-visible:ring-ring/60 rounded-sm text-[0.8125rem] font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none'
+  'text-foreground hover:text-foreground/70 focus-visible:ring-ring/60 rounded-sm text-[0.8125rem] font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:outline-none'
 
 const navLinkActive = 'underline decoration-1 underline-offset-[6px]'
 
@@ -78,19 +83,6 @@ function SignInLink() {
 
 function SignedIn({ wallet }: { wallet: string }) {
   const { t } = useI18n()
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-
-  const signOut = useMutation({
-    mutationFn: logout,
-    onSuccess: async () => {
-      // Сессия обнуляется вручную, а не инвалидацией: повторный запрос `/me`
-      // ответил бы 401, и человек увидел бы вспышку ошибки на ровном месте.
-      queryClient.setQueryData(queryKeys.session, null)
-      queryClient.removeQueries({ queryKey: queryKeys.archives.all })
-      await navigate({ to: '/' })
-    },
-  })
 
   return (
     <>
@@ -98,14 +90,9 @@ function SignedIn({ wallet }: { wallet: string }) {
         {t.nav.dashboard}
       </Link>
 
-      <button
-        type="button"
-        onClick={() => signOut.mutate()}
-        disabled={signOut.isPending}
-        className={navLink}
-      >
-        {t.auth.session.signOut}
-      </button>
+      {/* Выход спрашивает подтверждение: кнопка стоит вплотную к ссылкам, а вернуться
+          после промаха можно только через кошелёк и новую подпись. */}
+      <SignOutButton className={navLink} />
 
       {/* Адрес — не пункт навигации, а сведение о том, кем ты вошёл. Среди ссылок
           он читался сломанной ссылкой, поэтому убран в плашку с волосяной рамкой

@@ -17,6 +17,13 @@ import type {
 
 export interface MockArchive extends CreatorArchive {
   files: PublicFileEntry[]
+  /**
+   * Момент, когда backend закончит сборку, в миллисекундах эпохи. Поля нет
+   * в контракте: настоящий backend просто отдаёт другой `technical_status`,
+   * когда упаковал контейнер. Моку нужен срок, чтобы переход `processing → ready`
+   * действительно происходил, а не был вечным «обрабатывается».
+   */
+  processing_done_at?: number
   /** Имя автора. В контракте это `creator.display_name` публичного ответа. */
   creator_display_name: string
   /**
@@ -128,6 +135,10 @@ interface SeedInput {
   cover?: string
   marketplace_status?: MockArchive['marketplace_status']
   technical_status?: MockArchive['technical_status']
+  /** Сколько секунд архив пробудет в `processing`, считая от загрузки страницы. */
+  processingSeconds?: number
+  /** Заполняется только вместе с technical_status: 'failed'. */
+  failure_reason?: string
 }
 
 function seedArchive(input: SeedInput): MockArchive {
@@ -149,6 +160,10 @@ function seedArchive(input: SeedInput): MockArchive {
     size_bytes: input.files.reduce((sum, file) => sum + file.size_bytes, 0),
     metrics: { views: input.views, downloads: input.downloads, paid_unlocks: input.paid },
     created_at: input.createdAt,
+    ...(input.failure_reason ? { failure_reason: input.failure_reason } : {}),
+    ...(input.processingSeconds === undefined
+      ? {}
+      : { processing_done_at: Date.now() + input.processingSeconds * 1000 }),
     files: input.files,
     creator_display_name: input.creator,
     owner_id: input.mine ? MOCK_CREATOR.id : `usr_${input.id}`,
@@ -339,6 +354,63 @@ function seed(): MockArchive[] {
         pdf('finance/manual.pdf', 760),
       ],
     }),
+    // Три состояния, которых не видно в каталоге, но которые обязан показывать
+    // кабинет: архив в обработке, архив со сломанной сборкой и снятый с публикации.
+    seedArchive({
+      id: 'arc_field_notes',
+      creator: 'Aurora Labs',
+      mine: true,
+      slug: null,
+      title: 'Rust FFI Field Notes',
+      short: 'Заметки о связке Rust и C: выравнивание, владение, отладка.',
+      description: 'Разбор типичных ошибок на границе Rust и C.',
+      amount: '18.00',
+      views: 0,
+      downloads: 0,
+      paid: 0,
+      createdAt: '2026-09-04T11:30:00Z',
+      marketplace_status: 'draft',
+      technical_status: 'processing',
+      // Полминуты — чтобы переход был виден живьём и при этом ни один тест
+      // не успел его застать: тесты стартуют со свежей базы и идут секунды.
+      processingSeconds: 30,
+      files: [pdf('notes/ffi.pdf', 1480), pdf('notes/debugging.pdf', 920)],
+    }),
+    seedArchive({
+      id: 'arc_broken_scans',
+      creator: 'Aurora Labs',
+      mine: true,
+      slug: null,
+      title: 'Archive Scans 1997',
+      short: 'Сканы бумажного архива за 1997 год.',
+      description: 'Оцифровка бумажного архива.',
+      amount: '29.00',
+      views: 0,
+      downloads: 0,
+      paid: 0,
+      createdAt: '2026-08-22T08:05:00Z',
+      marketplace_status: 'draft',
+      technical_status: 'failed',
+      failure_reason:
+        'Файл scans/roll-07.png повреждён: контейнер собрать не удалось. Замените файл и запустите сборку заново.',
+      files: [image('scans/roll-06.png', 7400), image('scans/roll-07.png', 0)],
+    }),
+    seedArchive({
+      id: 'arc_retired_guide',
+      creator: 'Aurora Labs',
+      mine: true,
+      slug: 'solana-validator-guide',
+      title: 'Solana Validator Guide',
+      short: 'Развёртывание и обслуживание валидатора: железо, ключи, мониторинг.',
+      description: 'Руководство по запуску валидатора и его обслуживанию.',
+      amount: '39.00',
+      views: 4180,
+      downloads: 1240,
+      paid: 96,
+      createdAt: '2026-01-15T13:00:00Z',
+      marketplace_status: 'unpublished',
+      files: [pdf('validator/setup.pdf', 2100), sheet('validator/hardware.xlsx', 140)],
+    }),
     seedArchive({
       id: 'arc_draft_notes',
       creator: 'Aurora Labs',
@@ -395,6 +467,25 @@ export function findBySlug(slug: string): MockArchive | undefined {
 
 export function findById(archiveId: string): MockArchive | undefined {
   return db.archives.find((archive) => archive.archive_id === archiveId)
+}
+
+/**
+ * Доводит до конца сборки те архивы, чей срок истёк.
+ *
+ * Вызывается на чтении, а не по таймеру: мок живёт внутри воркера и в тестах,
+ * где фонового времени может не быть вовсе. Настоящий backend меняет статус сам,
+ * а фронт узнаёт об этом ровно так же — следующим ответом на запрос.
+ */
+export function advanceProcessing(): void {
+  const now = Date.now()
+
+  for (const archive of db.archives) {
+    if (archive.technical_status !== 'processing') continue
+    if (archive.processing_done_at === undefined || archive.processing_done_at > now) continue
+
+    archive.technical_status = 'ready'
+    delete archive.processing_done_at
+  }
 }
 
 export { DEFAULT_POLICY, economicsFor }

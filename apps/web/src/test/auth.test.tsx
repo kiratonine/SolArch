@@ -118,10 +118,61 @@ describe('сессия автора', () => {
 
     await user.click(screen.getByRole('button', { name: 'Sign out' }))
 
+    // Выход спрашивает подтверждение: одного нажатия недостаточно.
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Sign out' }))
+
     await waitFor(() => {
       expect(router.state.location.pathname).toBe('/')
     })
     expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument()
+  })
+
+  it('не выпускает по случайному нажатию: выход спрашивает подтверждение', async () => {
+    const user = userEvent.setup()
+    db.session = MOCK_CREATOR
+
+    const { router } = renderApp({ path: '/dashboard' })
+
+    await user.click(await screen.findByRole('button', { name: 'Sign out' }))
+
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Stay signed in' }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+    expect(router.state.location.pathname).toBe('/dashboard')
+    expect(db.session).toEqual(MOCK_CREATOR)
+  })
+
+  it('отпускает вопрос по клику мимо и по Escape, оставляя сессию', async () => {
+    const user = userEvent.setup()
+    db.session = MOCK_CREATOR
+
+    renderApp({ path: '/dashboard' })
+
+    await user.click(await screen.findByRole('button', { name: 'Sign out' }))
+    await screen.findByRole('dialog')
+
+    // Клик мимо — это «нет». Требовать за него отдельного нажатия не за что.
+    const backdrop = document.querySelector('[data-slot="dialog-backdrop"]')
+    expect(backdrop).not.toBeNull()
+    await user.click(backdrop as HTMLElement)
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+    expect(db.session).toEqual(MOCK_CREATOR)
+
+    await user.click(screen.getByRole('button', { name: 'Sign out' }))
+    await screen.findByRole('dialog')
+    await user.keyboard('{Escape}')
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+    expect(db.session).toEqual(MOCK_CREATOR)
   })
 
   it('не держит вошедшего автора на странице входа', async () => {

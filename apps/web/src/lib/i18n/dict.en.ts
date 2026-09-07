@@ -137,8 +137,14 @@ export const en = {
   },
 
   status: {
+    /**
+     * Технический статус говорит о файле, маркетплейсный — о витрине, и у нового
+     * архива оба равны `draft`. Одно слово на двух бейджах подряд читается как
+     * ошибка вёрстки, поэтому технический `draft` назван тем, чем он и является:
+     * контейнер ещё не собран.
+     */
     technical: {
-      draft: 'Draft',
+      draft: 'Not built',
       uploading: 'Uploading',
       processing: 'Processing',
       ready: 'Ready',
@@ -198,6 +204,13 @@ export const en = {
     session: {
       account: 'Your wallet',
       signOut: 'Sign out',
+
+      /** Подтверждение выхода: цена промаха — кошелёк и новая подпись. */
+      confirm: {
+        title: 'Sign out of SolArch?',
+        body: 'Your archives stay exactly where they are. Coming back means connecting your wallet and signing the message again.',
+        cancel: 'Stay signed in',
+      },
     },
   },
 
@@ -205,6 +218,21 @@ export const en = {
     title: 'Your archives',
     lead: 'Every archive you create shows up here with its status, price and metrics.',
     signedInAs: 'Signed in as',
+    loading: 'Loading your archives',
+
+    card: {
+      yourShare: 'your share',
+      created: (date: string) => `created ${date}`,
+      publicPage: 'Open the public page',
+    },
+
+    empty: {
+      title: 'No archives yet',
+      body: 'The archives you create show up here, each with its build status, its price and what it has done in the catalog.',
+    },
+    error: {
+      title: 'Your archives did not load',
+    },
   },
 
   common: {

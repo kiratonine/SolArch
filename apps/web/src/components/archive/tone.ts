@@ -39,3 +39,22 @@ export const TONE_SPINE: Record<SpineTone, string> = {
   ok: 'bg-state-ok',
   error: 'bg-state-error',
 }
+
+/**
+ * Цвет корешка для собственного архива.
+ *
+ * Корешок отвечает на один вопрос — далеко ли архив от полки, — поэтому статусы
+ * читаются по порядку срочности: сломанная сборка важнее всего, затем незаконченная,
+ * и только у готового архива корешок говорит о витрине. Опубликованный получает
+ * чернильный корешок, как в каталоге: он там же, где его видит покупатель.
+ */
+export function creatorSpineTone(archive: {
+  technical_status: TechnicalStatus
+  marketplace_status: MarketplaceStatus
+}): SpineTone {
+  if (archive.technical_status === 'failed') return 'error'
+  if (archive.technical_status === 'draft') return 'idle'
+  if (archive.technical_status !== 'ready') return 'progress'
+  if (archive.marketplace_status === 'blocked') return 'error'
+  return archive.marketplace_status === 'published' ? 'sealed' : 'ok'
+}

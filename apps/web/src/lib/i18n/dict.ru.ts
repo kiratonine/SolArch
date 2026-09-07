@@ -136,7 +136,7 @@ export const ru: Dictionary = {
 
   status: {
     technical: {
-      draft: 'Черновик',
+      draft: 'Не собран',
       uploading: 'Загрузка',
       processing: 'Обработка',
       ready: 'Готов',
@@ -193,6 +193,12 @@ export const ru: Dictionary = {
     session: {
       account: 'Ваш кошелёк',
       signOut: 'Выйти',
+
+      confirm: {
+        title: 'Выйти из SolArch?',
+        body: 'Архивы останутся на месте. Чтобы вернуться, снова подключите кошелёк и подпишите сообщение.',
+        cancel: 'Остаться',
+      },
     },
   },
 
@@ -200,6 +206,21 @@ export const ru: Dictionary = {
     title: 'Ваши архивы',
     lead: 'Каждый созданный архив появляется здесь со своим статусом, ценой и метриками.',
     signedInAs: 'Вы вошли как',
+    loading: 'Загружаем ваши архивы',
+
+    card: {
+      yourShare: 'ваша доля',
+      created: (date: string) => `создан ${date}`,
+      publicPage: 'Открыть публичную страницу',
+    },
+
+    empty: {
+      title: 'Архивов пока нет',
+      body: 'Созданные архивы появятся здесь — со статусом сборки, ценой и тем, что они собрали в каталоге.',
+    },
+    error: {
+      title: 'Ваши архивы не загрузились',
+    },
   },
 
   common: {
