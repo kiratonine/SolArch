@@ -75,7 +75,7 @@ CLI v4 поддерживает флаг `--base` для выбора прими
 
 | # | Этап | Статус | Комментарий |
 |---|------|--------|-------------|
-| S0 | Скелет `apps/web` | todo | Vite+React+TS, Tailwind, shadcn/Base UI, TanStack Query, роутер, тесты, линт |
+| S0 | Скелет `apps/web` | **done** | Vite 8, React 19, TS 6, Tailwind v4, shadcn/Base UI, TanStack Query+Router, MSW, Vitest, oxlint |
 | S1 | Typed API client + mock-слой (`lib/api/*`) по `docs/API.md` | todo | Без mock-слоя дальше двигаться нельзя |
 | S2 | Дизайн-язык: тема shadcn, layout, базовые компоненты | todo | Тему потом можно заменить готовым шаблоном с shadcn |
 | S3 | Public: Landing / Catalog + сортировки + состояния | todo | loading/empty/error |
@@ -162,16 +162,22 @@ display_path · display_name · extension · mime_type · size_bytes
 ## 5. Текущее состояние
 
 ```text
-Remote:      https://github.com/kiratonine/SolArch  — ПУСТОЙ, ни одной ветки
-Локально:    docs/ + CLAUDE.md + WORKLOG_FRONTEND.md. Кода нет, git не инициализирован.
-apps/web:    не создан
-Backend:     недоступен → работаем на mock-слое (MSW)
-Этап:        S0 не начат
+Remote:      https://github.com/kiratonine/SolArch  — ещё пустой, НЕ ЗАПУШЕНО
+Локально:    git инициализирован, две ветки
+  main                       c8599a9  docs/ + корневой workspace + .gitignore + README
+  feat/marketplace-frontend  72f6cb5  apps/web + CLAUDE.md + WORKLOG (текущая)
+apps/web:    скелет собран и проверен
+Backend:     недоступен → работаем на MSW
+Этап:        S0 done → следующий S1
 ```
 
-Открытый организационный вопрос: `docs/` ещё не в GitHub. По `INTEGRATION.md` §12 первым
-шагом идёт «merge common docs and monorepo skeleton» — нужно договориться, кто заливает
-общие документы в `main`, чтобы три ветки не разошлись на разных версиях документации.
+Проверено на S0: `npm run build`, `npm run test`, `npm run lint` проходят;
+страница рендерится на `http://localhost:5173` без ошибок в консоли.
+
+Организационный вопрос (открыт): ничего ещё не запушено в GitHub. По `INTEGRATION.md` §12
+первым шагом идёт «merge common docs and monorepo skeleton» — надо договориться с командой,
+что `main` (коммит `c8599a9`) становится общей базой, от которой ответвляются две другие ветки.
+Иначе три ветки разойдутся на разных версиях документации и корневого конфига.
 
 ---
 
@@ -220,6 +226,30 @@ Backend:     недоступен → работаем на mock-слое (MSW)
 - Создан `CLAUDE.md` — автозагружаемый сжатый контекст проекта.
 - Выбраны роутер, стратегия моков и структура репозитория (F7–F9).
 - Найден remote `github.com/kiratonine/SolArch` — пустой, `docs/` туда ещё не залиты.
-- Кода не написано.
-- **Следующий шаг:** S0 — инициализация git, ветка `feat/marketplace-frontend`,
-  скелет `apps/web` (Vite+React+TS, Tailwind, shadcn/Base UI, TanStack Query+Router, MSW, Vitest, ESLint).
+
+### Сессия 2 — 2026-09-07 · S0 выполнен
+
+Сделано:
+- `git init`, ветка `main` с общей базой (`docs/`, корневой npm workspace, `.gitignore`, README),
+  от неё отведена `feat/marketplace-frontend`.
+- Создан `apps/web`: Vite 8, React 19, TypeScript 6.
+- TanStack Router с файловыми роутами (`src/routes/`), TanStack Query с общим клиентом.
+- Tailwind v4 + shadcn/ui на Base UI, пресет `nova` (Lucide + Geist).
+- MSW: `handlers.ts` общий, `browser.ts` для dev, `node.ts` для тестов; service worker в `public/`.
+- Vitest + Testing Library, незамоканный запрос в тестах падает намеренно.
+- oxlint настроен, предупреждений нет.
+- Проверено: build, test, lint зелёные; страница рендерится без ошибок в консоли.
+
+Отклонения от плана и почему:
+- **oxlint вместо ESLint** — `create-vite@9` перешёл на него по умолчанию; переписывать
+  на ESLint не стали, ради скорости и меньшей конфигурации.
+- **Убран `baseUrl` из tsconfig** — TypeScript 6 объявил его устаревшим (`TS5101`);
+  алиас `@/*` работает через `paths` без него.
+- **Пресет темы `nova`** взят как дефолтный. Меняется заменой токенов в `src/index.css`.
+
+Не сделано:
+- В GitHub ничего не запушено — ждём согласования с командой по общей базе `main`.
+
+**Следующий шаг:** S1 — typed API client в `lib/api/` и наполнение MSW-хендлеров
+по `docs/API.md`. От ответов на Q1–Q7 этап не блокируется: спорные места закрываем
+адаптерами, но Q1 (формат сессии) стоит выяснить до S5.
