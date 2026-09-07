@@ -5,7 +5,11 @@ import type { MarketplaceSort } from '@/lib/api/types'
 import { db, findBySlug, type MockArchive } from '../db'
 import { apiError, route, toDetail, toListItem } from './shared'
 
-const PER_PAGE = 12
+/**
+ * Размер страницы задаёт backend. В моке он намеренно маленький: иначе на девяти
+ * фикстурах вторая страница не появилась бы и постраничность осталась бы непроверенной.
+ */
+const PER_PAGE = 6
 
 /**
  * Порядок выдачи каталога.

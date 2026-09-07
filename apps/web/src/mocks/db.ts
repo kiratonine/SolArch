@@ -210,6 +210,84 @@ function seed(): MockArchive[] {
       files: [pdf('legal/terms-of-service.pdf', 420), pdf('legal/privacy-policy.pdf', 380)],
     }),
     seedArchive({
+      id: 'arc_anchor_cookbook',
+      slug: 'solana-anchor-cookbook',
+      title: 'Solana Anchor Cookbook',
+      short: 'Готовые рецепты на Anchor: PDA, токен-аккаунты, тесты, деплой.',
+      description:
+        'Сборник рецептов для разработки на Anchor: работа с PDA, создание и закрытие ' +
+        'токен-аккаунтов, интеграционные тесты и порядок деплоя в mainnet.',
+      amount: '24.00',
+      views: 11730,
+      downloads: 3480,
+      paid: 517,
+      createdAt: '2026-05-21T14:20:00Z',
+      files: [
+        pdf('anchor/01-pda.pdf', 940),
+        pdf('anchor/02-token-accounts.pdf', 1120),
+        pdf('anchor/03-testing.pdf', 860),
+      ],
+    }),
+    seedArchive({
+      id: 'arc_ml_notebooks',
+      slug: 'applied-ml-notebooks',
+      title: 'Applied ML Notebooks',
+      short: 'Разборы прикладных задач машинного обучения с данными и выводами.',
+      description:
+        'Двенадцать разобранных задач: подготовка данных, выбор метрики, ошибки ' +
+        'валидации и разбор того, почему модель работает не так, как ожидалось.',
+      amount: '34.00',
+      views: 8120,
+      downloads: 1940,
+      paid: 268,
+      createdAt: '2026-06-14T11:05:00Z',
+      files: [
+        pdf('ml/00-method.pdf', 1280),
+        sheet('ml/datasets.xlsx', 520),
+        pdf('ml/case-studies.pdf', 3400),
+      ],
+    }),
+    seedArchive({
+      id: 'arc_type_specimens',
+      slug: 'grotesque-type-specimens',
+      title: 'Grotesque Type Specimens',
+      short: 'Сорок разворотов-образцов гротесков в высоком разрешении.',
+      description:
+        'Образцы наборных гротесков: развороты с кеглями, начертаниями и примерами ' +
+        'вёрстки. Пригодны для подбора шрифтовой пары и печати.',
+      amount: '15.00',
+      views: 5410,
+      downloads: 1620,
+      paid: 96,
+      createdAt: '2026-07-02T09:40:00Z',
+      files: [
+        image('type/spread-01.png', 6100),
+        image('type/spread-02.png', 5800),
+        image('type/spread-03.png', 6400),
+        image('type/spread-04.png', 5900),
+      ],
+    }),
+    seedArchive({
+      id: 'arc_startup_finance',
+      slug: 'startup-finance-models',
+      title: 'Startup Finance Models',
+      short: 'Финансовые модели раннего этапа: юнит-экономика, runway, найм.',
+      description:
+        'Три связанные модели: юнит-экономика, план найма и прогноз runway. ' +
+        'К каждой — инструкция, как заполнять и что проверять перед показом инвестору.',
+      amount: '59.00',
+      views: 7340,
+      downloads: 1180,
+      paid: 174,
+      createdAt: '2026-04-28T16:10:00Z',
+      files: [
+        sheet('finance/unit-economics.xlsx', 310),
+        sheet('finance/hiring-plan.xlsx', 180),
+        sheet('finance/runway.xlsx', 220),
+        pdf('finance/manual.pdf', 760),
+      ],
+    }),
+    seedArchive({
       id: 'arc_draft_notes',
       slug: null,
       title: 'Untitled research notes',

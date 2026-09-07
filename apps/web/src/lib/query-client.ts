@@ -1,5 +1,7 @@
 import { QueryClient } from '@tanstack/react-query'
 
+import { isApiError } from '@/lib/api'
+
 /**
  * Единый QueryClient приложения.
  *
@@ -13,7 +15,13 @@ export const queryClient = new QueryClient({
       staleTime: 60_000,
       gcTime: 5 * 60_000,
       refetchOnWindowFocus: false,
-      retry: 1,
+      // Ответ 4xx повтором не исправить: 404 на снятый с публикации архив
+      // останется 404 и только задержит показ страницы. Повторяем лишь сбои
+      // сети и 5xx.
+      retry: (failureCount, error) => {
+        if (isApiError(error) && error.status < 500) return false
+        return failureCount < 1
+      },
     },
     mutations: {
       retry: 0,

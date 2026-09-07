@@ -1,3 +1,5 @@
+import { Link } from '@tanstack/react-router'
+
 import { MetricGrid } from '@/components/archive/metric-grid'
 import { PriceTag } from '@/components/archive/price-tag'
 import { TONE_SPINE, type SpineTone } from '@/components/archive/tone'
@@ -19,8 +21,12 @@ export interface ArchiveCardProps {
  * Внизу манифест: сколько файлов, сколько весит, сколько раз открыли. Всё, что
  * посетитель может узнать о запечатанном контейнере, не открывая его.
  *
- * Компонент презентационный. Ссылку на `/archives/$slug` добавит S3, когда
- * появится сам роут страницы архива, — вместе с состоянием наведения.
+ * Ссылка обёрнута только вокруг заголовка, а кликабельна вся карточка: псевдоэлемент
+ * растянут по ней (`after:inset-0`). Так у ссылки остаётся короткое имя — название
+ * архива, — а не пересказ всей карточки, как было бы при обёртывании целиком.
+ *
+ * При наведении корешок утолщается. Он позиционирован абсолютно, поэтому ширина
+ * меняется без сдвига содержимого.
  */
 export function ArchiveCard({ archive, spine = 'sealed', className }: ArchiveCardProps) {
   const { t, format } = useI18n()
@@ -28,20 +34,29 @@ export function ArchiveCard({ archive, spine = 'sealed', className }: ArchiveCar
   return (
     <article
       className={cn(
-        'bg-card border-border relative overflow-hidden rounded-lg border',
+        'bg-card border-border group has-[a:focus-visible]:ring-ring/60 relative overflow-hidden rounded-lg border transition-colors has-[a:focus-visible]:ring-2',
         className,
       )}
     >
       <span
         aria-hidden="true"
-        className={cn('absolute inset-y-0 left-0 w-[3px]', TONE_SPINE[spine])}
+        className={cn(
+          'absolute inset-y-0 left-0 w-[3px] transition-[width] duration-150 group-hover:w-[6px]',
+          TONE_SPINE[spine],
+        )}
       />
 
       <div className="py-5 pr-5 pl-6 sm:pl-7">
         <div className="flex items-start justify-between gap-6">
           <div className="min-w-0">
             <h3 className="font-sans text-[1.0625rem] leading-snug font-semibold tracking-[-0.01em]">
-              {archive.title}
+              <Link
+                to="/archives/$slug"
+                params={{ slug: archive.slug }}
+                className="after:absolute after:inset-0 group-hover:underline group-hover:underline-offset-4 focus-visible:outline-none"
+              >
+                {archive.title}
+              </Link>
             </h3>
             <p className="text-muted-foreground mt-1 truncate text-[0.8125rem]">
               {t.archive.by} {archive.creator.display_name}

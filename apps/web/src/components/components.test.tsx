@@ -4,13 +4,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ArchiveCard } from '@/components/archive/archive-card'
 import { LanguageSwitch } from '@/components/layout/language-switch'
-import { I18nProvider } from '@/lib/i18n'
+import { I18nProvider, useI18n } from '@/lib/i18n'
 import { PriceBreakdown } from '@/components/archive/price-breakdown'
 import { StatusBadge } from '@/components/archive/status-badge'
 import { EmptyState } from '@/components/state/empty-state'
 import { ErrorState } from '@/components/state/error-state'
 import type { MarketplaceArchiveListItem } from '@/lib/api'
-import { renderWithI18n } from '@/test/render'
+import { renderWithI18n, renderWithRouter } from '@/test/render'
 
 const ARCHIVE: MarketplaceArchiveListItem = {
   archive_id: 'arc_solana_course',
@@ -25,30 +25,43 @@ const ARCHIVE: MarketplaceArchiveListItem = {
   metrics: { views: 18_420, downloads: 4_210, paid_unlocks: 612 },
 }
 
+/**
+ * Карточка ставит ссылку, поэтому ей нужен роутер, а он поднимается асинхронно —
+ * отсюда `findBy*` вместо `getBy*` в первом обращении к каждому рендеру.
+ */
 describe('ArchiveCard', () => {
-  it('показывает манифест архива на английском', () => {
-    renderWithI18n(<ArchiveCard archive={ARCHIVE} />)
+  it('показывает манифест архива на английском', async () => {
+    renderWithRouter(<ArchiveCard archive={ARCHIVE} />)
 
-    expect(screen.getByRole('heading', { name: 'Solana Program Security' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Solana Program Security' }),
+    ).toBeInTheDocument()
     expect(screen.getByText('by Aurora Labs')).toBeInTheDocument()
     expect(screen.getByText('files')).toBeInTheDocument()
     expect(screen.getByText('unlocks')).toBeInTheDocument()
     expect(screen.getByText('612')).toBeInTheDocument()
   })
 
-  it('склоняет единицы в русской локали', () => {
-    renderWithI18n(<ArchiveCard archive={ARCHIVE} />, { locale: 'ru' })
+  it('склоняет единицы в русской локали', async () => {
+    renderWithRouter(<ArchiveCard archive={ARCHIVE} />, { locale: 'ru' })
 
     // 4 файла — форма few, 612 открытий — форма many.
-    expect(screen.getByText('файла')).toBeInTheDocument()
+    expect(await screen.findByText('файла')).toBeInTheDocument()
     expect(screen.getByText('открытий')).toBeInTheDocument()
   })
 
-  it('выводит цену строкой backend, без пересчёта', () => {
-    renderWithI18n(<ArchiveCard archive={ARCHIVE} />)
+  it('выводит цену строкой backend, без пересчёта', async () => {
+    renderWithRouter(<ArchiveCard archive={ARCHIVE} />)
 
-    expect(screen.getByText('49.00')).toBeInTheDocument()
+    expect(await screen.findByText('49.00')).toBeInTheDocument()
     expect(screen.getByText('USDC')).toBeInTheDocument()
+  })
+
+  it('ведёт на страницу архива, а имя ссылки — только название', async () => {
+    renderWithRouter(<ArchiveCard archive={ARCHIVE} />)
+
+    const link = await screen.findByRole('link', { name: 'Solana Program Security' })
+    expect(link).toHaveAttribute('href', '/archives/solana-program-security')
   })
 })
 
@@ -112,11 +125,18 @@ describe('LanguageSwitch', () => {
   })
 
   it('переключает язык всего поддерева и запоминает выбор', async () => {
+    // Соседний потребитель словаря — обычный компонент, а не карточка: карточке
+    // нужен роутер, а он к переключению языка отношения не имеет.
+    function FileCount() {
+      const { t } = useI18n()
+      return <p>{t.units.files(4)}</p>
+    }
+
     // Провайдер без заданной локали — иначе переключение было бы обесточено.
     render(
       <I18nProvider>
         <LanguageSwitch />
-        <ArchiveCard archive={ARCHIVE} />
+        <FileCount />
       </I18nProvider>,
     )
 

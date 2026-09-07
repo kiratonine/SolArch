@@ -40,9 +40,52 @@ export const en = {
     title: 'Catalog',
     lead: 'Take any archive without an account. Payment happens later, in the desktop Viewer, once the file is already yours.',
     loading: 'Loading the catalog',
+
+    /** Три шага механики. Landing обязан объяснять продукт (роль §3.1). */
+    steps: [
+      {
+        title: 'Take the file',
+        body: 'Every .slr leaves the catalog for free and without an account. Keep it, copy it, pass it on.',
+      },
+      {
+        title: 'Open it in the Viewer',
+        body: 'The container stays sealed until the desktop SolArch Viewer opens it on your computer.',
+      },
+      {
+        title: 'Pay once in USDC',
+        body: 'One payment unlocks the archive on one device. The creator keeps 95% of it.',
+      },
+    ],
+
+    sort: {
+      label: 'Sort',
+      popular_week: 'This week',
+      popular_month: 'This month',
+      most_downloaded: 'Most downloaded',
+      price_asc: 'Lowest price',
+      price_desc: 'Highest price',
+    },
+
+    search: {
+      label: 'Search the catalog',
+      placeholder: 'Search by title or description',
+      clear: 'Clear the search',
+    },
+
+    pagination: {
+      label: 'Catalog pages',
+      previous: 'Previous',
+      next: 'Next',
+      position: (page: number, pages: number) => `Page ${page} of ${pages}`,
+    },
+
     empty: {
       title: 'Nothing is published yet',
       body: 'The first archive to go live shows up here.',
+    },
+    noMatches: {
+      title: (query: string) => `Nothing matches “${query}”`,
+      body: 'Try a shorter query, or clear the search and browse everything.',
     },
     error: {
       title: 'The catalog did not load',
@@ -55,6 +98,16 @@ export const en = {
     price: 'Price',
     free: 'Free to download',
     openedIn: 'Opens in the SolArch Viewer after payment',
+    loading: 'Loading the archive',
+    about: 'About this archive',
+    back: 'Back to the catalog',
+    error: {
+      title: 'The archive did not load',
+    },
+    missing: {
+      title: 'This archive is not available',
+      body: 'It was either taken off the catalog or the link is wrong.',
+    },
   },
 
   metrics: {
