@@ -13,4 +13,13 @@ chacha20poly1305.workspace = true
 ed25519-dalek.workspace = true
 sha2.workspace = true
 zeroize.workspace = true
-rand_core.workspace = true
+hkdf.workspace = true
+serde_jcs.workspace = true
+focaccia.workspace = true
+zip.workspace = true
+bs58.workspace = true
+time.workspace = true
+quick-xml.workspace = true
+
+[dev-dependencies]
+base64.workspace = true

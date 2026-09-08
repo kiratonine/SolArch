@@ -1,13 +1,10 @@
-//! Core-owned structural v1 encoding (SLR_FORMAT §§3–4 delegate widths to Core).
+//! Exact frozen `.slr` v1 prelude and Public Header codec.
 //!
 //! Prelude: `SOLARCH\0` (8 bytes), major u16 LE = 1, minor u16 LE = 0,
 //! reserved u32 LE = 0, then five (offset u64 LE, length u64 LE) pairs.
 //! Sections in order: public header JSON UTF-8, encrypted manifest, encrypted
-//! index, encrypted content, opaque signature/integrity block. Prelude = 96 bytes.
-//! Sections are contiguous with no gaps/trailing bytes. Header <= 64 KiB;
-//! manifest/index <= 16 MiB each; total <= 1 GiB. No crypto wire profile is
-//! implied: successful structural parsing is NEVER signature verification.
-use crate::{integrity::checked_range, Error, Result};
+//! index, encrypted content and SIG1. Structural parsing remains UNVERIFIED.
+use crate::{canonical, integrity::checked_range, Error, Result};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Seek, SeekFrom};
 use std::ops::Range;
@@ -16,6 +13,10 @@ pub const MAGIC: &[u8; 8] = b"SOLARCH\0";
 pub const PRELUDE_LEN: usize = 96;
 pub const MAX_HEADER: usize = 64 * 1024;
 pub const MAX_CONTAINER: usize = 1024 * 1024 * 1024;
+pub const MAX_ENCRYPTED_MANIFEST: usize = 16 * 1024 * 1024;
+pub const MAX_ENCRYPTED_INDEX: usize = 262_168;
+pub const MAX_ENCRYPTED_DATA: usize = 8 + 512 * 1024 * 1024 + 16_384 * 16;
+pub const SIGNATURE_BLOCK_LEN: usize = 104;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -54,58 +55,122 @@ pub struct Backend {
 #[serde(deny_unknown_fields)]
 pub struct CryptoMetadata {
     pub content_algorithm: String,
+    pub kdf: String,
     pub chunk_size: u32,
 }
 
 impl PublicHeader {
     pub fn validate(&self) -> Result<()> {
-        let text = [
-            &self.archive_id,
-            &self.created_at,
-            &self.title,
-            &self.creator_wallet,
-            &self.backend.archive_api_id,
-            &self.crypto.content_algorithm,
-        ];
         if self.format != "solarch"
             || self.version != "1.0.0"
-            || text
-                .iter()
-                .any(|s| s.is_empty() || s.len() > 4096 || s.chars().any(char::is_control))
+            || !valid_id(&self.archive_id)
             || self.backend.archive_api_id != self.archive_id
+            || self.title.is_empty()
+            || self.title.len() > 1024
+            || self.title.contains('\0')
+            || !valid_timestamp(&self.created_at)
+            || !valid_wallet(&self.creator_wallet)
             || self.commercial_snapshot.price_currency != "USDC"
             || self.commercial_snapshot.platform_fee_bps != 500
             || self.license_snapshot.max_devices != 1
             || self.license_snapshot.allow_export
             || !self.license_snapshot.watermark_enabled
-            || self.crypto.chunk_size == 0
-            || self.crypto.chunk_size > 1024 * 1024
-            || !valid_decimal(&self.commercial_snapshot.price_amount)
+            || self.crypto.content_algorithm != "XChaCha20-Poly1305"
+            || self.crypto.kdf != "HKDF-SHA-256"
+            || self.crypto.chunk_size != 1_048_576
+            || !valid_price(&self.commercial_snapshot.price_amount)
         {
             return Err(Error::InvalidHeader);
         }
         Ok(())
     }
+
+    pub fn to_jcs(&self) -> Result<Vec<u8>> {
+        self.validate()?;
+        canonical::to_jcs(self)
+    }
 }
 
-fn valid_decimal(value: &str) -> bool {
-    if value.is_empty() || value.len() > 32 {
+fn valid_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+}
+
+fn valid_wallet(value: &str) -> bool {
+    bs58::decode(value)
+        .into_vec()
+        .ok()
+        .filter(|bytes| bytes.len() == 32)
+        .is_some_and(|bytes| bs58::encode(bytes).into_string() == value)
+}
+
+fn valid_timestamp(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() != 20
+        || bytes[4] != b'-'
+        || bytes[7] != b'-'
+        || bytes[10] != b'T'
+        || bytes[13] != b':'
+        || bytes[16] != b':'
+        || bytes[19] != b'Z'
+        || bytes.iter().enumerate().any(|(index, byte)| {
+            !matches!(index, 4 | 7 | 10 | 13 | 16 | 19) && !byte.is_ascii_digit()
+        })
+    {
+        return false;
+    }
+    let parse = |range: std::ops::Range<usize>| {
+        std::str::from_utf8(&bytes[range]).ok()?.parse::<u32>().ok()
+    };
+    let (Some(year), Some(month), Some(day), Some(hour), Some(minute), Some(second)) = (
+        parse(0..4),
+        parse(5..7),
+        parse(8..10),
+        parse(11..13),
+        parse(14..16),
+        parse(17..19),
+    ) else {
+        return false;
+    };
+    if !(1970..=9999).contains(&year) || second > 59 {
+        return false;
+    }
+    let Ok(month) = time::Month::try_from(month as u8) else {
+        return false;
+    };
+    time::Date::from_calendar_date(year as i32, month, day as u8).is_ok()
+        && time::Time::from_hms(hour as u8, minute as u8, second as u8).is_ok()
+}
+
+fn valid_price(value: &str) -> bool {
+    if value.is_empty() || value.len() > 21 {
         return false;
     }
     let mut parts = value.split('.');
     let whole = parts.next().unwrap_or_default();
-    if whole.is_empty() || !whole.bytes().all(|c| c.is_ascii_digit()) {
+    let fraction = parts.next().unwrap_or_default();
+    if whole.is_empty()
+        || fraction.len() != 6
+        || parts.next().is_some()
+        || !whole.bytes().all(|c| c.is_ascii_digit())
+        || !fraction.bytes().all(|c| c.is_ascii_digit())
+        || (whole.len() > 1 && whole.starts_with('0'))
+        || whole.len() + fraction.len() > 20
+    {
         return false;
     }
-    if let Some(fraction) = parts.next() {
-        if fraction.is_empty()
-            || fraction.len() > 6
-            || !fraction.bytes().all(|c| c.is_ascii_digit())
-        {
-            return false;
-        }
-    }
-    parts.next().is_none()
+    let Some(units) = whole
+        .parse::<u64>()
+        .ok()
+        .and_then(|amount| amount.checked_mul(1_000_000))
+        .and_then(|amount| amount.checked_add(fraction.parse::<u64>().ok()?))
+    else {
+        return false;
+    };
+    units > 0
 }
 
 /// An explicitly UNVERIFIED parse: no API here can authorize opening content.
@@ -165,15 +230,15 @@ pub fn parse_structure(bytes: &[u8]) -> Result<UnverifiedContainer<'_>> {
     Ok(UnverifiedContainer { header, sections })
 }
 
-fn parse_header(bytes: &[u8]) -> Result<PublicHeader> {
-    let header: PublicHeader = serde_json::from_slice(bytes).map_err(|_| Error::InvalidHeader)?;
+pub fn parse_header(bytes: &[u8]) -> Result<PublicHeader> {
+    let header: PublicHeader = canonical::parse_exact(bytes, Error::InvalidHeader)?;
     header.validate()?;
     Ok(header)
 }
 
 // Shared by slice parsing and seekable inspection so limits, gap/overlap checks,
 // version dispatch and malformed-input behavior cannot drift between them.
-fn section_ranges(prelude: &[u8], size_bytes: u64) -> Result<[Range<usize>; 5]> {
+pub(crate) fn section_ranges(prelude: &[u8], size_bytes: u64) -> Result<[Range<usize>; 5]> {
     if prelude.len() < 8 {
         return Err(Error::TruncatedInput);
     }
@@ -208,11 +273,24 @@ fn section_ranges(prelude: &[u8], size_bytes: u64) -> Result<[Range<usize>; 5]> 
         }
         let cap = match i {
             0 => MAX_HEADER,
-            1 | 2 => 16 * 1024 * 1024,
-            4 => 64 * 1024,
+            1 => MAX_ENCRYPTED_MANIFEST,
+            2 => MAX_ENCRYPTED_INDEX,
+            3 => MAX_ENCRYPTED_DATA,
+            4 => SIGNATURE_BLOCK_LEN,
             _ => MAX_CONTAINER,
         };
-        if range.len() > cap {
+        let minimum = match i {
+            0 => 1,
+            1 => 17,
+            2 => 24,
+            3 => 8,
+            4 => SIGNATURE_BLOCK_LEN,
+            _ => unreachable!(),
+        };
+        if range.len() < minimum
+            || range.len() > cap
+            || (i == 4 && range.len() != SIGNATURE_BLOCK_LEN)
+        {
             return Err(Error::LimitExceeded);
         }
         expected = range.end;
@@ -224,20 +302,56 @@ fn section_ranges(prelude: &[u8], size_bytes: u64) -> Result<[Range<usize>; 5]> 
     Ok(ranges)
 }
 
+pub(crate) fn encode_prelude(section_lengths: [u64; 5]) -> Result<[u8; PRELUDE_LEN]> {
+    if section_lengths.contains(&0)
+        || section_lengths[0] > MAX_HEADER as u64
+        || section_lengths[1] > MAX_ENCRYPTED_MANIFEST as u64
+        || section_lengths[2] > MAX_ENCRYPTED_INDEX as u64
+        || section_lengths[3] > MAX_ENCRYPTED_DATA as u64
+        || section_lengths[4] != SIGNATURE_BLOCK_LEN as u64
+    {
+        return Err(Error::LimitExceeded);
+    }
+    let mut bytes = [0_u8; PRELUDE_LEN];
+    bytes[..8].copy_from_slice(MAGIC);
+    bytes[8..10].copy_from_slice(&1_u16.to_le_bytes());
+    let mut offset = PRELUDE_LEN as u64;
+    for (index, length) in section_lengths.into_iter().enumerate() {
+        let base = 16 + index * 16;
+        bytes[base..base + 8].copy_from_slice(&offset.to_le_bytes());
+        bytes[base + 8..base + 16].copy_from_slice(&length.to_le_bytes());
+        offset = offset.checked_add(length).ok_or(Error::OutOfBounds)?;
+    }
+    if offset > MAX_CONTAINER as u64 {
+        return Err(Error::LimitExceeded);
+    }
+    section_ranges(&bytes, offset)?;
+    Ok(bytes)
+}
+
+pub(crate) fn declared_size(prelude: &[u8]) -> Result<u64> {
+    if prelude.len() != PRELUDE_LEN {
+        return Err(Error::TruncatedInput);
+    }
+    let offset = read_u64(prelude, 80)?;
+    let length = read_u64(prelude, 88)?;
+    offset.checked_add(length).ok_or(Error::OutOfBounds)
+}
+
 fn read_u64(bytes: &[u8], start: usize) -> Result<u64> {
     let slice = bytes.get(start..start + 8).ok_or(Error::TruncatedInput)?;
     let array = <[u8; 8]>::try_from(slice).map_err(|_| Error::TruncatedInput)?;
     Ok(u64::from_le_bytes(array))
 }
 
-/// Structural serialization only. Opaque crypto sections must be provided by a
-/// future agreed crypto profile. Never labels output as authenticated `.slr`.
+/// Structural serialization helper. Opaque crypto sections must already follow
+/// the production profile; this function itself never authenticates them.
 pub fn serialize_structure(
     header: &PublicHeader,
     protected_sections: [&[u8]; 4],
 ) -> Result<Vec<u8>> {
     header.validate()?;
-    let json = serde_json::to_vec(header).map_err(|_| Error::Serialization)?;
+    let json = canonical::to_jcs(header)?;
     let sections = [
         json.as_slice(),
         protected_sections[0],
@@ -275,16 +389,16 @@ mod inspection_tests;
 mod tests {
     use super::*;
     pub(crate) fn header() -> PublicHeader {
-        serde_json::from_str(r#"{"format":"solarch","version":"1.0.0","archive_id":"arc_test","created_at":"2026-09-07T00:00:00Z","title":"Synthetic fixture","creator_wallet":"test-only-wallet","commercial_snapshot":{"price_amount":"10.00","price_currency":"USDC","platform_fee_bps":500},"license_snapshot":{"max_devices":1,"allow_export":false,"watermark_enabled":true},"backend":{"archive_api_id":"arc_test"},"crypto":{"content_algorithm":"test-only-opaque-profile","chunk_size":1048576}}"#).unwrap()
+        serde_json::from_str(r#"{"format":"solarch","version":"1.0.0","archive_id":"arc_test","created_at":"2026-09-07T00:00:00Z","title":"Synthetic fixture","creator_wallet":"11111111111111111111111111111111","commercial_snapshot":{"price_amount":"10.000000","price_currency":"USDC","platform_fee_bps":500},"license_snapshot":{"max_devices":1,"allow_export":false,"watermark_enabled":true},"backend":{"archive_api_id":"arc_test"},"crypto":{"content_algorithm":"XChaCha20-Poly1305","kdf":"HKDF-SHA-256","chunk_size":1048576}}"#).unwrap()
     }
     pub(super) fn fixture() -> Vec<u8> {
         serialize_structure(
             &header(),
             [
-                b"manifest ciphertext",
-                b"index ciphertext",
-                b"chunk ciphertext",
-                b"signature opaque",
+                &[1_u8; 17],
+                &[2_u8; 24],
+                &[3_u8; 8],
+                &[0_u8; SIGNATURE_BLOCK_LEN],
             ],
         )
         .unwrap()
@@ -342,5 +456,49 @@ mod tests {
         let mut bytes = fixture();
         bytes[PRELUDE_LEN] = 0;
         assert!(parse_structure(&bytes).is_err());
+
+        for timestamp in [
+            "+026-09-07T00:00:00Z",
+            "2026-00-07T00:00:00Z",
+            "2026-02-30T00:00:00Z",
+            "2026-09-07T24:00:00Z",
+            "2026-09-07T00:00:60Z",
+        ] {
+            let mut h = header();
+            h.created_at = timestamp.into();
+            assert_eq!(h.validate(), Err(Error::InvalidHeader));
+        }
+    }
+
+    #[test]
+    fn public_header_requires_exact_closed_jcs() {
+        let canonical = header().to_jcs().unwrap();
+        assert!(parse_header(&canonical).unwrap() == header());
+
+        let mut duplicate = br#"{"archive_id":"other","#.to_vec();
+        duplicate.extend_from_slice(&canonical[1..]);
+        assert!(matches!(
+            parse_header(&duplicate),
+            Err(Error::InvalidHeader)
+        ));
+
+        let mut unknown = br#"{"extra":1,"#.to_vec();
+        unknown.extend_from_slice(&canonical[1..]);
+        assert!(matches!(parse_header(&unknown), Err(Error::InvalidHeader)));
+
+        let mut noncanonical = canonical;
+        noncanonical.push(b'\n');
+        assert!(matches!(
+            parse_header(&noncanonical),
+            Err(Error::InvalidHeader)
+        ));
+    }
+
+    #[test]
+    fn encrypted_data_limit_is_enforced_by_prelude() {
+        let mut lengths = [1, 17, 24, MAX_ENCRYPTED_DATA as u64, 104];
+        assert!(encode_prelude(lengths).is_ok());
+        lengths[3] += 1;
+        assert_eq!(encode_prelude(lengths), Err(Error::LimitExceeded));
     }
 }

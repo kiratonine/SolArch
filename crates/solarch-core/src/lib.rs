@@ -1,15 +1,14 @@
-//! Archive Core foundation. No approved production crypto wire profile yet.
+//! Production-compatible SolArch `.slr` v1 archive core.
 #![forbid(unsafe_code)]
 
-pub mod builder;
-pub mod chunks;
-pub mod crypto;
+pub mod archive;
+mod canonical;
 pub mod error;
-pub mod fingerprint;
 pub mod format;
 pub mod integrity;
 pub mod manifest;
 pub mod paths;
-pub mod signature;
+pub mod production_crypto;
+pub mod source;
 
 pub use error::{Error, Result};

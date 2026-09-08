@@ -1,5 +1,5 @@
 //! Errors intentionally contain no input values, file content, or secret material.
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, thiserror::Error, PartialEq, Eq)]
 pub enum Error {
     #[error("invalid magic")]
     InvalidMagic,
@@ -35,10 +35,6 @@ pub enum Error {
     InvalidBuilderInput,
     #[error("resource limit exceeded")]
     LimitExceeded,
-    #[error("secure random generator unavailable")]
-    RandomUnavailable,
-    #[error("production container crypto contract is not yet agreed")]
-    ContractUnavailable,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

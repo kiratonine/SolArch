@@ -1,14 +1,16 @@
-//! Protected metadata model. Serialization here is not a production container codec.
-use std::collections::HashSet;
+//! Exact closed JCS manifest model for `.slr` v1.
 
 use serde::{Deserialize, Serialize};
 
+use crate::canonical;
 use crate::error::{Error, Result};
 use crate::paths::{NormalizedPath, PathSet, ProtectedType};
 
 pub const MAX_FILES: usize = 10_000;
-pub const MAX_TOTAL_SIZE_BYTES: u64 = 16 * 1024 * 1024 * 1024;
-pub const MAX_CHUNKS: u64 = 1_000_000;
+pub const MAX_TOTAL_SIZE_BYTES: u64 = 512 * 1024 * 1024;
+pub const MAX_FILE_SIZE_BYTES: u64 = 512 * 1024 * 1024;
+pub const MAX_CHUNKS: u64 = 16_384;
+pub const CHUNK_SIZE: u64 = 1_048_576;
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -25,7 +27,7 @@ pub struct ManifestFile {
     pub display_name: String,
     pub mime_type: String,
     pub size_bytes: u64,
-    /// Opaque caller-provided hash; no external hash encoding is established here.
+    /// Lowercase SHA-256 of complete original bytes.
     pub hash: String,
     pub chunks: Vec<u64>,
     pub viewer_policy: ViewerPolicy,
@@ -50,26 +52,25 @@ impl Default for ViewerPolicy {
 }
 
 impl Manifest {
-    /// Validate after deserialization and before use. Chunk byte lengths must also
-    /// be checked against the separately authenticated index by its consumer.
     pub fn validate(&self, expected_archive_id: &str, chunk_count: u64) -> Result<()> {
-        if !valid_text(&self.archive_id, 256) || self.archive_id != expected_archive_id {
+        if !valid_id(&self.archive_id) || self.archive_id != expected_archive_id {
             return Err(Error::InvalidManifest);
         }
         if self.files.is_empty() || self.files.len() > MAX_FILES || chunk_count > MAX_CHUNKS {
             return Err(Error::LimitExceeded);
         }
         let mut paths = PathSet::new();
-        let mut ids = HashSet::new();
-        let mut chunks = HashSet::new();
+        let mut next_chunk = 0_u64;
         let mut total_size = 0_u64;
-        for file in &self.files {
-            paths.insert(file.path.as_str())?;
-            if !valid_text(&file.file_id, 256)
-                || !ids.insert(file.file_id.as_str())
-                || !valid_text(&file.display_name, 255)
-                || file.display_name.contains(['/', '\\'])
-                || !valid_text(&file.hash, 1024)
+        let mut previous_path: Option<&str> = None;
+        for (ordinal, file) in self.files.iter().enumerate() {
+            paths.insert_file(file.path.as_str())?;
+            if previous_path.is_some_and(|path| path.as_bytes() >= file.path.as_str().as_bytes())
+                || file.file_id != format!("file_{ordinal:06}")
+                || file.display_name != file.path.as_str().rsplit('/').next().unwrap_or("")
+                || file.display_name.is_empty()
+                || file.display_name.len() > 255
+                || !valid_hash(&file.hash)
                 || ProtectedType::from_path(&file.path)?.mime_type() != file.mime_type
                 || !file.viewer_policy.internal_viewer_only
                 || file.viewer_policy.export_allowed
@@ -77,30 +78,65 @@ impl Manifest {
             {
                 return Err(Error::InvalidManifest);
             }
+            previous_path = Some(file.path.as_str());
             total_size = total_size
                 .checked_add(file.size_bytes)
                 .ok_or(Error::LimitExceeded)?;
-            if total_size > MAX_TOTAL_SIZE_BYTES || file.chunks.len() as u64 > MAX_CHUNKS {
+            if total_size > MAX_TOTAL_SIZE_BYTES
+                || file.size_bytes > MAX_FILE_SIZE_BYTES
+                || file.chunks.len() as u64 > MAX_CHUNKS
+            {
                 return Err(Error::LimitExceeded);
             }
             if (file.size_bytes == 0) != file.chunks.is_empty() {
                 return Err(Error::InvalidChunkMetadata);
             }
+            let expected_chunks = if file.size_bytes == 0 {
+                0
+            } else {
+                file.size_bytes.div_ceil(CHUNK_SIZE)
+            };
+            if file.chunks.len() as u64 != expected_chunks {
+                return Err(Error::InvalidChunkMetadata);
+            }
             for &chunk in &file.chunks {
-                if chunk >= chunk_count || !chunks.insert(chunk) {
+                if chunk != next_chunk || chunk >= chunk_count {
                     return Err(Error::InvalidChunkMetadata);
                 }
+                next_chunk += 1;
             }
         }
-        if chunks.len() as u64 != chunk_count {
+        if next_chunk != chunk_count {
             return Err(Error::InvalidChunkMetadata);
         }
         Ok(())
     }
+
+    pub fn to_jcs(&self, expected_archive_id: &str, chunk_count: u64) -> Result<Vec<u8>> {
+        self.validate(expected_archive_id, chunk_count)?;
+        canonical::to_jcs(self)
+    }
+
+    pub fn parse_exact(bytes: &[u8], expected_archive_id: &str, chunk_count: u64) -> Result<Self> {
+        let manifest: Self = canonical::parse_exact(bytes, Error::InvalidManifest)?;
+        manifest.validate(expected_archive_id, chunk_count)?;
+        Ok(manifest)
+    }
 }
 
-fn valid_text(value: &str, max_bytes: usize) -> bool {
-    !value.trim().is_empty() && value.len() <= max_bytes && !value.chars().any(char::is_control)
+fn valid_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+}
+
+fn valid_hash(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 #[cfg(test)]
@@ -111,12 +147,12 @@ mod tests {
         Manifest {
             archive_id: "arc_test".into(),
             files: vec![ManifestFile {
-                file_id: "file_001".into(),
+                file_id: "file_000000".into(),
                 path: NormalizedPath::new("course/a.pdf").unwrap(),
                 display_name: "a.pdf".into(),
                 mime_type: "application/pdf".into(),
                 size_bytes: 3,
-                hash: "opaque-caller-hash".into(),
+                hash: "00".repeat(32),
                 chunks: vec![0],
                 viewer_policy: ViewerPolicy::default(),
             }],
@@ -140,12 +176,29 @@ mod tests {
             value.validate("arc_test", 1),
             Err(Error::DuplicateNormalizedPath)
         );
-        value.files[1].path = NormalizedPath::new("b.pdf").unwrap();
+        value.files[1].path = NormalizedPath::new("z.pdf").unwrap();
         assert_eq!(value.validate("arc_test", 1), Err(Error::InvalidManifest));
-        value.files[1].file_id = "file_002".into();
+        value.files[1].file_id = "file_000001".into();
+        value.files[1].display_name = "z.pdf".into();
         assert_eq!(
             value.validate("arc_test", 1),
             Err(Error::InvalidChunkMetadata)
+        );
+    }
+
+    #[test]
+    fn file_directory_prefix_conflicts_are_rejected() {
+        let mut value = manifest();
+        value.files[0].path = NormalizedPath::new("A.PDF/inside.png").unwrap();
+        value.files[0].display_name = "inside.png".into();
+        value.files[0].mime_type = "image/png".into();
+        let mut second = manifest().files.remove(0);
+        second.file_id = "file_000001".into();
+        second.path = NormalizedPath::new("a.pdf").unwrap();
+        value.files.push(second);
+        assert_eq!(
+            value.validate("arc_test", 2),
+            Err(Error::DuplicateNormalizedPath)
         );
     }
 

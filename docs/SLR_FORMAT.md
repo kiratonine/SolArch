@@ -1,7 +1,7 @@
 # SolArch — `.slr` Format v1
 
-**Status:** INTEGRATION_GATE_01 contract frozen after external review; implementation pending.
-**Extension:** `.slr`; MIME `application/x-solarch`. Normative v1 profile below replaces the earlier conceptual layout. Existing Part 01 in-memory types are not a wire implementation.
+**Status:** INTEGRATION_GATE_01 contract frozen after external review; Part 01 production Rust Core/CLI implementation complete, Backend/Viewer integration pending.
+**Extension:** `.slr`; MIME `application/x-solarch`. Normative v1 profile below replaces the earlier conceptual layout and is implemented by the Part 01 Rust Core/CLI.
 
 ## 1. Scope and notation
 
@@ -96,9 +96,9 @@ Each nonempty file is split separately into 1048576-byte plaintext chunks; only 
 
 Encrypted Manifest is not the Marketplace Public Listing. Public APIs never expose internal chunk maps, ACK, private storage paths or private crypto metadata; public listing fields remain separately owned by Backend.
 
-MIME values are exactly `application/pdf`, `image/png`, `image/jpeg`, `image/webp`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document`, or `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`. Supported extensions must match type/content validation; an extension alone is not validation.
+MIME values are exactly `application/pdf`, `image/png`, `image/jpeg`, `image/webp`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document`, or `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`. Supported extensions must match type/content validation; an extension alone is not validation for a nonempty file. The explicit size-0 exception in §4 has no content bytes to probe, so its supported extension selects the exact MIME and its hash is SHA-256 of empty bytes.
 
-Builder normalizes separators to `/` and Unicode to NFC (Unicode 15.1). Persisted paths must already be normalized. Reject absolute/drive/UNC paths, empty/`.`/`..` components, NUL/control characters U+0000–001F/U+007F, Windows forbidden characters `< > : " | ? *`, trailing dot/space components, and Windows reserved base names (ASCII case-insensitive `CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`, including extensions and superscript ¹/²/³ device digits). Reject symlinks/reparse points in source traversal. Duplicate/collision key is NFC of Unicode 15.1 default full case folding of the NFC path; reject equal keys and file/directory prefix conflicts. Limits apply after normalization; no truncation to fit. This strengthens the foundation's uppercase comparison and needs implementation/Unicode fixtures after review.
+Builder normalizes separators to `/` and Unicode to NFC (Unicode 15.1). Persisted paths must already be normalized. Reject absolute/drive/UNC paths, empty/`.`/`..` components, NUL/control characters U+0000–001F/U+007F, Windows forbidden characters `< > : " | ? *`, trailing dot/space components, and Windows reserved base names (ASCII case-insensitive `CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`, including extensions and superscript ¹/²/³ device digits). Reject symlinks/reparse points in source traversal. Duplicate/collision key is NFC of Unicode 15.1 default full case folding of the NFC path; reject equal keys and file/directory prefix conflicts. Limits apply after normalization; no truncation to fit. Part 01 implements these rules with Unicode and compatibility fixtures.
 
 ## 5. Encrypted Index and Data
 
@@ -175,7 +175,7 @@ Fingerprint identifies bytes and supports Backend equality checks; it alone does
 
 For nonempty files, sum of `ceil(file_size / 1048576)` is at most 10511 under the total/file-count caps, below 16384. Metadata limits are independent: an input under file/path-count caps may still fail the manifest-byte cap. Data length is exactly 8 + total plaintext + 16*chunk_count. Total file length must also pass the 1 GiB ceiling. Reject claimed lengths/counts before allocation; use checked arithmetic, bounded streaming for whole-file verification and bounded metadata buffers. No allocation proportional to an unchecked offset/count.
 
-Foundation values 16 GiB plaintext, 65536 chunks, 1000000 references and the 64 MiB in-memory builder ceiling are **not** production v1 semantics. The 64 MiB ceiling is a temporary builder limitation; existing `inspect` already uses seek/stream. Reconcile code only after this gate's external review; no production compatibility is claimed for in-memory test structs.
+Foundation values 16 GiB plaintext, 65536 chunks, 1000000 references and the former 64 MiB in-memory builder ceiling are **not** production v1 semantics. The Part 01 production builder and verifier stream data under the frozen limits above; no production compatibility is claimed for the removed foundation in-memory test structs.
 
 ## 10. Validation order and failures
 
@@ -199,4 +199,4 @@ Any integrity, unsupported schema/version, key, bounds or authorization failure 
 
 Unknown fields and versions fail closed. A breaking layout/crypto change requires a new major profile and reviewed docs/fixtures before implementation. Adding a trusted verification key through a signed Viewer release does not change v1 bytes; changing suites or signed payload schemas does.
 
-Deterministic byte-level vectors and synthetic-key warnings are in [INTEGRATION.md](INTEGRATION.md#15-deterministic-interoperability-vectors). Future tests must include malformed/truncated structures, signature metadata mutation, wrong tags, path collisions and limit boundaries; this documentation gate does not implement those tests or production create/verify.
+Deterministic byte-level vectors and synthetic-key warnings are in [INTEGRATION.md](INTEGRATION.md#15-deterministic-interoperability-vectors). Part 01 implements the production create/verify paths and covers malformed/truncated structures, signature metadata mutation, wrong tags, path collisions and limit boundaries; Backend/Viewer interoperability remains pending.

@@ -38,6 +38,7 @@ export function excluded(entry, isDirectory = false) {
   if (parts.slice(0, isDirectory ? undefined : -1).some((part) => excludedDirectories.has(part.toLowerCase()))) return true;
   const name = parts.at(-1).toLowerCase();
   if (excludedCredentialFiles.has(name) ||
+      name === 'agents_backup.md' ||
       (parts.at(-2)?.toLowerCase() === '.docker' && name === 'config.json')) return true;
   return (name.startsWith('.env') && (name === '.env' || name.startsWith('.env.')) && name !== '.env.example') ||
     name.endsWith('.log') || name === '.ds_store' || name === 'thumbs.db' || name === 'desktop.ini' ||

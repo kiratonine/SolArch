@@ -115,7 +115,7 @@ Do not mark archive `ready`/publish until encrypted custody and verified finaliz
 
 ### 5.2 Production CLI handoff — protocol version 1
 
-The intended command is `solarch create --input-dir <path> --metadata <path> --output <path> --signing-key-id <id> --signing-public-key <B64>`; all arguments are nonsecret. Metadata file is exactly the public header JCS schema; input files/manifest are discovered and validated by Core. Signing public key is canonical B64 of 32 Ed25519 bytes from trusted Backend config, never source uploads. This is the **future** CLI contract, not a claim the foundation command currently works.
+The implemented Part 01 command is `solarch create --input-dir <path> --metadata <path> --output <path> --signing-key-id <id> --signing-public-key <B64>`; all arguments are nonsecret. Metadata file is exactly the public header JCS schema; input files/manifest are discovered and validated by Core. Signing public key is canonical B64 of 32 Ed25519 bytes from trusted Backend config, never source uploads.
 
 Node launches the known local binary directly (`spawn`, `shell:false`) under a trusted service account with private piped stdin/stdout and bounded captured stderr. Do not use shell interpolation, inherited secret-bearing environment or process transcripts. Input/output directories are owned by the job, not attacker-selected server paths. Private ACLs/permissions apply to source uploads; builder scratch files contain only encrypted container bytes. Do not publish an incomplete output.
 
@@ -129,7 +129,7 @@ Exact sequential binary protocol, no newline between binary frames:
 
 Parent checks frame magic/length, final JSON schema, exit code, independent final fingerprint/signature and job linkage before custody/publish. No output key is returned. Overall job deadline is 900 seconds; verification/signature exchange after step 2 is bounded to 300 seconds. Parent concurrently drains stderr with a 16384-byte cap and accepts only sanitized diagnostic codes, not source/plaintext dumps. On protocol error, timeout, broken pipe, crash or nonzero exit, kill/reap child, zeroize secret buffers best-effort and remove incomplete encrypted job artifacts. Never retry signing/building by reusing ACK. Binary read/write fragmentation is allowed; frame boundaries are defined by exact lengths, not pipe packets.
 
-An implementation unable to stream the format limits must fail explicitly with an implementation-limit error, not emit a different format. Current 64 MiB builder is temporary; production create/verify and this duplex protocol remain unimplemented until external review and user authorization.
+An implementation unable to stream the format limits must fail explicitly with an implementation-limit error, not emit a different format. The Part 01 Rust builder streams the frozen format limits and implements production create/verify plus this duplex protocol; Backend job orchestration and custody remain pending.
 
 ### 5.3 Trusted pending-build verification boundary
 
@@ -139,7 +139,7 @@ Verifier checks exact header/JCS equality to job metadata, signature prefix/key_
 
 Only after every check, stdout emits one JCS object plus LF, at most 4096 bytes: `{ "success": true, "signing_digest": <64 lowercase hex SHA256 of pending bytes>, "file_count": <integer>, "size_bytes": <declared finalized size including future signature> }`; exit code 0. Failure is nonzero, no success object, bounded sanitized stderr. Same 16384-byte stderr cap and enclosing 300-second verification/signature deadline apply; parent kills/reaps on timeout and never signs on partial output. A trusted in-process Core verifier may implement the identical validation and typed result instead of this CLI boundary. Ordinary `verify` on a finalized archive never accepts a missing signature or this exception.
 
-This verifier is a contract for future Rust Core/CLI implementation, not TypeScript crypto and not implemented by this gate. Separate verification is correctness/defense in depth; a compromised trusted Core binary or Backend administrator already has access to ACK/plaintext and is not made safe by invoking the same compromised software twice.
+This verifier is implemented by the Part 01 Rust Core/CLI and is not TypeScript crypto; Backend invocation remains pending. Separate verification is correctness/defense in depth; a compromised trusted Core binary or Backend administrator already has access to ACK/plaintext and is not made safe by invoking the same compromised software twice.
 
 ## 6. Backend ↔ Viewer cryptographic contract
 
@@ -490,4 +490,4 @@ order/whitespace may vary in HTTPS JSON, but the canonical P/Q bytes must match.
 
 ### 15.4 Required independent reproduction
 
-Future Core and Backend fixtures must reproduce every byte above and reject altered header/signature metadata, modified wrapper/signature/AAD/info, wrong device, and noncanonical encodings. A same-library encrypt/decrypt round-trip alone does not demonstrate interoperability. Gate verification used independent Node and Rust implementations as recorded in the report; no production fixture tooling or feature code was installed in this repository. Test-only keys are not deployment trust anchors. Intent/refresh credentials are authorization-layer values and are not inputs to P/W cryptographic vectors.
+The Part 01 Core fixture reproduces every `.slr` byte above and rejects altered header/signature metadata and noncanonical encodings; future Backend/Viewer fixtures must additionally reject modified wrapper/signature/AAD/info and wrong device. A same-library encrypt/decrypt round-trip alone does not demonstrate interoperability. Gate verification used independent Node and Rust implementations as recorded in the report; production Core fixture coverage is recorded in the Part 01 report. Test-only keys are not deployment trust anchors. Intent/refresh credentials are authorization-layer values and are not inputs to P/W cryptographic vectors.

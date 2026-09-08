@@ -210,7 +210,7 @@ Language preference является локальной настройкой Des
 
 ## ADR-019 — Exact `.slr` v1 bytes, signatures and resource profile
 
-**Status:** accepted/frozen by INTEGRATION_GATE_01 external review; implementation pending and not authorized by this gate.
+**Status:** accepted/frozen by INTEGRATION_GATE_01 external review; Part 01 Rust Core/CLI implemented, Backend/Viewer integration pending.
 **Scope:** Backend, Archive Core, Windows Viewer; normative bytes in SLR_FORMAT.md.
 
 Decision: 96-byte LE prelude, contiguous five sections, JCS header/manifest, binary IDX1 index/DAT1 data, XChaCha20-Poly1305 with HKDF-SHA-256 separate manifest/index/content keys and exact domain/nonce/AAD rules. ACK is fresh per build attempt. SIG1 is 104 bytes; pure Ed25519 signs the NUL-terminated `SolArch/slr-signature/v1` domain plus SHA-256 of every preceding byte including the 40-byte signature metadata. Final fingerprint is lowercase SHA-256 hex of the entire signed file and is absent from PublicHeader. Limits: 1 GiB finalized, 512 MiB plaintext/single file, 10000 files, 1 MiB per-file chunks, 16384 total chunks; remaining numeric caps in SLR_FORMAT are mandatory together.
@@ -219,11 +219,11 @@ Why: bounded streaming verifies large files, fixed signed ranges authenticate of
 
 Rejected: unspecified SHA-256/BLAKE3 choice, fingerprint inside its own preimage, signature metadata outside authentication, ordinary JSON signing, whole-file Ed25519 buffering, optional content suites/nonces selected by each implementation. This is SHA-256 plus pure Ed25519, explicitly not Ed25519ph. AEAD and file hashes have different roles from the platform signature.
 
-MVP limitation: no compression, suite negotiation, offline trust refresh or backwards compatibility promise for foundation in-memory structs. Unicode 15.1 path collision rules and strict JCS need cross-language negative fixtures. Existing code remains partial until reviewed implementation. Extension: breaking bytes/suites require a reviewed new major profile; adding a trusted public key through an authenticated release preserves v1 bytes.
+MVP limitation: no compression, suite negotiation, offline trust refresh or backwards compatibility promise for foundation in-memory structs. Part 01 covers Unicode 15.1 path collision rules and strict JCS in Rust; cross-language negative fixtures remain integration work. Extension: breaking bytes/suites require a reviewed new major profile; adding a trusted public key through an authenticated release preserves v1 bytes.
 
 ## ADR-020 — Backend key custody and duplex builder signing
 
-**Status:** accepted/frozen by INTEGRATION_GATE_01 external review; implementation pending.
+**Status:** accepted/frozen by INTEGRATION_GATE_01 external review; Part 01 Rust Core/CLI duplex builder and pending verifier implemented, Backend custody/orchestration pending.
 **Scope:** Backend ↔ ArchiveBuilder/CLI; exact frames in INTEGRATION.md §5.
 
 Decision: Backend CSPRNG generates 32-byte ACK per attempt. Private bounded stdin sends `SLRKEY01` + ACK, stdout returns `SLRSIGN1` + public digest, Backend independently validates pending encrypted artifact and signs, stdin sends 64 signature bytes, stdout then returns bounded public JSON. Archive signing key never enters Core child. Backend persists only authenticated encrypted ACK custody/reference bound to archive/fingerprint before publishing.

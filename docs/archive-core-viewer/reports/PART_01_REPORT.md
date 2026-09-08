@@ -1,419 +1,370 @@
 # SolArch Archive Core & Viewer — Part 01 Report
 
-**Part:** `PART_01`
-**Status:** `PARTIAL`
-**Updated:** `2026-09-07`
-**Intended branch:** `feat/archive-core-viewer`; not verifiable because the supplied directory has no `.git`.
+**Part:** `PART_01`  
+**Status:** `COMPLETE`  
+**Updated:** `2026-09-09`  
+**Branch verified:** `feat/archive-core-viewer`
 
-## 1. Scope
+## 1. Scope and result
 
-Executed only `TODO/PART_01.md`: Rust foundation, structural container model,
-paths/manifest, authenticated encryption/chunks, signature/hash primitives,
-in-memory builder, CLI foundation, synthetic fixtures and clean archive script.
-No Part 02, Viewer, payment, backend, license or device implementation was started.
+Part 01 is complete against `TODO/PART_01_COMPLETION_AFTER_INTEGRATION_GATE.md`.
+The production Rust Core and CLI now create, sign, inspect and verify the frozen
+self-contained `.slr v1` format. The deterministic Integration Gate vector is
+reproduced byte-for-byte, protected contents can be verified with the ACK, and
+all mandatory checks pass.
 
-Part is not COMPLETE: production create/verify, external fingerprint and key
-handoff require shared contract decisions listed in section 14. Independent
-work was completed without choosing those contracts silently.
+This work stayed inside Archive Core/CLI. No Part 02, Viewer, Backend, payment,
+device identity, license, wrapped-key or Marketplace implementation was started.
+Frozen shared documents were read as authority. Only obsolete implementation-
+status annotations were updated; no frozen byte/API/crypto contract changed.
 
-## 2. Implemented
+The continuation was performed in strict single-agent mode. No helper agents
+were used. No commit, push, merge, rebase or PR was performed.
 
-- Rust workspace with `solarch-core`, `solarch-cli`, dependency lockfile and typed,
-  input-redacted errors. No `unsafe` code is permitted in either crate.
-- Versioned structural parser/serializer with contiguous section validation,
-  checked offsets/lengths, size caps, strict JSON header shape and explicit
-  `UnverifiedContainer`. Parsing is not cryptographic verification.
-- Seek-based metadata inspection shares structural validation with the slice
-  parser, reads only the prelude/header, and enforces the existing 1 GiB limit.
-  Public headers must disable export and enable watermarking for MVP.
-- Host-independent NFC/separator path normalization; traversal, absolute/drive/
-  UNC/ADS paths, Windows reserved names, unsafe characters, depth/length limits
-  and case/Unicode duplicate checks. No extraction or filesystem canonicalization
-  is used to define internal paths.
-- Manifest models and archive/policy/MIME/chunk-reference/size validation.
-- Real XChaCha20-Poly1305 with a fresh session-owned random Content Key,
-  non-resettable counter nonces, authenticated context and zeroizing key/plaintext
-  buffers. Failed calls cannot reset counters. The caller retains keys in memory.
-- Deterministic chunk partitioning and selected chunk decryption; in-memory
-  builder encrypts manifest, index and chunks and checks reconstructed sizes.
-- Raw SHA-256 and strict Ed25519 verification with caller-provided trusted key.
-  No raw digest is declared to be the production external archive fingerprint.
-- Deterministic `cfg(test)` fixture generator performs encrypted/signed serialized
-  round-trip, tampering and truncation checks. Fixture signing coverage, keys and
-  ciphertext codec are test-only, not a production `.slr` crypto profile.
-- CLI help and bounded structural-only `inspect` returning `UNVERIFIED` JSON,
-  without protected manifest/index/chunk output. `create` and `verify` deliberately
-  return a nonzero contract-unavailable error before key/source handling.
-- Standalone clean archive script, precise exclusions, regular-file staging,
-  symlink rejection, source replacement checks, UTC/UUID filenames, shell-free
-  tar and failure cleanup, with tests. No root Node package was added.
-- `.gitignore` excludes local TODO/Codex settings, artifacts/build outputs and
-  secret file patterns. TODO is intentionally included in review archives.
+## 2. Changes after Integration Gate 01
 
-## 3. Files changed
+- Replaced the earlier 64 MiB in-memory foundation builder and provisional
+  crypto/signature/fingerprint modules with the frozen production profile.
+- Added a streaming `ArchiveBuilder` that inventories and validates an input
+  directory, streams protected files into fixed-size chunks, creates a pending
+  archive, accepts only a valid Ed25519 response, and publishes without replacing
+  an existing output.
+- Added trusted pending-build verification using the authorized source tree,
+  metadata and binary ACK; it authenticates/decrypts every protected section and
+  checks manifest, index, content lengths and plaintext hashes.
+- Added finalized signature/fingerprint verification and an ACK-enabled Core API
+  for full protected verification of finalized archives.
+- Implemented the exact duplex CLI ACK/signing frames and strict EOF handling.
+- Made `inspect` bounded and explicitly public/unverified; it never presents
+  structural parsing as authorization.
+- Added deterministic source traversal, six-format content probing, Unicode NFC
+  normalization, full Unicode case folding, path-prefix collision rejection and
+  conservative DOCX/XLSX ZIP validation.
+- Added the frozen deterministic fixture and positive/negative end-to-end tests.
+- Removed the obsolete modules whose semantics conflicted with the frozen Gate.
+- Kept the clean-review archive tool strict and excluded the unrelated local
+  `AGENTS_backup.md` file by exact basename, with regression coverage.
+- Closed the 2026-09-08 external-review findings: bounded streaming source
+  traversal, parsed OOXML content types, exact documented path rejection,
+  expanded bounded inspect output, patched `time`, and duplicate validation
+  removal. Details and regression evidence are in section 14.
+- Closed the remaining 2026-09-09 findings with patched `quick-xml`, bounded
+  non-quadratic collision bookkeeping, restored frozen empty-file semantics and
+  final stale-status cleanup. Details are in section 15.
 
-All implementation files below are new; original shared docs and AGENTS were not changed.
+## 3. Production contracts implemented
+
+### Container and canonical data
+
+- Exact 96-byte little-endian prelude and five contiguous sections.
+- Final size cap 1 GiB; protected plaintext cap 512 MiB; single-file cap
+  512 MiB; 10,000 files; 1 MiB chunks; at most 16,384 chunks; bounded header,
+  manifest and index sections.
+- Exact closed Public Header schema and RFC 8785 JCS byte equality.
+- Exact closed protected Manifest schema and RFC 8785 JCS serialization.
+- Strict IDs, canonical Solana base58 key, exact USDC units/policy literals and
+  calendar-valid ASCII UTC timestamps.
+- Exact `IDX1` records and `DAT1` framing, including non-final chunk length rules.
+
+### Cryptography, signature and fingerprint
+
+- HKDF-SHA-256 key schedule and domains frozen by the Gate.
+- XChaCha20-Poly1305 manifest/index/chunk encryption with exact nonces and AAD.
+- Exact 104-byte `SIG1` section.
+- Signing digest is SHA-256 over the pending bytes through the SIG1 prefix;
+  Ed25519 verifies the exact NUL-domain-separated signing message.
+- Final archive fingerprint is lowercase hex SHA-256 of every finalized byte.
+- Signature trust always comes from the caller-provided key ID/public key, never
+  from archive-controlled data.
+
+### Source, paths and protected formats
+
+- Deterministic regular-file-only source inventory; symlinks and unsupported
+  topology fail closed. `read_dir` is consumed incrementally; all encountered
+  entries share a bounded budget derived from 10,000 files × depth 32.
+- Relative forward-slash paths; no traversal, absolute/drive/UNC/ADS paths,
+  unsafe Windows names, duplicate normalized paths, or file/ancestor conflicts.
+- Case collision comparison uses NFC plus Unicode default case folding. The
+  pinned normalization tables are Unicode 15.1; Unicode 15.1 introduced no new
+  case-fold mappings beyond the pinned folding data.
+- Protected formats: PDF, PNG, JPG/JPEG, WebP, DOCX and XLSX. Extension, MIME,
+  magic/container structure and OOXML main content type must agree for nonempty
+  files. The frozen explicit size-0 exception uses the supported extension/MIME,
+  SHA-256 of empty bytes and no chunks. OOXML `[Content_Types].xml` uses bounded
+  streaming XML parsing, rejects DTD/entities/duplicate attributes, and requires
+  the exact main PartName/approved ContentType pair.
+- Plaintext file SHA-256 and size are verified before protected verification
+  succeeds.
+
+### Builder and CLI handoff
+
+- Stable `ArchiveBuilder` output includes pending/final paths, signing digest,
+  final fingerprint, file count and size.
+- `create` reads exactly one 40-byte `ACK1` frame, emits exactly one 40-byte
+  `SGN1` request, then accepts exactly 64 signature bytes followed by EOF.
+- Short, malformed or extra ACK/signature bytes fail without publishing output.
+- The pending file is re-digested and identity-checked before signature append;
+  the complete signed file is verified before no-replace publication.
+- Output races never overwrite an existing path. Cleanup only removes the same
+  filesystem object created by this build.
+- `verify --pending-build` requires source, metadata, signing-key ID and ACK and
+  returns protected-content verification only after full decryption/integrity.
+- Finalized `verify` authenticates SIG1 and reports the full-file fingerprint;
+  it does not claim protected plaintext verification without the ACK.
+- `inspect` reads only bounded public structure, labels it `UNVERIFIED`, and has
+  a separate output bound large enough for every valid 64 KiB Public Header.
+
+## 4. Exact files changed
+
+Modified:
 
 ```text
-.gitignore
 Cargo.toml
 Cargo.lock
 README.md
+crates/solarch-cli/Cargo.toml
+crates/solarch-cli/src/command.rs
+crates/solarch-cli/tests/cli.rs
 crates/solarch-core/Cargo.toml
-crates/solarch-core/src/lib.rs
 crates/solarch-core/src/error.rs
 crates/solarch-core/src/format.rs
 crates/solarch-core/src/format_inspection_tests.rs
-crates/solarch-core/src/paths.rs
+crates/solarch-core/src/lib.rs
 crates/solarch-core/src/manifest.rs
-crates/solarch-core/src/crypto.rs
-crates/solarch-core/src/chunks.rs
-crates/solarch-core/src/integrity.rs
-crates/solarch-core/src/signature.rs
-crates/solarch-core/src/fingerprint.rs
+crates/solarch-core/src/paths.rs
+docs/SLR_FORMAT.md
+docs/INTEGRATION.md
+docs/DECISIONS.md
+scripts/create-clean-archive.mjs
+scripts/create-clean-archive.test.mjs
+docs/archive-core-viewer/reports/PART_01_REPORT.md
+```
+
+Added:
+
+```text
+crates/solarch-core/src/archive.rs
+crates/solarch-core/src/canonical.rs
+crates/solarch-core/src/production_crypto.rs
+crates/solarch-core/src/source.rs
+tests/fixtures/slr_v1_vector.b64
+```
+
+Removed as obsolete conflicting foundation code:
+
+```text
 crates/solarch-core/src/builder.rs
 crates/solarch-core/src/builder_fixture_tests.rs
-crates/solarch-cli/Cargo.toml
-crates/solarch-cli/src/main.rs
-crates/solarch-cli/src/command.rs
-crates/solarch-cli/tests/cli.rs
-scripts/create-clean-archive.mjs
-scripts/create-clean-archive.test.mjs
-docs/archive-core-viewer/reports/PART_01_REPORT.md
+crates/solarch-core/src/chunks.rs
+crates/solarch-core/src/crypto.rs
+crates/solarch-core/src/fingerprint.rs
+crates/solarch-core/src/signature.rs
 ```
 
-Generated review archives live only in excluded `artifacts/`; synthetic CLI smoke
-inputs live outside the repository under `/tmp/solarch-part01-smoke/`.
+`AGENTS_backup.md` is an unrelated pre-existing untracked user file. It was not
+modified and is excluded from the review archive.
 
-## 4. Orchestration
+## 5. Dependency changes
 
-Main read Part 01, root rules, all mandatory current docs, existing directory and
-local agent/template configuration before implementation and delegation.
+- Added `hkdf 0.12.4`, `serde_jcs 0.2.0`, `base64 0.22.1`, `bs58 0.5.1`.
+- Added `zip 2.4.2` with only `deflate` enabled and patched `quick-xml 0.42.0` with no
+  optional features for bounded OOXML inspection.
+- Pinned `unicode-normalization = 0.1.23`, `focaccia = 1.4.0`, and
+  patched `time = 0.3.47` to keep behavior reproducible and remediate
+  `RUSTSEC-2026-0009` without changing timestamp semantics.
+- Removed `rand_core`; the Backend-provided ACK is the production Content Key.
+- Removed the unused `zeroize` derive feature; runtime zeroization remains.
+- `Cargo.lock` was regenerated by Cargo for this dependency graph.
 
-Dependency graph: contract audit → central structural/crypto boundaries → Rust
-foundation + paths/manifest → in-memory builder and test fixtures → integration
-review → final validation → report and archive. Clean script ran independently.
+## 6. Deterministic vector reproduction
 
-| Agent | Role / ownership | Result and integration |
-| --- | --- | --- |
-| `contract_gate` | `contract_reviewer`, read-only shared-contract audit | Confirmed delegated structural widths and reserved crypto integration gaps; incorporated centrally. |
-| `clean_archive` | temporary default helper; only the two `scripts/*.mjs` files | Script/tests delivered; Main reviewed and requested precise source-name exclusions and safer cleanup, then fixed timestamp cleanup. |
-| `safe_paths` | `rust_core_implementer`; only `paths.rs` and `manifest.rs` | Implemented models and ten tests; Main reviewed integration and ran final workspace suite. |
-| `integrated_review` | `test_security_reviewer`, read-only integrated review | No critical/high findings; Main fixed timestamp staging leak and implemented independent unverified inspect. Follow-up static review passed. |
-
-No overlapping writable assignments. At most three helpers were active alongside
-Main. No extra persistent profiles or sub-agent reports. Main owned Cargo files,
-architecture, remaining Rust/CLI, integration, final tests and this report.
-
-External review cycle 1 delegation: attempted project `test_security_reviewer`
-(`credential_exclusions`), but the harness rejected its configured model before
-execution (`gpt-5.6` unsupported for this account). No work is attributed to that
-failed attempt. Temporary default helper `credential_fix_fallback` owned only
-the two archive-script files and passed its focused 11-test Node run. Temporary
-default helper `review_fixes` performed read-only integrated review and reported
-PASS without running suites. Main reviewed both results, implemented all Rust
-fixes and reran all required checks itself. No new persistent agent profiles.
-
-## 5. Architecture / integration decisions
-
-`SLR_FORMAT.md` §§3–4 explicitly delegate encoding/field widths to Core. Core
-documents its structural layout in `format.rs`: `SOLARCH\0`, u16 LE major/minor,
-reserved u32, five u64 LE offset/length pairs, 96-byte prelude, contiguous sections.
-Limits: header 64 KiB; encrypted manifest/index 16 MiB each; signature section
-64 KiB; total structural input 1 GiB. Sections after the header remain opaque.
-
-External review cycle 1 adds no wire-layout change: `inspect_structure` uses the
-same descriptor validator as `parse_structure`. It obtains length with seek,
-reads the 96-byte prelude and at most 64 KiB of public header, and checks length
-again after reading. No protected section bytes are loaded. The old CLI-only
-64 MiB whole-file ceiling is removed; the existing 1 GiB structural cap remains.
-MVP `allow_export=false` and `watermark_enabled=true` now apply through the common
-header validator, including builder, serializer and both parser paths.
-
-The approved primitive choice is XChaCha20-Poly1305, SHA-256 and Ed25519. The
-in-memory nonce strategy uses a counter under a newly generated, session-owned
-key; no key import, session clone, reset or caller nonce API exists. In-memory
-builder content is capped at 64 MiB and 65,536 chunks. It does not yet produce a
-file or the required external `archive_fingerprint`/`size_bytes` build output.
-
-Selected libraries were checked against their own documentation:
-[chacha20poly1305 0.10.1](https://docs.rs/chacha20poly1305/0.10.1/chacha20poly1305/),
-[ed25519-dalek 2.2.0](https://docs.rs/ed25519-dalek/2.2.0/ed25519_dalek/),
-[sha2 0.10.9](https://docs.rs/sha2/0.10.9/sha2/),
-[zeroize](https://docs.rs/zeroize/latest/zeroize/), and
-[unicode-normalization](https://docs.rs/unicode-normalization/latest/unicode_normalization/).
-Stable compatible versions were selected and resolved in Cargo.lock; this is not
-a claim that every resolved transitive dependency received an independent audit.
-
-No shared API/format/DECISIONS document was changed. No backend key sidecar,
-environment convention, stdout key, custody service, trust-key lookup or license
-encoding was invented. The generic primitives and test codec do not supply those
-missing agreements. All test signing secrets are explicitly synthetic, cfg(test).
-
-Root Node tooling did not exist. As required, the archive command is direct
-`node scripts/create-clean-archive.mjs`; no package.json or alternate lockfile was
-created. No npm/yarn/bun installation or script command was used.
-
-## 6. Docs / contracts checked
+The checked-in fixture `tests/fixtures/slr_v1_vector.b64` decodes to exactly
+1,166 bytes. The production builder reproduces all bytes exactly, pending
+verification succeeds, the Gate signature finalizes successfully, and finalized
+verification returns:
 
 ```text
-docs/README.md
-docs/SPEC.md
-docs/ARCHITECTURE.md
-docs/API.md
-docs/SLR_FORMAT.md
-docs/DATA_MODEL.md
-docs/PAYMENTS.md
-docs/SECURITY.md
-docs/INTEGRATION.md
-docs/TESTING.md
-docs/DECISIONS.md
-docs/roles/01_ARCHIVE_CORE_AND_VIEWER.md
+57ce84068fdd9b23f8860afa27834151f4fefb038d812c2ac77e8a861b1eecdb
 ```
 
-Also read root AGENTS, current Part 01, `.codex/config.toml`, named agent profiles,
-and `.codex/PART_REPORT_TEMPLATE.md`. Other Part instructions were not executed or
-read for implementation. The archive script copies local TODO review inputs.
+The test compares the complete generated container with the decoded fixture,
+not only selected fields or its digest.
 
-## 7. Tests added
+## 7. CLI smoke/integration results
 
-33 Core unit tests cover structural round-trip, all prefix truncations, bad
-magic/version/reserved fields, offset overflow/overlap/gaps, public metadata,
-paths, MIME, policy, manifest references/limits, single/multiple chunks, wrong
-key/AAD/tag/ciphertext, counter uniqueness/exhaustion, secret redaction,
-SHA-256 known vector, valid/forged/modified/wrong-trust signatures and builder.
+The ten `solarch-cli` integration tests execute the compiled CLI as child
+processes with synthetic files and a real binary stdin/stdout duplex exchange.
+They demonstrate:
 
-Test-only fixture scenarios include minimal-valid, multi-file-valid,
-corrupted-header, corrupted-manifest, corrupted-index, corrupted-chunk,
-invalid-signature, unsupported-version, all truncations, and freshly re-signed
-corrupt ciphertext still failing AEAD. Fixtures are generated in memory, with
-deterministic keys, without committing binary archives or plaintext files.
+```text
+create -> ACK -> signing request -> sign -> finalized .slr       PASS
+inspect finalized archive                                       PASS
+verify finalized archive                                        PASS
+verify pending build with correct source/metadata/ACK            PASS
+verify tampered finalized archive                                FAIL CLOSED
+verify pending build with wrong ACK                              FAIL CLOSED
+short/wrong/extra ACK                                            FAIL CLOSED
+short/bad/wrong-digest/extra signature                           FAIL CLOSED
+existing/racing output                                           NOT REPLACED
+inspect with heavily JSON-escaped valid title (>4096 bytes)      PASS
+```
 
-Five CLI tests cover help, blocked commands/non-secret errors,
-structural inspect output/corruption, concurrent unique fixtures and a sparse
-container with a 256 MiB content section. Eleven Node tests group all mandatory script
-inclusion/exclusion cases, tar content inspection, unique UTC names, root
-resolution, unsafe entries, symlinks, source mutation, tool failures, staging
-cleanup, artifacts replacement and safe diagnostics.
+The actual `solarch --help` command was also run and displays the three exact
+command forms without patch artifacts.
 
-Cycle 1 adds positive MVP policy validation and rejection of every disallowed
-export/watermark combination through validation, serialization and both parsers;
-seek/slice corruption and truncation parity; a guarded 1 GiB synthetic reader
-that rejects any attempt to read beyond metadata; length-change and size-limit
-rejection. The sparse CLI test also rejects truncation and checks `UNVERIFIED`.
-The new tar regression covers root/nested/case variants of credential-bearing
-files while preserving source and example templates. No real credentials used.
+## 8. Commands actually run and exact results
 
-## 8. Commands executed
+Run from the Git repository root through RTK:
 
-Environment: `rustc --version` → 1.94.0; `cargo --version` → 1.94.0;
-`node --version` → v20.20.2; `pnpm --version` → 10.32.1; `tar --version` → GNU 1.35.
-
-Final Main validation commands:
-
-```sh
+```text
 cargo fmt --check
+  PASS
+
 cargo clippy --workspace --all-targets --all-features -- -D warnings
+  PASS, no warnings
+
 cargo test --workspace
+  PASS: 60 passed, 0 failed, 0 ignored
+  Breakdown: 50 solarch-core tests, 10 solarch-cli integration tests
+
 node --test scripts/create-clean-archive.test.mjs
-cargo run -p solarch-cli -- --help
-cargo run -p solarch-cli -- create --input-directory /tmp/solarch-part01-smoke/source --metadata-file /tmp/solarch-part01-smoke/metadata.json --output-file /tmp/solarch-part01-smoke/output.slr
-cargo run -p solarch-cli -- inspect /tmp/solarch-part01-smoke/structural-only.slr
-cargo run -p solarch-cli -- verify /tmp/solarch-part01-smoke/structural-only.slr
+  PASS: 11 passed, 0 failed, 0 skipped
+
 git diff --check
+  PASS
+
+cargo run -p solarch-cli -- --help
+  PASS; actual help output inspected
+
+git branch --show-current
+  feat/archive-core-viewer
+
+git status --short
+git diff --stat
+  PASS; Git metadata was available and the working tree was inspected
 ```
 
-Development commands: `cargo fmt --all`; `cargo test --workspace` during integration
-(27, then 30 passing tests before the last CLI test); worker
-`rustfmt --edition 2021 crates/solarch-core/src/paths.rs crates/solarch-core/src/manifest.rs`;
-worker `cargo test -p solarch-core --lib` initially failed while Main's builder/
-format modules were not yet present. Worker/reviewer Node runs passed 7, then 9
-tests before Main's final ten-test run. These are not substituted for final checks.
+`cargo fmt --all` was also run before the final check.
 
-CLI smoke input was generated by a temporary Python heredoc using `json`,
-`struct.pack('<HHI', 1, 0, 0)` and five `struct.pack('<QQ', offset, len(section))`
-pairs with synthetic public header and opaque sections. It was not a crypto-
-verified fixture. Crypto round-trip is separately exercised in Rust unit tests.
+## 9. Security review findings and fixes
 
-Whitespace fallback executed `git diff --no-index --check /dev/null <file>` for
-each of 23 new implementation/README/config files. All returned exit 1 with no
-diagnostics (normal no-index difference status). The initial Python wrapper
-incorrectly treated exit 1 as failure; the corrected wrapper accepts 0/1 only
-with empty stdout/stderr and passed. This does not establish branch diff status.
+- Closed JCS parsing rejects unknown/missing fields and non-canonical bytes.
+- All section arithmetic is checked and exact physical/declaration lengths are
+  enforced; truncated, oversized and trailing inputs fail closed.
+- Mutations in the header, manifest, index, data, SIG1 prefix or signature are
+  covered; wrong trust anchors, wrong ACK, source/metadata mismatch, malformed
+  chunk lengths and signature forgery fail closed.
+- Source and pending files are checked by open-handle/path identity, size and
+  modification metadata before and after critical reads. Publication is
+  no-replace and verifies the published hard link before unlinking `.pending`.
+- Source directory entries are never collected without a limit. Incremental
+  traversal enforces file, depth, topology-entry, single-file and cumulative
+  plaintext limits before unbounded source-controlled allocation can occur.
+- OOXML validation does not search raw XML substrings. The parser is byte- and
+  event-bounded, does not resolve external entities, rejects DTD/entity events,
+  and checks exact parsed main-part attributes. Comment/entity/macro spoofs fail.
+- Path rejection matches the frozen contract exactly: U+0000–001F/U+007F and
+  only its documented Windows device names; compatibility cases remain accepted.
+- ACK and signature protocol reads require EOF; partial sensitive input buffers
+  are zeroized on success and error. Derived keys and temporary plaintext byte
+  buffers use `Zeroizing`/`Zeroize` where practical.
+- Production paths contain no `unwrap()`/`expect()` on untrusted input and both
+  crates deny unsafe code.
+- Errors and CLI failures do not print ACK, Content Key, protected plaintext or
+  signature input bytes.
+- The clean archive rejects symlinks and unsafe entries and excludes Git data,
+  build products, artifacts, env/credential/secret files and prior archives.
 
-## 9. Exact results
+The final review found and fixed one presentation defect in CLI help (literal
+patch `+` markers) and one cleanup edge case after successful no-replace linking.
+Both are covered by checks; the help regression has an explicit test.
 
-| Check | Actual result |
+## 10. Resolution of the original blockers
+
+The first Part 01 cycle was correctly reported `PARTIAL` because shared contracts
+were then undefined. `INTEGRATION_GATE_01` subsequently froze them:
+
+| Original blocker | Current disposition |
 | --- | --- |
-| cargo fmt --check | PASS, exit 0 |
-| Clippy workspace/all targets/all features, warnings denied | PASS, exit 0 |
-| cargo test --workspace | PASS after external review cycle 1, exit 0: 33 Core + 5 CLI = 38 tests, 0 failures |
-| Node archive-script tests | PASS after external review cycle 1, exit 0: 11 tests, 0 failures |
-| CLI --help | PASS, exit 0, limitations displayed |
-| CLI inspect structural fixture | PASS, exit 0, UNVERIFIED public JSON only |
-| CLI create smoke | BLOCKED, exit 1, explicit contract-unavailable; no output.slr created |
-| CLI verify smoke | BLOCKED, exit 1, explicit contract-unavailable |
-| git status --short | UNAVAILABLE, exit 128: not a Git repository |
-| git diff --check | UNAVAILABLE, exit 129: not a Git repository |
-| New-file no-index whitespace fallback | PASS, no whitespace diagnostics on 23 files; wrapper exit 0 |
+| Archive fingerprint undefined | Resolved by Gate; full finalized-file SHA-256 lowercase hex implemented |
+| Signature schema/message undefined | Resolved by Gate; exact SIG1/digest/domain/Ed25519 implemented |
+| ACK handoff undefined | Resolved by Gate; exact 40-byte ACK and signing duplex protocol implemented |
+| Device/license/wrapped-key contracts undefined | Resolved in shared docs for later Parts; intentionally not implemented in Part 01 |
 
-No test assertion fails in the final suites. Nonzero production CLI statuses are
-verified fail-closed behavior, not successful production create/verify acceptance.
-Fmt and Clippy were rerun successfully in cycle 1. The standalone CLI smoke and
-Git rows retain the original Part validation results; the cycle's CLI subprocess
-tests ran inside the workspace suite. Exact cycle commands/results are in section 16.
+This report preserves that historical fact while removing those items as active
+Part 01 blockers.
 
-Original pre-review clean archive validation run: PASS, `node scripts/create-clean-archive.mjs`,
-exit 0, produced:
+## 11. Windows-native status and remaining limitations
 
-```text
-artifacts/solarch-archive-core-viewer-clean-20260907T114639Z-4035ff20-0b53-43ee-8f94-623698f642ef.tar.gz
-```
+- No Windows-native run was performed. Part 01 introduces portable Rust and
+  standard-library filesystem code; all mandatory portable checks pass under
+  Linux/WSL. Native Windows Viewer behavior belongs to Part 02 and is not claimed.
+- Publication uses a same-filesystem hard link followed by unlink to obtain
+  no-replace visibility with standard Rust APIs. Therefore input/output must be
+  on a filesystem that supports hard links; the pending file is intentionally
+  created beside the output.
+- Concurrent malicious same-length mutation with restored metadata cannot be
+  made impossible on every platform using portable metadata alone. The code
+  verifies stable handles/identity and fails closed for observable replacement;
+  the creator workspace is assumed to be access-controlled.
+- Decrypted manifest/index/chunk byte buffers and derived keys are zeroized where
+  practical. Parsed Rust `String` fields are caller-owned and cannot be promised
+  to be scrubbed perfectly after allocator moves/copies.
+- Protected-format validation is deliberately conservative structural probing,
+  not a full PDF/image/Office renderer or malware scanner.
+- DRM remains best-effort. No absolute content-protection claim is made.
+- External review of the newly generated clean archive remains a user-operated
+  delivery step; it is not represented as already passed.
 
-Executed:
+These limitations do not leave a mandatory Part 01 acceptance item unimplemented.
 
-```sh
-tar -tzf artifacts/solarch-archive-core-viewer-clean-20260907T114639Z-4035ff20-0b53-43ee-8f94-623698f642ef.tar.gz
-```
+## 12. Clean external review archive
 
-PASS, exit 0, 58 entries. Main additionally checked the tar members using Python
-`tarfile`: required source/report/Part instruction present, only regular files
-and directories, no absolute/traversal paths, symlinks, `.git`, `.codex`,
-`node_modules`, `target`, `artifacts`, secret directories or forbidden env files.
-That validation script exited 0. This run preceded this report result update.
-The final review snapshot is generated again after saving this report, using the
-same command; its unique filename is printed by the script and in the final
-delivery message. Earlier snapshots are excluded from every new archive.
+The clean archive is generated only after this report is saved and then validated
+by listing its actual tar contents. Its exact path and validation result are
+recorded in the final delivery message to avoid a self-referential archive/report
+filename cycle.
 
-## 10. Windows-native checks
+Required sources, tests, current docs, `TODO/PART_01.md`,
+`TODO/INTEGRATION_GATE_01.md`, this updated report and the deterministic fixture
+must be present. `.git`, `.codex`, `target`, `node_modules`, `artifacts`, secrets,
+credential/env files, symlinks and previous archives must be absent.
 
-Not required for this Part: no Viewer/Tauri or Windows-conditional implementation
-was introduced. Rust/CLI and script ran in WSL/Linux. Native Windows builds,
-filesystem behavior and installer/file association were NOT VERIFIED.
+## 13. Historical external review cycle
 
-## 11. Security checks
+The 2026-09-07 review of the foundation found four issues: credential-file
+archive exclusions, unsafe MVP policy flags, CLI fixture directory collisions,
+and unbounded `inspect`. Those fixes remain present and tested. The Integration
+Gate continuation supersedes the former production-contract blockers and brings
+the implementation status from `PARTIAL` to `COMPLETE`.
 
-Main reviewed all helper changes and integration boundaries. Independent reviewer
-found no critical/high issues in the inspected foundation. Low timestamp cleanup
-issue was fixed with a regression test. Source-key filenames are preserved while
-actual secret data patterns are excluded. Cycle 1 additionally excludes exact
-credential-bearing local filenames and directories, including package/network
-credentials, direnv state and Docker's credential config. Artifacts cleanup avoids following a
-detected replaced directory. No shell interpolation is used for tar execution.
+## 14. External review fixes — 2026-09-08
 
-Key Debug is redacted; plaintext AEAD buffers zeroize on success/error/drop;
-Content Key has no Serialize/Clone/byte-export API. Decrypted manifest objects
-remain caller-owned sensitive metadata and are not claimed to be fully zeroized.
-No production secrets or protected plaintext files were created in the repo.
-Because there is no Git metadata, committed-content verification is unavailable.
+All seven findings were fixed in the same Part and all mandatory checks passed:
 
-## 12. Known limitations
-
-- In-memory builder is not a streaming production file builder. Caller prepares
-  chunk map and opaque file hashes; external file-hash encoding is not agreed.
-- Structural parser can accept an opaque invalid signature: its result is
-  explicitly unverified and cannot authorize opening. Test-only full validation
-  is not a production container verifier.
-- MIME checks validate extension/metadata, not actual PDF/image/Office payload
-  syntax or disguised executable content. Publishing remains unavailable.
-- No agreed complete ArchiveBuilder output with production fingerprint exists.
-- Clean script filters paths/names, not arbitrary secrets hidden in allowed
-  source/docs. A concurrently hostile filesystem is not transactionally snapshotted.
-  If artifacts is maliciously relocated during output, a partial can remain in
-  the relocated directory; cleanup avoids deleting through a substituted path.
-- Inspect now reads only metadata with bounded memory, up to the unchanged
-  1 GiB structural size cap. It does not authenticate or read protected sections.
-  Before/after length checks detect growth/truncation during metadata reading,
-  not same-length concurrent replacement; no transactional snapshot is claimed.
-
-## 13. Not tested / not verified
-
-Production signed `.slr` create/verify, cross-branch fingerprint equality,
-backend key handoff/storage, real Backend ArchiveBuilder integration, native
-Windows, actual protected format parsing/rendering, payment/license/device flows,
-Git branch/commit state and external re-review after cycle 1 are not verified. No production
-security or blockchain claim is inferred from the synthetic tests.
-
-## 14. Contract conflicts / blockers
-
-No contradictory fixed product rule was found. These essential decisions remain
-missing and are explicitly reserved for agreement:
-
-1. `docs/INTEGRATION.md` §6 reserves archive fingerprint encoding; `SLR_FORMAT`
-   does not define digest coverage/canonicalization. Raw SHA-256 is only a primitive.
-2. `SLR_FORMAT` §14 requires platform/server signing but does not define signed
-   bytes/domain, signature block schema, trust-key identity/distribution/lookup.
-   A key embedded by the archive itself must not be treated as platform trust.
-3. **Content Key production custody/handoff is NOT fully defined.** `DATA_MODEL`
-   has conceptual `content_key_ref`, while `INTEGRATION` §5 gives conceptual CLI
-   paths without secret ingress/handoff. No safe production CLI convention was
-   imposed. Caller-owned in-memory keys are explicitly permitted by Part 01.
-4. Future device public-key encoding, signed license canonical payload/signature
-   and wrapped-content-key envelope remain placeholders (`API` §9, `INTEGRATION`
-   §6). They were not implemented in Part 01.
-
-Precise structural widths are not a blocker: docs explicitly delegate them to
-Core. Production crypto serialization and create/verify are the dependent pieces
-held back. Agree their contracts, update docs/fixtures, then finish those pieces
-within Part 01 before moving on.
-
-## 15. Remaining issues
-
-Resolve section 14 agreements; implement production builder/CLI serialization,
-signature/fingerprint outputs and secure handoff; run successful production CLI
-round-trip and compatibility fixtures. Supply a Git checkout for actual branch
-diff checks. Obtain external re-review of the cycle 1 fixes; keep further findings
-in this same report.
-
-## 16. External review fixes
-
-### Cycle 1 — four user-supplied external findings, 2026-09-07
-
-Status: all four requested fixes implemented and verified. Part remains `PARTIAL`.
-Production create/verify/fingerprint/signing/key-handoff remain contract-blocked;
-shared crypto/API docs, algorithms and wire contracts were not changed.
-
-| Finding | Fix | Regression evidence |
+| Finding | Resolution | Regression evidence |
 | --- | --- | --- |
-| Credential-bearing local files leaked into clean archive | Exact case-insensitive basename rules for `.npmrc`, `.netrc`, `_netrc`, `.pypirc`, `.git-credentials`, `.gitcookies`, `.envrc`, `.authinfo`, `.authinfo.gpg`, `.vault-token`, `.s3cfg`, `.boto`; prune `.direnv/`; exclude precise `.docker/config.json` at any depth | Actual tar listing asserts absence at root/nested/case variants and preservation of source/templates such as `.npmrc.example`, `.docker/config.json.example`, `.docker/Dockerfile` and `credentials.ts` |
-| Public header allowed unsafe MVP policy | Common validator rejects export enabled and watermark disabled | Valid protected policy accepted; all three invalid flag combinations rejected directly and through serialization, slice parsing and seek inspection |
-| PID-only CLI fixture directory collision | Per-process atomic counter + PID, atomic `create_dir`, retry on pre-existing directories without reuse/deletion | Sixteen concurrent fixture allocations remain distinct; both file-based CLI tests allocate independent directories |
-| inspect loads whole file and rejects over 64 MiB | Core `Read + Seek` inspection with shared descriptor validation; bounded prelude/header reads, actual stream length checks | Real sparse CLI file with 256 MiB content section succeeds, truncation fails; guarded 1 GiB reader proves no opaque-section reads; malformed inputs retain slice-parser error behavior |
+| Unbounded per-directory `read_dir().collect()` | Stream `ReadDir`; cap every file/directory entry with `MAX_SOURCE_FILES × MAX_PATH_DEPTH`; accumulate total bytes during traversal; retain final normalized UTF-8 sort | Low-budget hostile empty topology fails `LimitExceeded`; recursive ordering test remains deterministic |
+| Empty protected files accepted | Initially changed to rejection, then superseded by the 2026-09-09 review because the frozen manifest explicitly permits size 0 | Section 15 records the corrected explicit empty-file behavior |
+| Raw substring OOXML content-type validation | `quick-xml` streaming parser, 1 MiB/event/depth bounds, DTD/general-entity rejection, exact `/word/document.xml` or `/xl/workbook.xml` plus approved ContentType | Valid DOCX/XLSX flow passes; comments, DTD/entity references and macro-enabled main type fail |
+| Path implementation broader than frozen contract | Replaced Unicode-wide `is_control()` with exact U+0000–001F/U+007F; removed undocumented `CONIN$`/`CONOUT$`; use ASCII-insensitive exact device stems | Exhaustive documented control test, reserved-name tests and compatibility acceptance for U+0085/CONIN$/CONOUT$/COM0/LPT10 |
+| 4096-byte protocol cap broke valid inspect | Kept 4096 for frozen create/verify JSON, added separate `MAX_HEADER + 1024` inspect bound | Valid 1024-byte title expanding beyond 4096 through JSON escaping inspects successfully |
+| Vulnerable direct `time 0.3.44` | Pinned patched `time 0.3.47`; lockfile updated | Full vector and workspace suites unchanged/passing |
+| Duplicate manifest record validation | Removed the duplicate call | Clippy and full workspace tests pass |
 
-Files changed in this review cycle:
+Implementation-status annotations were updated only in `SLR_FORMAT.md`,
+`INTEGRATION.md` and ADR-019/ADR-020 of `DECISIONS.md`. ADR-021 remains explicitly
+implementation pending. No frozen contract text was redefined.
 
-```text
-scripts/create-clean-archive.mjs
-scripts/create-clean-archive.test.mjs
-crates/solarch-core/src/format.rs
-crates/solarch-core/src/format_inspection_tests.rs (new)
-crates/solarch-cli/src/command.rs
-crates/solarch-cli/tests/cli.rs
-README.md
-docs/archive-core-viewer/reports/PART_01_REPORT.md
-```
+## 15. Remaining external review fixes — 2026-09-09
 
-Main executed:
+| Finding | Resolution | Regression evidence |
+| --- | --- | --- |
+| Reachable `RUSTSEC-2026-0194` in `quick-xml 0.38.4` | Pinned patched `quick-xml 0.42.0`; adapted its string-based event/attribute API; duplicate checks are explicitly enabled; DTD and general-reference rejection retained | Valid OOXML passes; duplicate unknown attributes, comments, DTD/entities and macro-enabled spoofing fail closed |
+| Topology retained 320,000 full paths with quadratic insertion | Empty directories are validated and streamed but never retained; collision state contains only at most 10,000 protected paths; `PathSet` uses Unicode-casefold-ordered `BTreeSet` for O(log n) insert/lookup | 512 empty directories plus one file retain a one-file inventory; low entry budget fails closed; existing Unicode/prefix collision and deterministic ordering tests pass |
+| Empty-file behavior contradicted frozen manifest | Restored explicit size-0 exception for all six protected extensions; nonempty files still require probing | Source table covers all extensions; builder test asserts empty SHA-256, `chunks=[]`, zero IDX records, pending verify and finalized content verify |
+| Stale 64 MiB/reconcile wording | Updated only implementation-status text in `SLR_FORMAT.md`; documented the size-0 probing exception without changing schema/bytes | Frozen vector remains byte-identical |
 
-```sh
-cargo fmt --all
-cargo fmt --check
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test --workspace
-node --test scripts/create-clean-archive.test.mjs
-```
-
-Results: all commands exit 0. `cargo fmt --check` PASS; Clippy PASS with warnings
-denied; Rust suite 38 PASS / 0 FAIL / 0 ignored (33 Core, 5 CLI); Node suite
-11 PASS / 0 FAIL / 0 skipped. Node tests include actual archive generation and
-`tar -tzf` inspection. No dependency or lockfile change was required.
-
-Independent static review (`review_fixes`) reported PASS with no actionable
-regressions. Main checked the changed implementation and final runtime results;
-helper results did not replace integrated validation. Windows-native checks
-remain not required for this portable Part 01 change and were not run. The input
-directory still lacks `.git`; the attempted `git status --short` returned exit
-128, so branch diff/commit state remains unavailable.
-
-Remaining: external re-review and the pre-existing production integration
-contract freeze. No commit, push, merge, rebase or Part 02 work was performed.
+No crypto/wire value, numeric `.slr` limit or ADR-021 implementation status was
+changed. `RUSTSEC-2026-0194` is no longer reachable because the affected release
+is absent from the resolved dependency graph.

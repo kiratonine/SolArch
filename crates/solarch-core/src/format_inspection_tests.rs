@@ -4,8 +4,14 @@ use std::io::{self, Cursor};
 // Test-only prelude creation deliberately bypasses PublicHeader::validate so
 // parser tests exercise invalid untrusted policy, not just builder rejection.
 fn metadata(header: &PublicHeader, content_size: u64) -> (Vec<u8>, u64) {
-    let json = serde_json::to_vec(header).unwrap();
-    let lengths = [json.len() as u64, 1, 1, content_size, 1];
+    let json = serde_jcs::to_vec(header).unwrap();
+    let lengths = [
+        json.len() as u64,
+        17,
+        24,
+        content_size,
+        SIGNATURE_BLOCK_LEN as u64,
+    ];
     let mut bytes = MAGIC.to_vec();
     bytes.extend_from_slice(&[1, 0, 0, 0, 0, 0, 0, 0]);
     let mut end = PRELUDE_LEN as u64;
@@ -19,7 +25,7 @@ fn metadata(header: &PublicHeader, content_size: u64) -> (Vec<u8>, u64) {
 }
 
 fn raw_small_container(header: &PublicHeader) -> Vec<u8> {
-    let (mut bytes, total) = metadata(header, 1);
+    let (mut bytes, total) = metadata(header, 8);
     bytes.resize(total as usize, 0);
     bytes
 }
@@ -99,10 +105,7 @@ impl Seek for MetadataOnlyReader {
 
 fn large_reader() -> MetadataOnlyReader {
     let header = super::tests::header();
-    let (small, small_total) = metadata(&header, 1);
-    let content = MAX_CONTAINER as u64 - (small_total - 1);
-    let (bytes, total) = metadata(&header, content);
-    assert_eq!(small.len(), bytes.len());
+    let (bytes, total) = metadata(&header, MAX_ENCRYPTED_DATA as u64);
     MetadataOnlyReader {
         prefix: Cursor::new(bytes),
         total,
@@ -112,12 +115,12 @@ fn large_reader() -> MetadataOnlyReader {
 }
 
 #[test]
-fn seek_inspection_reads_only_metadata_at_maximum_container_size() {
+fn seek_inspection_reads_only_metadata_at_maximum_data_size() {
     let mut reader = large_reader();
     // Public API always starts at byte zero, even if caller has sought elsewhere.
     reader.seek(SeekFrom::Start(123)).unwrap();
     let inspected = inspect_structure(&mut reader).unwrap();
-    assert_eq!(inspected.size_bytes, MAX_CONTAINER as u64);
+    assert_eq!(inspected.section_sizes[3], MAX_ENCRYPTED_DATA as u64);
     assert_eq!(reader.bytes_read, reader.prefix.get_ref().len());
     assert!(reader.bytes_read <= PRELUDE_LEN + MAX_HEADER);
     assert_eq!(
@@ -137,7 +140,7 @@ fn seek_inspection_rejects_length_changes_and_oversized_container_or_header() {
         ));
     }
     let mut reader = large_reader();
-    reader.total += 1;
+    reader.total = MAX_CONTAINER as u64 + 1;
     assert!(matches!(
         inspect_structure(&mut reader),
         Err(Error::LimitExceeded)

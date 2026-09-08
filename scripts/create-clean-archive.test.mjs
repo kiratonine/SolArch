@@ -43,7 +43,7 @@ test('unsafe relative entries rejected', () => {
 test('clean tar includes review inputs and excludes build outputs, secrets and symlinks', async (t) => {
   const root = await fixture(t);
   const included = ['AGENTS.md', 'docs/SPEC.md', 'TODO/PART_01.md', '.env.example', 'src/main.rs', 'nested/safe/file.txt', 'src/key.rs', 'src/keys.ts', 'fixtures/test-key.rs'];
-  const omitted = ['.env', '.env.local', '.env.production', 'node_modules/pkg/a.js', 'target/debug/a', '.git/config', '.codex/config.toml', 'artifacts/old.tar.gz', 'a.log', 'nested/.env', 'nested/cache/a', 'tmp/a', 'temp/a', 'logs/a', 'dist/a', 'build/a', 'coverage/a', '.next/a', 'playwright-report/a', 'test-results/a', 'traces/a', '.DS_Store', 'file:Zone.Identifier', 'secrets/a', 'keys/a', '.ssh/id_ed25519', 'credentials.json', 'private.pem', 'private.key', 'solarch-archive-core-viewer-clean-20260901T000000Z.tar.gz'];
+  const omitted = ['AGENTS_backup.md', '.env', '.env.local', '.env.production', 'node_modules/pkg/a.js', 'target/debug/a', '.git/config', '.codex/config.toml', 'artifacts/old.tar.gz', 'a.log', 'nested/.env', 'nested/cache/a', 'tmp/a', 'temp/a', 'logs/a', 'dist/a', 'build/a', 'coverage/a', '.next/a', 'playwright-report/a', 'test-results/a', 'traces/a', '.DS_Store', 'file:Zone.Identifier', 'secrets/a', 'keys/a', '.ssh/id_ed25519', 'credentials.json', 'private.pem', 'private.key', 'solarch-archive-core-viewer-clean-20260901T000000Z.tar.gz'];
   for (const entry of [...included, ...omitted]) await put(root, entry);
   await fs.symlink(path.join(root, 'src/main.rs'), path.join(root, 'linked.rs'));
   await fs.symlink(os.tmpdir(), path.join(root, 'outside'));

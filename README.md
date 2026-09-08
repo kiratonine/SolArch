@@ -1,9 +1,8 @@
-# SolArch Archive Core foundation
+# SolArch Archive Core
 
-Part 01 is **PARTIAL**: the reusable Rust foundation and clean review archive
-tool are implemented. Production `.slr` create/verify remain blocked on shared
-signature coverage/trust, fingerprint encoding, and CLI key-handoff decisions.
-See [the Part 01 report](docs/archive-core-viewer/reports/PART_01_REPORT.md).
+Part 01 implements the frozen production `.slr v1` Core and CLI contracts. See
+[the Part 01 report](docs/archive-core-viewer/reports/PART_01_REPORT.md) for exact
+validation evidence and remaining platform limitations.
 
 ## Validation
 
@@ -30,27 +29,19 @@ transactional snapshot of a concurrently hostile filesystem.
 
 ## Core boundaries
 
-- `format`: documented, bounded v1 structural serialization and parsing. Its
-  result is explicitly **unverified**, even when parsing succeeds.
-- `paths` / `manifest`: logical path, MIME metadata, policy and chunk-reference
-  validation; no filesystem extraction or content-format parser.
-- `crypto` / `chunks`: real XChaCha20-Poly1305, fresh session-owned Content Key,
-  non-resettable nonce counter, selected chunk decryption and zeroizing buffers.
-- `builder`: prepared manifest and borrowed chunks to an encrypted in-memory
-  archive. The caller retains the session/key. Maximum content is 64 MiB for
-  this foundation API; a streaming file builder is still pending integration.
-- `signature` / `fingerprint`: strict Ed25519 verification with an explicit
-  caller trust anchor and a raw SHA-256 primitive, without claiming an external
-  archive fingerprint contract.
+- `format` / `canonical`: exact 96-byte prelude and closed RFC 8785 JCS Public
+  Header parsing. Structural inspection is explicitly **UNVERIFIED**.
+- `source` / `paths` / `manifest`: deterministic traversal, protected-content
+  probing, Unicode/case collision rejection and exact manifest validation.
+- `production_crypto`: frozen HKDF-SHA-256/XChaCha20-Poly1305, IDX1/DAT1, SIG1,
+  Ed25519 signed-message and final SHA-256 fingerprint profiles.
+- `archive`: streaming pending builder, trusted ACK-enabled pending verification,
+  signature acceptance, no-replace publication and finalized signature verify.
 
-`cargo run -p solarch-cli -- inspect <file>` returns bounded public/structural
-metadata marked `UNVERIFIED`; it does not authenticate the container, reveal
-the manifest, or authorize decryption. It seeks to determine the actual file
-length and reads only the 96-byte prelude and public header (at most 64 KiB).
-The shared structural limit remains 1 GiB; encrypted sections are not read.
-`create` and `verify` fail with a contract-unavailable error and do not read keys.
-
-Synthetic encrypted/signed fixtures are generated reproducibly only inside
-`cfg(test)` in `builder_fixture_tests.rs`. They are not production platform
-signatures or cross-branch wire fixtures. No Viewer, payment, licensing, or
-Windows-specific implementation is included in Part 01.
+`solarch create` uses the binary ACK/signature duplex protocol documented in
+`docs/INTEGRATION.md`. `solarch verify --pending-build` performs full protected
+verification with the authorized source, metadata and ACK. Finalized `verify`
+authenticates the signed container and reports its full-file fingerprint without
+claiming protected plaintext verification. `inspect` remains bounded and public
+only. No Viewer, payment, Backend, licensing, or Windows-specific implementation
+is included in Part 01.
