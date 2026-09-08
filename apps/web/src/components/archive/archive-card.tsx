@@ -11,6 +11,13 @@ export interface ArchiveCardProps {
   archive: MarketplaceArchiveListItem
   /** Цвет корешка. В каталоге всё опубликовано, в кабинете автора статусы разные. */
   spine?: SpineTone
+  /**
+   * Карточка без ссылки — предпросмотр в кабинете автора. У неопубликованного
+   * архива нет ни slug, ни публичной страницы, и вести отсюда некуда. Предпросмотр
+   * рисует та же карточка, что и каталог: копия разошлась бы с оригиналом на
+   * первой же правке и перестала бы отвечать на вопрос «как это увидят».
+   */
+  preview?: boolean
   className?: string
 }
 
@@ -28,7 +35,12 @@ export interface ArchiveCardProps {
  * При наведении корешок утолщается. Он позиционирован абсолютно, поэтому ширина
  * меняется без сдвига содержимого.
  */
-export function ArchiveCard({ archive, spine = 'sealed', className }: ArchiveCardProps) {
+export function ArchiveCard({
+  archive,
+  spine = 'sealed',
+  preview = false,
+  className,
+}: ArchiveCardProps) {
   const { t, format } = useI18n()
 
   return (
@@ -41,7 +53,9 @@ export function ArchiveCard({ archive, spine = 'sealed', className }: ArchiveCar
       <span
         aria-hidden="true"
         className={cn(
-          'absolute inset-y-0 left-0 w-[3px] transition-[width] duration-150 group-hover:w-[6px]',
+          'absolute inset-y-0 left-0 w-[3px] transition-[width] duration-150',
+          // Корешок утолщается только там, где по карточке можно перейти.
+          !preview && 'group-hover:w-[6px]',
           TONE_SPINE[spine],
         )}
       />
@@ -50,13 +64,17 @@ export function ArchiveCard({ archive, spine = 'sealed', className }: ArchiveCar
         <div className="flex items-start justify-between gap-6">
           <div className="min-w-0">
             <h3 className="font-sans text-[1.0625rem] leading-snug font-semibold tracking-[-0.01em]">
-              <Link
-                to="/archives/$slug"
-                params={{ slug: archive.slug }}
-                className="after:absolute after:inset-0 group-hover:underline group-hover:underline-offset-4 focus-visible:outline-none"
-              >
-                {archive.title}
-              </Link>
+              {preview ? (
+                archive.title
+              ) : (
+                <Link
+                  to="/archives/$slug"
+                  params={{ slug: archive.slug }}
+                  className="after:absolute after:inset-0 group-hover:underline group-hover:underline-offset-4 focus-visible:outline-none"
+                >
+                  {archive.title}
+                </Link>
+              )}
             </h3>
             <p className="text-muted-foreground mt-1 truncate text-[0.8125rem]">
               {t.archive.by} {archive.creator.display_name}

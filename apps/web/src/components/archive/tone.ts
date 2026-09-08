@@ -41,6 +41,17 @@ export const TONE_SPINE: Record<SpineTone, string> = {
 }
 
 /**
+ * Цвет корешка для блока о витрине.
+ *
+ * Здесь речь только о каталоге, поэтому технический статус не участвует.
+ * Опубликованный архив получает чернильный корешок, как карточка в каталоге:
+ * он стоит там же, где его видит покупатель.
+ */
+export function marketplaceSpineTone(status: MarketplaceStatus): SpineTone {
+  return status === 'published' ? 'sealed' : MARKETPLACE_TONE[status]
+}
+
+/**
  * Цвет корешка для собственного архива.
  *
  * Корешок отвечает на один вопрос — далеко ли архив от полки, — поэтому статусы

@@ -354,8 +354,29 @@ function seed(): MockArchive[] {
         pdf('finance/manual.pdf', 760),
       ],
     }),
-    // Три состояния, которых не видно в каталоге, но которые обязан показывать
-    // кабинет: архив в обработке, архив со сломанной сборкой и снятый с публикации.
+    // Собран, но ещё ни разу не публиковался: единственное состояние, из которого
+    // публикация проходит без препятствий. Без него кнопку не на чем нажать.
+    seedArchive({
+      id: 'arc_zk_primer',
+      creator: 'Aurora Labs',
+      mine: true,
+      slug: null,
+      title: 'Zero-Knowledge Proof Primer',
+      short: 'Доказательства с нулевым разглашением без формул: схемы, примеры, границы применимости.',
+      description:
+        'Введение в доказательства с нулевым разглашением для инженеров: какие задачи ими ' +
+        'решают, какие нет, и во что обходится каждое решение.',
+      amount: '32.00',
+      views: 0,
+      downloads: 0,
+      paid: 0,
+      createdAt: '2026-09-06T10:00:00Z',
+      marketplace_status: 'draft',
+      files: [pdf('zk/01-intuition.pdf', 1180), pdf('zk/02-circuits.pdf', 1640)],
+    }),
+    // Четыре состояния, которых не видно в каталоге, но которые обязан показывать
+    // кабинет: архив в обработке, архив со сломанной сборкой, снятый с публикации
+    // и закрытый модерацией.
     seedArchive({
       id: 'arc_field_notes',
       creator: 'Aurora Labs',
@@ -410,6 +431,22 @@ function seed(): MockArchive[] {
       createdAt: '2026-01-15T13:00:00Z',
       marketplace_status: 'unpublished',
       files: [pdf('validator/setup.pdf', 2100), sheet('validator/hardware.xlsx', 140)],
+    }),
+    seedArchive({
+      id: 'arc_blocked_atlas',
+      creator: 'Aurora Labs',
+      mine: true,
+      slug: 'city-atlas-1928',
+      title: 'City Atlas 1928',
+      short: 'Сканы городского атласа 1928 года в высоком разрешении.',
+      description: 'Оцифрованный атлас: сорок листов, включая транспортные схемы.',
+      amount: '22.00',
+      views: 2140,
+      downloads: 610,
+      paid: 44,
+      createdAt: '2026-07-20T09:00:00Z',
+      marketplace_status: 'blocked',
+      files: [image('atlas/sheet-01.png', 9200), image('atlas/sheet-02.png', 8800)],
     }),
     seedArchive({
       id: 'arc_draft_notes',

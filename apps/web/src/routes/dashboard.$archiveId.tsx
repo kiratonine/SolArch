@@ -9,6 +9,8 @@ import { StatusBadge } from '@/components/archive/status-badge'
 import { TECHNICAL_TONE, TONE_SPINE } from '@/components/archive/tone'
 import { Container } from '@/components/layout/container'
 import { SectionHeading } from '@/components/layout/section-heading'
+import { CatalogPreview } from '@/components/publish/catalog-preview'
+import { PublishPanel } from '@/components/publish/publish-panel'
 import { EmptyState } from '@/components/state/empty-state'
 import { ErrorState } from '@/components/state/error-state'
 import { UploadQueue } from '@/components/upload/upload-queue'
@@ -167,6 +169,19 @@ function ArchiveDetailPage() {
         />
       </section>
 
+      {/* Витрина стоит сразу за сборкой и перед описью: это следующий шаг в жизни
+          архива, а опись — справка, за которой возвращаются, а не действие. */}
+      <section className="mt-10">
+        <SectionHeading>{t.dashboard.detail.listing.title}</SectionHeading>
+        <PublishPanel archive={data} className="mt-4" />
+
+        {/* Опубликованный архив показан в каталоге настоящей карточкой, и предпросмотр
+            стал бы её копией. Ссылка на живую страницу отвечает на тот же вопрос точнее. */}
+        {data.marketplace_status !== 'published' && data.marketplace_status !== 'blocked' && (
+          <CatalogPreview archive={data} className="mt-8" />
+        )}
+      </section>
+
       <section className="border-border mt-10 border-t pt-6">
         <SectionHeading>{t.dashboard.detail.files.title}</SectionHeading>
 
@@ -268,9 +283,6 @@ function BuildState({ archive, className }: { archive: CreatorArchive; className
           >
             {t.dashboard.detail.build.download}
           </a>
-          <span className="text-muted-foreground text-[0.8125rem]">
-            {t.dashboard.detail.build.publishNote}
-          </span>
         </div>
       )}
     </div>

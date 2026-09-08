@@ -51,9 +51,11 @@ describe('список своих архивов', () => {
       .map((article) => within(article).getByRole('heading').textContent)
 
     expect(titles).toEqual([
+      'Zero-Knowledge Proof Primer',
       'Rust FFI Field Notes',
       'Untitled research notes',
       'Archive Scans 1997',
+      'City Atlas 1928',
       'Solana Anchor Cookbook',
       'Solana Program Security',
       'Solana Validator Guide',

@@ -263,7 +263,7 @@ export const en = {
         },
         ready: {
           title: 'The container is built',
-          body: 'The .slr is packed and can be downloaded. Anyone can copy it around; only a paid licence opens it in the Viewer.',
+          body: 'The .slr is packed and can be downloaded. Anyone can copy it around; only a paid license opens it in the Viewer.',
         },
         failed: {
           title: 'The container was not built',
@@ -271,7 +271,59 @@ export const en = {
         },
 
         download: 'Download the .slr',
-        publishNote: 'Putting the archive in the catalog comes as a separate step.',
+      },
+
+      /**
+       * Витрина. Заголовки описывают положение архива, а не действие: человек
+       * сначала узнаёт, где архив сейчас, и только потом читает кнопку.
+       */
+      listing: {
+        title: 'The catalog',
+
+        draft: {
+          title: 'Not in the catalog',
+          body: 'Nobody can find this archive yet. Publishing gives it a page in the catalog and a link you can hand to anyone.',
+        },
+        published: {
+          title: 'In the catalog',
+          body: 'Anyone can open this archive, read its file list and download the .slr. Paying for it happens later, in the Viewer.',
+        },
+        unpublished: {
+          title: 'Out of the catalog',
+          body: 'The public page is closed and nobody new can find the archive. Copies people already downloaded still open: a license, once paid for, stays valid.',
+        },
+        blocked: {
+          title: 'SolArch took this archive down',
+          body: 'It cannot go back in the catalog from here. Write to SolArch to find out what happened.',
+        },
+
+        publish: 'Publish',
+        publishing: 'Publishing',
+        unpublish: 'Unpublish',
+        unpublishing: 'Unpublishing',
+
+        /** Почему кнопка погашена. Проверяет это backend, называем — мы. */
+        requires: {
+          notReady: 'The container has to be built before the archive can go in the catalog.',
+          payout: 'SolArch is still preparing the USDC account for your payout wallet. This takes a moment.',
+        },
+
+        link: {
+          label: 'Public link',
+          copy: 'Copy the link',
+          copied: 'Copied',
+        },
+
+        preview: {
+          title: 'How the catalog will show it',
+          body: 'Visitors see this card in the catalog and nothing else about the archive until they open it.',
+        },
+
+        confirm: {
+          title: 'Take the archive out of the catalog?',
+          body: 'The public page stops opening and the archive leaves the catalog. You can publish it again at any time, and everyone who already paid keeps their access.',
+          cancel: 'Leave it published',
+        },
       },
 
       files: {

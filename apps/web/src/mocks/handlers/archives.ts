@@ -182,6 +182,11 @@ export const archiveHandlers = [
     const archive = findById(String(params.archiveId))
     if (!archive) return apiError(404, 'ARCHIVE_NOT_FOUND', 'Archive not found')
 
+    // Заблокированный архив снимает с витрины модерация, и вернуть его автор не может.
+    if (archive.marketplace_status === 'blocked') {
+      return apiError(409, 'ARCHIVE_BLOCKED', 'Архив заблокирован и не может быть опубликован')
+    }
+
     // Требования публикации из docs/API.md §3.
     if (archive.technical_status !== 'ready') {
       return apiError(409, 'ARCHIVE_NOT_READY', 'Архив ещё не собран')

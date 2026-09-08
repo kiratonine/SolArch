@@ -236,6 +236,13 @@ export const creatorArchiveSchema = z.object({
   economics: economicsSchema,
   license_policy: licensePolicySchema,
   creator_payout_wallet: z.string(),
+  /**
+   * ДОПУЩЕНИЕ (открытый вопрос Q17): публикация требует подготовленного USDC ATA
+   * автора (`docs/API.md` §3), но поля, по которому фронт мог бы это узнать,
+   * в контракте нет. Аккаунт заводит backend сам (ADR-009), поэтому ожидание
+   * короткое — и всё же кнопку публикации надо на чём-то гасить, иначе автор
+   * узнаёт о неготовности только из отказа.
+   */
   payout_account_ready: z.boolean(),
   file_count: z.number(),
   size_bytes: z.number(),
