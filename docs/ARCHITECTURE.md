@@ -195,8 +195,9 @@ Public header может содержать:
 - creator snapshot;
 - price snapshot;
 - policy snapshot;
-- API endpoints/identifier;
-- fingerprint.
+- Backend archive identifier (no URL).
+
+Final-file fingerprint is not embedded in PublicHeader; Viewer computes it over all finalized bytes and compares Backend metadata. Exact schema is SLR_FORMAT.md.
 
 Но при online first unlock authoritative state получает Viewer с Backend.
 
@@ -240,19 +241,26 @@ Guest downloads .slr
 → opens in Viewer
 → Viewer parses public header
 → Viewer asks Backend for current archive metadata
-→ Viewer requests payment intent
-→ Backend builds USDC split transaction request
+→ Viewer already has device_public_key
+→ Viewer requests payment intent with archive_id + device_public_key
+→ Backend immutably binds Device A before payment
+→ Viewer QR opens the public Solana Pay transaction-request endpoint
+→ Backend builds/reuses and fee-payer-signs one current-blockhash USDC split issuance
 → Buyer signs
-→ SolArch fee payer signs/pays network fee
 → transaction submitted
-→ Backend verifies chain result
+→ Backend tracks an issuance landed within its own validity through finality
+→ Backend verifies chain result and derives buyer_wallet
 → payment_confirmed
-→ Entitlement created
-→ Viewer sends device_public_key
-→ Device License created
+→ Entitlement created for pre-bound Device A
+→ Viewer activates with payment intent credential
+→ signed 72-hour Device License + refresh token created
 → content key wrapped to device
 → Viewer decrypts protected chunks
 → internal renderer displays content
+
+Later offline open before offline_valid_until uses local signed P/W. After the
+deadline, Viewer refreshes with the Device A refresh token. No buyer account,
+wallet reconnect/signMessage, post-payment device replacement or Device B reuse.
 ```
 
 ---
@@ -309,7 +317,12 @@ Viewer останавливает parsing/decryption и показывает int
 
 ### Backend unavailable after previously activated license
 
-Offline behavior зависит от signed license/offline policy. Для hackathon достаточно online-first operation; offline grace можно реализовать только если остаётся время.
+Viewer may open locally with a valid signed Device License and locally stored
+device-bound wrapper until `offline_valid_until`, exactly 72 hours after issuance.
+After that deadline, authoritative refresh with the device refresh token is
+mandatory; unavailable Backend denies. There is no buyer account/wallet login or
+wallet ownership proof on reopen. Best-effort clock rollback detection applies,
+without a trusted-clock guarantee.
 
 ### Archive blocked
 

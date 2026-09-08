@@ -286,13 +286,17 @@ Backend должен предоставить контракт, который V
 
 ```text
 GET current archive public metadata
-POST create payment intent
+POST create payment intent with device_public_key
+GET/POST public Solana Pay transaction request from returned solana_pay_url
 GET/POST payment verification status
-POST activate device
-GET/POST license check
+POST initial activation with intent credential
+POST Device A license refresh with secure refresh token
 ```
 
-Точные endpoint names будут зафиксированы в общем `docs/API.md`.
+Exact endpoint names, credentials and 72-hour offline behavior are fixed in
+`docs/API.md`. Buyer account/wallet login or wallet proof is not part of Viewer
+MVP. Viewer stores the device private key and refresh token through Windows secure
+storage and never persists plaintext Content Key.
 
 До появления общего API-файла следует вынести network layer Viewer в отдельный adapter, чтобы endpoint paths можно было поменять без изменения UI/crypto logic.
 

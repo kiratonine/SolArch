@@ -183,7 +183,8 @@ SolArch receives:  0.50 USDC
 
 Оплата должна быть **одной атомарной Solana-транзакцией**.
 
-Backend формирует transaction request, содержащий необходимые инструкции:
+Backend формирует transaction request с текущим recent blockhash, содержащий
+необходимые инструкции:
 
 ```text
 USDC transfer → Creator ATA = 95%
@@ -191,6 +192,8 @@ USDC transfer → SolArch ATA = 5%
 ```
 
 Если одна инструкция не проходит, вся транзакция не должна считаться покупкой.
+До ответа Solana Pay POST Backend обязан подписать первый signer slot ключом
+SolArch fee payer; wallet `account` остаётся единственным missing signer.
 
 ---
 
@@ -227,6 +230,9 @@ Backend создаёт authoritative payment intent.
 ```text
 payment_intent_id
 archive_id
+archive_fingerprint
+device_public_key
+intent_credential_hash
 price_amount
 currency = USDC
 creator_wallet
@@ -236,11 +242,16 @@ platform_wallet
 platform_ata
 platform_share
 reference
+solana_pay_url
 status
 expires_at
 ```
 
 Viewer не должен самостоятельно вычислять доверенные payment instructions.
+30-минутный `expires_at` прекращает выдачу новых transactions. Публичный Solana
+Pay GET/POST endpoint создаёт или идемпотентно возвращает одну ещё валидную
+issuance; после окончания её blockhash window может создать свежую до intent
+expiry. `account` из wallet POST используется только для построения transaction.
 
 ---
 
@@ -257,8 +268,10 @@ Viewer не должен самостоятельно вычислять дов�
 - platform amount = 5%;
 - total amount = archive price;
 - expected reference/payment intent;
-- transaction finality;
-- transaction success;
+- exact Backend-issued transaction message hash;
+- landing within that issuance's lastValidBlockHeight;
+- transaction `confirmationStatus == finalized`;
+- transaction success (`meta.err == null`);
 - отсутствие replay;
 - одна transaction signature не используется повторно;
 - payment intent не используется для другого archive.
@@ -268,6 +281,23 @@ Viewer не должен самостоятельно вычислять дов�
 ```text
 payment_confirmed
 ```
+
+Issuance, submission и `awaiting_finality` не создают Entitlement. Транзакция,
+выданная до intent expiry и landed в своей blockhash validity, доводится до
+Solana `finalized` commitment после expiry при необходимости. Late/unissued/reference-
+only transaction отклоняется. Exact DTO/state/error contract — `docs/API.md`
+§§7–8.
+
+Для production MVP:
+
+```text
+getLatestBlockhash commitment = confirmed
+processed payment = informational only
+confirmed payment = awaiting_finality only
+finalized payment + full verification = Payment/Entitlement
+```
+
+`confirmed` при получении blockhash не является payment authorization threshold.
 
 ---
 
@@ -280,6 +310,11 @@ Payment ≠ Entitlement ≠ Device License
 ```
 
 После `payment_confirmed` backend создаёт Entitlement.
+
+Для Viewer purchase Payment Intent заранее и неизменно привязан к
+`device_public_key`. Backend выводит `buyer_wallet` из подтверждённой transaction;
+покупатель не имеет SolArch account/session и не подтверждает wallet при
+activation/refresh. Entitlement наследует единственный Device A из intent.
 
 Минимальные поля:
 
@@ -305,7 +340,8 @@ Entitlement означает право покупателя получить д
 Viewer отправляет:
 
 ```text
-entitlement_id
+payment_intent_id + intent credential (initial activation)
+или license_id + device refresh token (refresh)
 device_public_key
 device_name
 viewer_version
@@ -313,12 +349,13 @@ viewer_version
 
 Backend:
 
-1. проверяет entitlement;
-2. проверяет `max_devices`;
-3. создаёт device activation;
-4. создаёт signed device license;
-5. оборачивает/encrypts content key под device public key;
-6. возвращает policy + signed license + wrapped key.
+1. авторизует exact intent/refresh credential;
+2. проверяет immutable pre-payment device binding и entitlement/archive state;
+3. проверяет `max_devices=1`, не разрешая replacement/Device B;
+4. создаёт/reuses device activation и signed 72-hour offline license;
+5. оборачивает content key через exact HPKE contract API.md;
+6. при initial activation выдаёт device refresh token, при refresh — новый
+   signed license + wrapper для того же Device A.
 
 Для MVP:
 

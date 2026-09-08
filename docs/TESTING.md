@@ -117,6 +117,12 @@ Manual demo
 - payout wallet validation helpers;
 - ATA derivation;
 - payment intent;
+- exact Solana Pay URL contains no client secret;
+- transaction-request GET/POST DTOs;
+- fresh recent blockhash after prior issuance validity ends;
+- no new issuance at/after intent expiry;
+- one active issuance and idempotent same-account POST;
+- different account rejected while an issuance remains valid;
 - wrong amount;
 - wrong creator recipient;
 - wrong platform recipient;
@@ -339,3 +345,66 @@ manual demo rehearsed
 ```
 
 If one of the critical A-to-Z steps is mocked, the team must explicitly know and disclose it; do not silently present mock behavior as real blockchain/security functionality.
+
+
+## Integration Gate 01 cross-branch vectors
+
+[INTEGRATION.md §15](INTEGRATION.md#15-deterministic-interoperability-vectors) owns deterministic synthetic byte vectors for final-file fingerprint, signature preimage/SIG1, device X25519 key, JCS license, Ed25519 envelope signature and RFC 9180 HPKE. They are documentation values, not production secrets or proof of an implemented release. Core and Backend must independently reproduce them before integration after external review.
+
+Required future negative cases: duplicate/unknown JSON fields, invalid UTF-8/JCS, noncanonical Base64/pad bits/hex/key coordinates, low-order/all-zero DH, wrong device/key role, swapped HPKE wrapper, modified info/AAD/nonce/rights/fingerprint, signature metadata mutation, stale grant/new request nonce, expiry/clock rollback/Backend unavailable, and concurrent Device B activation. Test every numeric SLR_FORMAT limit at boundary and above, including metadata cap with valid individual paths, zero-sized files and per-file chunk rounding. Container verification must stream 1 GiB without a whole-file allocation; an UNVERIFIED structural inspect result is not signature verification.
+
+Payment/device tests must prove: intent binds Device A before payment; confirmed
+transaction derives `buyer_wallet` server-side; a different wallet may pay without
+changing Device A; post-payment key substitution and Device B fail; intent secret
+alone cannot change its binding; refresh token works only for its exact
+entitlement/license/archive/device; IDs, transaction signature, wallet and public
+key alone do not authorize; token values never reach logs/URL/QR/telemetry.
+
+Payment lifetime tests must prove: intent response has the exact secret-free
+`solana_pay_url` and no serialized transaction; public GET/POST follow the Solana
+Pay DTO; POST `account` is not buyer authorization; each replacement issuance has
+a current blockhash and the same immutable reference/95/5 economics; at most one
+issuance is blockhash-valid; expiry stops new issuance. Commitment tests must prove that transaction construction obtains
+`getLatestBlockhash` at `confirmed`, while this does not authorize access.
+A `processed` payment remains informational/pending. A `confirmed` payment remains
+`awaiting_finality` and creates no Payment, Entitlement, Device License or Content
+Key release. Only `confirmationStatus == finalized` together with
+`meta.err == null` and the complete verification checklist may transition the
+intent to `confirmed` and atomically create Payment + Entitlement. A pre-expiry issuance
+landed within its own validity must progress `pending -> awaiting_finality ->
+confirmed` after wall-clock expiry and atomically create exactly one Entitlement.
+Unissued/modified/reference-only transactions and transactions landed after their
+recorded validity must fail without Entitlement **and without changing intent or
+issuance state**. Inject DB/service failure after finality and at every confirmation
+write: the whole transaction rolls back to retryable `awaiting_finality`, then the
+reconciler commits exactly one Payment, Entitlement and event. Exercise required
+UNIQUE constraints under concurrency. Repeat POST, signature submission, polling
+and finalization concurrently to prove idempotence.
+
+Prove authoritative terminal chain failure permits immediate reissue before
+TTL/policy stop, while dropped/reorged/non-final observations require the prior
+window to close. Race cancellation/block against submission: no new issuance is
+created, terminal failure waits for all live windows, and any eligible landed
+issuance still reaches exactly one Payment/Entitlement after finality.
+
+Deliver the identical activation/refresh `request_nonce` twice and concurrently:
+exactly one request may perform issuance; every duplicate returns
+`REQUEST_NONCE_REPLAY` without rotating a token or producing a second grant.
+Intentional recovery with a fresh nonce remains serialized and succeeds only for
+the same Device A.
+
+License tests use exact `issued_at + 72 hours`: local offline open succeeds before
+the exclusive deadline, boundary/after requires refresh, active refresh produces
+a new signed window/W, revoked/expired/blocked/wrong-device fail, and unavailable
+Backend after expiry denies. Exercise same-process monotonic and cross-restart
+secure high-water rollback detection, including the 300-second tolerance, while
+documenting that it is best-effort rather than a trusted clock.
+Reject issuance whose proposed offline deadline exceeds any known authoritative
+Entitlement/License expiry. Keep a renderer open across the deadline and verify it
+closes, drops plaintext and zeroizes ACK/derived keys at the boundary.
+
+Synthetic crypto round-trips and mocked Entitlements do not demonstrate real
+payment verification or credential authorization. Windows secure storage,
+trusted release distribution and native Viewer offline/clock behavior require
+later Windows-native validation; none is inferred from a documentation/vector
+check.

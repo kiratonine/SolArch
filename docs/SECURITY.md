@@ -353,3 +353,82 @@ Before demo/merge:
 - Device B limit test passes;
 - source ZIP cannot be fetched publicly;
 - logs reviewed for secret leakage.
+
+
+## 17. Trust anchors and key custody
+
+INTEGRATION_GATE_01 freezes separate Backend-owned **archive-signing** and **license-signing** Ed25519 key pairs. They are not device X25519 keys, buyer wallet keys or the Solana fee payer. Key IDs are case-sensitive ASCII `[a-z0-9_-]{1,32}`, unique within the deployment and never reassigned to different key bytes. Use disjoint IDs/maps for the two roles.
+
+Windows Viewer ships two immutable trusted public-key maps (key_id → canonical 32-byte Ed25519 public key), deployment/network identity and allowed HTTPS Backend origin(s) in its authenticated installer/application release. Test/development maps must not be present in production. Establish trust through the application's authenticated release distribution; never TOFU from `.slr`, license response, arbitrary archive URL or downloaded unsigned config. A key_id only selects a pretrusted key in the correct role. Unknown/revoked/wrong-role keys fail closed; no fallback to embedded keys or trying all keys.
+
+For planned rotation, distribute an authenticated Viewer release containing old and new public keys before Backend starts using the new ID. Retain old archive verification keys for immutable finalized archives while they remain trusted. License key overlap must cover the 72-hour offline windows of issued licenses and supported releases. Removal/revocation requires an authenticated Viewer release and Backend denial of affected archives/licenses; already-issued licenses may remain usable until `offline_valid_until`. Signing key compromise requires incident response; offline copies and already extracted keys cannot be recalled. Resigning an archive changes its final fingerprint and requires a new finalized identity/explicit migration; do not silently replace a ready published object's bytes.
+
+Actual production key bytes, Backend domains and release-signing credentials must be provisioned by the platform owners before deployment; no synthetic vector key may be used. Missing production provisioning is not permission to trust archive-provided values. This gate defines the trust model, not a completed Windows release/signing validation or enterprise PKI.
+
+ACK custody and bounded local signing protocol are normative in [INTEGRATION.md](INTEGRATION.md#5-backend--solarch-core). Archive private signing keys never enter the builder; Backend verifies the pending artifact before signing. ACK is generated fresh per attempt and only transferred through the private bounded pipe or an in-process borrowed secret. Zeroize as far as the runtime permits, disable secret-bearing tracing/crash dumps and protect local process access. A malicious administrator or compromised trusted Backend process is outside the practical DRM guarantee.
+
+## 18. License authorization, replay and unwrap
+
+[API.md](API.md#9-device-activation-and-cryptographic-wire-profile) defines
+pre-payment Device A binding, canonical signed P+W, a 72-hour offline window,
+intent/refresh credentials, HPKE context and request nonce. Verify Ed25519 and
+every binding before HPKE Open. Base-mode HPKE alone does not authenticate its
+sender; signing the whole envelope prevents attacker-created replacement
+wrappers.
+
+MVP buyers have no SolArch account/login/session. Viewer never requests wallet
+challenge/signMessage for activation or refresh and never treats a supplied
+wallet address as authorization. Backend derives `buyer_wallet` only from the
+authoritative confirmed USDC transaction. That value supplies audit/watermark
+identity; access stays bound to the Payment Intent's exact pre-payment X25519 key,
+even if another person's wallet pays the QR.
+
+Initial activation requires the payment-intent client secret. Later refresh
+requires the separate 256-bit device refresh token and exact Device A key. Raw
+tokens never enter server storage/logs/URLs/QR/telemetry; purpose-separated keyed
+hash records bind them to their exact records/device. A stolen refresh token
+cannot obtain a wrapper for Device B. IDs, transaction signatures, wallet values
+and public device keys are not bearer credentials. There is no transfer/reset
+flow in MVP.
+
+The public Solana Pay transaction-request URL contains only an opaque intent ID,
+never the intent credential or device key. Its wallet POST `account` selects
+transaction signer/source accounts but proves no identity or authorization.
+Backend locks the intent, permits at most one blockhash-valid issuance, stores the
+exact message hash/validity window and never trusts reference alone. Intent expiry stops new issuance; a matching pre-expiry issuance landed within its
+own validity continues toward Solana `finalized` commitment. `processed` is
+informational only and `confirmed` remains `awaiting_finality`. No Payment,
+Entitlement, Device License or Content Key release is allowed before
+`confirmationStatus == finalized`, `meta.err == null`, and the complete
+authoritative transaction verification succeeds.
+Reference-only or message-mismatched transactions have no state effect, preventing
+public-reference denial of service. After eligible finality, intent confirmation,
+Payment, Entitlement and its durable event commit atomically; infrastructure
+failure stays retryable `awaiting_finality` and reconciliation prevents a paid
+buyer from being stranded without an Entitlement.
+
+Viewer persists the intent credential before exposing the QR. Loss before first
+activation has no wallet/account recovery: Backend keeps the paid Entitlement
+bound to Device A and does not issue a key; a new purchase is required. Credential
+authentication precedes resource lookup/error disclosure, preventing guessed
+intent/license IDs from becoming state oracles. The database enforces one
+activation row per Entitlement and an exact foreign-key match to its immutable
+Device A in addition to atomic service checks.
+
+Before `offline_valid_until`, a valid locally stored signed P+W may unlock without
+network. Store the device private key and refresh token through Windows secure
+storage; storing signed public metadata and device-bound ciphertext is allowed.
+Never persist plaintext ACK. Best-effort monotonic/secure high-water clock checks
+detect rollback as specified by API, but cannot provide a trusted clock against a
+compromised device. Revocation/block during an offline window is enforced no
+later than the next mandatory refresh; after expiry, unavailable Backend denies.
+This 72-hour exposure is an explicit practical DRM tradeoff.
+
+Backend never issues a 72-hour grant beyond a known Entitlement/License expiry.
+Viewer monitors the exclusive deadline even while rendering and closes protected
+views, drops plaintext buffers and zeroizes ACK/derived keys at the boundary;
+keeping a view open cannot bypass refresh.
+
+Exact errors may be logged by code/request ID only; never key material, protected
+content or auth headers. Every selected chunk must pass AEAD authentication
+before rendering, and all protected formats retain watermark/no-export policy.
