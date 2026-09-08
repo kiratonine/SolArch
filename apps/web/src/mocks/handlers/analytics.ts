@@ -2,14 +2,20 @@ import { HttpResponse, http } from 'msw'
 
 import { formatUsdc, parseUsdc, previewEconomics } from '@/lib/money'
 import type { AnalyticsPeriod } from '@/lib/api/types'
-import { findById } from '../db'
-import { apiError, requireSession, route } from './shared'
+import { apiError, findOwned, requireSession, route } from './shared'
 
-/** Доля метрик, попадающая в окно периода. Только для правдоподобия мока. */
-const PERIOD_SHARE: Record<AnalyticsPeriod, number> = {
-  '7d': 0.12,
-  '30d': 0.38,
-  all: 1,
+/**
+ * Доля метрик, попадающая в окно периода. Только для правдоподобия мока.
+ *
+ * У каждой метрики доля своя, и чем уже окно, тем сильнее они расходятся: за неделю
+ * успевают набежать просмотры, которые ещё не превратились в покупки. Одна доля на
+ * три метрики давала одинаковые конверсии во всех трёх периодах — экран, на котором
+ * перепутанный период невозможно заметить ни глазом, ни тестом.
+ */
+const PERIOD_SHARE: Record<AnalyticsPeriod, { views: number; downloads: number; paid: number }> = {
+  '7d': { views: 0.12, downloads: 0.1, paid: 0.07 },
+  '30d': { views: 0.38, downloads: 0.34, paid: 0.29 },
+  all: { views: 1, downloads: 1, paid: 1 },
 }
 
 function ratio(numerator: number, denominator: number): number {
@@ -22,16 +28,17 @@ export const analyticsHandlers = [
     const unauthorized = requireSession()
     if (unauthorized) return unauthorized
 
-    const archive = findById(String(params.archiveId))
-    if (!archive) return apiError(404, 'ARCHIVE_NOT_FOUND', 'Archive not found')
+    // Аналитика — только для владельца (`docs/API.md` §11).
+    const archive = findOwned(String(params.archiveId))
+    if (!archive) return apiError(404, 'ARCHIVE_NOT_FOUND', 'Архив не найден')
 
     const url = new URL(request.url)
     const period = (url.searchParams.get('period') ?? 'all') as AnalyticsPeriod
-    const share = PERIOD_SHARE[period] ?? 1
+    const share = PERIOD_SHARE[period] ?? PERIOD_SHARE.all
 
-    const views = Math.round(archive.metrics.views * share)
-    const downloads = Math.round(archive.metrics.downloads * share)
-    const paidUnlocks = Math.round(archive.metrics.paid_unlocks * share)
+    const views = Math.round(archive.metrics.views * share.views)
+    const downloads = Math.round(archive.metrics.downloads * share.downloads)
+    const paidUnlocks = Math.round(archive.metrics.paid_unlocks * share.paid)
 
     // Выручка = цена × число оплаченных разблокировок, дальше тот же split 95/5.
     const grossUnits = parseUsdc(archive.price.amount) * BigInt(paidUnlocks)

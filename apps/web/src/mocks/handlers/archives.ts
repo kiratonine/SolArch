@@ -9,11 +9,10 @@ import {
   advanceProcessing,
   db,
   economicsFor,
-  findById,
   nextId,
   type MockArchive,
 } from '../db'
-import { apiError, requireSession, route } from './shared'
+import { apiError, findOwned, requireSession, route } from './shared'
 
 /**
  * Мок отвечает так, как ответил бы backend: своей фразой, а не ключом словаря.
@@ -129,8 +128,8 @@ export const archiveHandlers = [
 
     advanceProcessing()
 
-    const archive = findById(String(params.archiveId))
-    if (!archive) return apiError(404, 'ARCHIVE_NOT_FOUND', 'Archive not found')
+    const archive = findOwned(String(params.archiveId))
+    if (!archive) return apiError(404, 'ARCHIVE_NOT_FOUND', 'Архив не найден')
 
     const { files: _files, ...rest } = archive
     return HttpResponse.json(rest)
@@ -142,8 +141,8 @@ export const archiveHandlers = [
     const unauthorized = requireSession()
     if (unauthorized) return unauthorized
 
-    const archive = findById(String(params.archiveId))
-    if (!archive) return apiError(404, 'ARCHIVE_NOT_FOUND', 'Archive not found')
+    const archive = findOwned(String(params.archiveId))
+    if (!archive) return apiError(404, 'ARCHIVE_NOT_FOUND', 'Архив не найден')
 
     return HttpResponse.json({ files: archive.files })
   }),
@@ -152,8 +151,8 @@ export const archiveHandlers = [
     const unauthorized = requireSession()
     if (unauthorized) return unauthorized
 
-    const archive = findById(String(params.archiveId))
-    if (!archive) return apiError(404, 'ARCHIVE_NOT_FOUND', 'Archive not found')
+    const archive = findOwned(String(params.archiveId))
+    if (!archive) return apiError(404, 'ARCHIVE_NOT_FOUND', 'Архив не найден')
 
     const body = (await request.json()) as UpdateArchiveRequest & { price?: unknown }
 
@@ -179,8 +178,8 @@ export const archiveHandlers = [
     const unauthorized = requireSession()
     if (unauthorized) return unauthorized
 
-    const archive = findById(String(params.archiveId))
-    if (!archive) return apiError(404, 'ARCHIVE_NOT_FOUND', 'Archive not found')
+    const archive = findOwned(String(params.archiveId))
+    if (!archive) return apiError(404, 'ARCHIVE_NOT_FOUND', 'Архив не найден')
 
     // Заблокированный архив снимает с витрины модерация, и вернуть его автор не может.
     if (archive.marketplace_status === 'blocked') {
@@ -207,8 +206,8 @@ export const archiveHandlers = [
     const unauthorized = requireSession()
     if (unauthorized) return unauthorized
 
-    const archive = findById(String(params.archiveId))
-    if (!archive) return apiError(404, 'ARCHIVE_NOT_FOUND', 'Archive not found')
+    const archive = findOwned(String(params.archiveId))
+    if (!archive) return apiError(404, 'ARCHIVE_NOT_FOUND', 'Архив не найден')
 
     archive.marketplace_status = 'unpublished'
 
@@ -220,8 +219,8 @@ export const archiveHandlers = [
     const unauthorized = requireSession()
     if (unauthorized) return unauthorized
 
-    const archive = findById(String(params.archiveId))
-    if (!archive) return apiError(404, 'ARCHIVE_NOT_FOUND', 'Archive not found')
+    const archive = findOwned(String(params.archiveId))
+    if (!archive) return apiError(404, 'ARCHIVE_NOT_FOUND', 'Архив не найден')
 
     return HttpResponse.text(`SLR mock container for ${archive.archive_id}`, {
       headers: {

@@ -158,13 +158,15 @@ export function PublishPanel({
               {listing.confirm.cancel}
             </DialogClose>
 
+            {/* Кнопка в диалоге названа короче, чем на странице: там подпись отвечает
+                на вопрос «что тут можно сделать», здесь — на заданный вопрос. */}
             <Button
               size="sm"
               variant="destructive"
               disabled={busy}
               onClick={() => unpublish.mutate()}
             >
-              {listing.unpublish}
+              {listing.confirm.confirm}
             </Button>
           </DialogFooter>
         </DialogContent>

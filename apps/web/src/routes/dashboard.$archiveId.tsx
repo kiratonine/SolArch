@@ -135,19 +135,30 @@ function ArchiveDetailPage() {
         </div>
       </div>
 
-      <MetricGrid
-        className="border-border mt-8 border-t pt-5"
-        items={[
-          { value: format.count(data.file_count), label: t.units.files(data.file_count) },
-          { value: format.bytes(data.size_bytes), label: t.metrics.size },
-          { value: format.count(data.metrics.views), label: t.metrics.views },
-          { value: format.count(data.metrics.downloads), label: t.metrics.downloads },
-          {
-            value: format.count(data.metrics.paid_unlocks),
-            label: t.units.unlocks(data.metrics.paid_unlocks),
-          },
-        ]}
-      />
+      {/* Аналитика открывается прямо с манифеста: она и есть его продолжение —
+          те же просмотры и скачивания, только с окном наблюдения и деньгами. */}
+      <div className="border-border mt-8 flex flex-wrap items-end justify-between gap-x-8 gap-y-4 border-t pt-5">
+        <MetricGrid
+          items={[
+            { value: format.count(data.file_count), label: t.units.files(data.file_count) },
+            { value: format.bytes(data.size_bytes), label: t.metrics.size },
+            { value: format.count(data.metrics.views), label: t.metrics.views },
+            { value: format.count(data.metrics.downloads), label: t.metrics.downloads },
+            {
+              value: format.count(data.metrics.paid_unlocks),
+              label: t.units.unlocks(data.metrics.paid_unlocks),
+            },
+          ]}
+        />
+
+        <Link
+          to="/dashboard/$archiveId/analytics"
+          params={{ archiveId: data.archive_id }}
+          className="text-foreground focus-visible:ring-ring/60 rounded-sm text-[0.8125rem] font-medium underline underline-offset-4 focus-visible:ring-2 focus-visible:outline-none"
+        >
+          {t.analytics.action}
+        </Link>
+      </div>
 
       <section className="mt-10">
         <SectionHeading>{t.dashboard.detail.build.title}</SectionHeading>

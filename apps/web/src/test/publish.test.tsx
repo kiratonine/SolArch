@@ -100,7 +100,7 @@ describe('витрина архива', () => {
     expect(within(dialog).getByText('Take the archive out of the catalog?')).toBeInTheDocument()
 
     // Отказ ничего не меняет: архив остаётся на витрине.
-    await user.click(within(dialog).getByRole('button', { name: 'Leave it published' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Keep it' }))
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).toBeNull()
     })

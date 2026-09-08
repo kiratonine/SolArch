@@ -16,6 +16,7 @@ import { Route as ArchivesSlugRouteImport } from './routes/archives.$slug'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard.index'
 import { Route as DashboardArchiveIdRouteImport } from './routes/dashboard.$archiveId'
 import { Route as DashboardNewRouteImport } from './routes/dashboard.new'
+import { Route as DashboardArchiveIdAnalyticsRouteImport } from './routes/dashboard.$archiveId_.analytics'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -52,6 +53,12 @@ const DashboardNewRoute = DashboardNewRouteImport.update({
   path: '/new',
   getParentRoute: () => DashboardRoute,
 } as any)
+const DashboardArchiveIdAnalyticsRoute =
+  DashboardArchiveIdAnalyticsRouteImport.update({
+    id: '/$archiveId_/analytics',
+    path: '/$archiveId/analytics',
+    getParentRoute: () => DashboardRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -61,6 +68,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/$archiveId': typeof DashboardArchiveIdRoute
   '/dashboard/new': typeof DashboardNewRoute
   '/dashboard/': typeof DashboardIndexRoute
+  '/dashboard/$archiveId/analytics': typeof DashboardArchiveIdAnalyticsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -69,6 +77,7 @@ export interface FileRoutesByTo {
   '/dashboard/$archiveId': typeof DashboardArchiveIdRoute
   '/dashboard/new': typeof DashboardNewRoute
   '/dashboard': typeof DashboardIndexRoute
+  '/dashboard/$archiveId/analytics': typeof DashboardArchiveIdAnalyticsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -79,6 +88,7 @@ export interface FileRoutesById {
   '/dashboard/$archiveId': typeof DashboardArchiveIdRoute
   '/dashboard/new': typeof DashboardNewRoute
   '/dashboard/': typeof DashboardIndexRoute
+  '/dashboard/$archiveId_/analytics': typeof DashboardArchiveIdAnalyticsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -90,6 +100,7 @@ export interface FileRouteTypes {
     | '/dashboard/$archiveId'
     | '/dashboard/new'
     | '/dashboard/'
+    | '/dashboard/$archiveId/analytics'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -98,6 +109,7 @@ export interface FileRouteTypes {
     | '/dashboard/$archiveId'
     | '/dashboard/new'
     | '/dashboard'
+    | '/dashboard/$archiveId/analytics'
   id:
     | '__root__'
     | '/'
@@ -107,6 +119,7 @@ export interface FileRouteTypes {
     | '/dashboard/$archiveId'
     | '/dashboard/new'
     | '/dashboard/'
+    | '/dashboard/$archiveId_/analytics'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -167,6 +180,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardNewRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/dashboard/$archiveId_/analytics': {
+      id: '/dashboard/$archiveId_/analytics'
+      path: '/$archiveId/analytics'
+      fullPath: '/dashboard/$archiveId/analytics'
+      preLoaderRoute: typeof DashboardArchiveIdAnalyticsRouteImport
+      parentRoute: typeof DashboardRoute
+    }
   }
 }
 
@@ -174,12 +194,14 @@ interface DashboardRouteChildren {
   DashboardArchiveIdRoute: typeof DashboardArchiveIdRoute
   DashboardNewRoute: typeof DashboardNewRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
+  DashboardArchiveIdAnalyticsRoute: typeof DashboardArchiveIdAnalyticsRoute
 }
 
 const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardArchiveIdRoute: DashboardArchiveIdRoute,
   DashboardNewRoute: DashboardNewRoute,
   DashboardIndexRoute: DashboardIndexRoute,
+  DashboardArchiveIdAnalyticsRoute: DashboardArchiveIdAnalyticsRoute,
 }
 
 const DashboardRouteWithChildren = DashboardRoute._addFileChildren(

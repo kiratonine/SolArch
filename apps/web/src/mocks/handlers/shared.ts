@@ -5,7 +5,7 @@ import type {
   MarketplaceArchiveDetail,
   MarketplaceArchiveListItem,
 } from '@/lib/api/types'
-import { db, type MockArchive } from '../db'
+import { db, findById, type MockArchive } from '../db'
 
 /** Абсолютный путь эндпоинта для MSW. */
 export function route(path: string): string {
@@ -19,6 +19,18 @@ export function apiError(status: number, code: string, message: string) {
 
 export function requireSession() {
   return db.session ? null : apiError(401, 'UNAUTHORIZED', 'Требуется вход автора')
+}
+
+/**
+ * Собственный архив автора.
+ *
+ * Всё под `/archives/*` — owner-only (`docs/API.md` §3). Чужой архив отдаётся
+ * как 404, а не 403: сам по себе 403 подтвердил бы, что такой архив существует,
+ * а вместе с ним — что кто-то другой его завёл.
+ */
+export function findOwned(archiveId: string): MockArchive | undefined {
+  const archive = findById(archiveId)
+  return archive && archive.owner_id === db.session?.id ? archive : undefined
 }
 
 /**

@@ -1,3 +1,4 @@
+import { MoneySplit, type MoneyRow } from '@/components/archive/money-split'
 import type { Money } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
@@ -31,14 +32,14 @@ export function PriceBreakdown({
 }: PriceBreakdownProps) {
   const { t, format } = useI18n()
 
-  const rows = [
-    { label: t.economics.buyerPays, amount: price.amount, emphasis: 'ink' as const },
-    { label: t.economics.creator, amount: creator, emphasis: 'seal' as const },
+  const rows: MoneyRow[] = [
+    { label: t.economics.buyerPays, amount: price.amount, emphasis: 'ink' },
+    { label: t.economics.creator, amount: creator, emphasis: 'seal' },
     {
       label: t.economics.platform,
       note: format.percent(platformFeeBps / 10_000),
       amount: platform,
-      emphasis: 'muted' as const,
+      emphasis: 'muted',
     },
   ]
 
@@ -46,35 +47,7 @@ export function PriceBreakdown({
     <section className={cn('bg-card border-border rounded-lg border p-5', className)}>
       <h3 className="font-sans text-sm font-semibold tracking-[-0.01em]">{t.economics.title}</h3>
 
-      <dl className="mt-4 space-y-0">
-        {rows.map((row, index) => (
-          <div
-            key={row.label}
-            className={cn(
-              'flex items-baseline justify-between gap-6 py-2.5',
-              index > 0 && 'border-border border-t',
-            )}
-          >
-            <dt className="text-muted-foreground flex items-baseline gap-2 text-sm">
-              {row.label}
-              {row.note && <span className="numeric text-xs">{row.note}</span>}
-            </dt>
-            <dd className="flex items-baseline gap-1.5 whitespace-nowrap">
-              <span
-                className={cn(
-                  'numeric text-[0.9375rem] font-semibold',
-                  row.emphasis === 'seal' && 'text-seal-ink',
-                  row.emphasis === 'ink' && 'text-foreground',
-                  row.emphasis === 'muted' && 'text-muted-foreground',
-                )}
-              >
-                {row.amount}
-              </span>
-              <span className="text-muted-foreground text-xs">{price.currency}</span>
-            </dd>
-          </div>
-        ))}
-      </dl>
+      <MoneySplit rows={rows} currency={price.currency} className="mt-4" />
 
       <p className="text-muted-foreground border-border mt-4 border-t pt-4 text-[0.8125rem]">
         {t.economics.networkFees}

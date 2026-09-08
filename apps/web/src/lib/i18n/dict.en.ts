@@ -319,10 +319,16 @@ export const en = {
           body: 'Visitors see this card in the catalog and nothing else about the archive until they open it.',
         },
 
+        /**
+         * Кнопки диалога названы одним словом. Вопрос в заголовке уже сказал, о чём
+         * речь, и повторять это на обеих кнопках незачем: длинные подписи не влезали
+         * в строку и вставали друг под друга.
+         */
         confirm: {
           title: 'Take the archive out of the catalog?',
           body: 'The public page stops opening and the archive leaves the catalog. You can publish it again at any time, and everyone who already paid keeps their access.',
-          cancel: 'Leave it published',
+          cancel: 'Keep it',
+          confirm: 'Unpublish',
         },
       },
 
@@ -358,6 +364,47 @@ export const en = {
         unsupportedType: 'the Viewer cannot show this format',
         empty: 'the file is empty',
       },
+    },
+  },
+
+  /**
+   * Аналитика архива. Ни одного числа фронт не считает — все приходят с backend,
+   * и текст обязан это подтверждать: он объясняет, откуда цифры, а не толкует их.
+   */
+  analytics: {
+    action: 'Analytics',
+    title: 'Analytics',
+    lead: 'SolArch does the counting. Views and downloads come from the catalog, unlocks and revenue from payments confirmed on Solana.',
+    back: 'Back to the archive',
+    loading: 'Loading the analytics',
+
+    period: {
+      label: 'Period',
+      '7d': 'Last 7 days',
+      '30d': 'Last 30 days',
+      all: 'All time',
+    },
+
+    funnel: {
+      title: 'From a view to an unlock',
+      toDownload: 'of views ended in a download',
+      toPurchase: 'of downloads ended in a paid unlock',
+    },
+
+    revenue: {
+      title: 'What the archive earned',
+      gross: 'Buyers paid',
+      creator: 'Your payout',
+      platform: 'SolArch fee',
+      note: 'Only payments confirmed on Solana are counted here. The payout goes straight to your wallet — SolArch never holds it.',
+    },
+
+    empty: {
+      title: 'Nothing counted yet',
+      body: 'Nothing happened with this archive in this period. Counting starts once the archive is in the catalog and somebody opens it.',
+    },
+    error: {
+      title: 'The analytics did not load',
     },
   },
 
