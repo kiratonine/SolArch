@@ -24,7 +24,9 @@ export const en = {
     language: 'Language',
     themeDark: 'Switch to the dark theme',
     themeLight: 'Switch to the light theme',
-    /** Подвал несёт вторую навигацию на странице, и она обязана быть названа. */
+    /** Кнопка и название списка ссылок на узком экране — одно и то же слово. */
+    menu: 'Menu',
+    /** Подвал несёт ещё одну навигацию на странице, и она обязана быть названа. */
     pages: 'Site pages',
   },
 

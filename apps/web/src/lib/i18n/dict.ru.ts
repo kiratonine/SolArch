@@ -19,6 +19,7 @@ export const ru: Dictionary = {
     language: 'Язык',
     themeDark: 'Включить тёмную тему',
     themeLight: 'Включить светлую тему',
+    menu: 'Меню',
     pages: 'Страницы сайта',
   },
 
