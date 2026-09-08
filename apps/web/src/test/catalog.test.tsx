@@ -1,7 +1,11 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { HttpResponse, http } from 'msw'
 import { describe, expect, it } from 'vitest'
 
+import { API_BASE_URL, API_PREFIX } from '@/lib/api/config'
+import { db } from '@/mocks/db'
+import { server } from '@/mocks/node'
 import { renderApp } from '@/test/render'
 
 /**
@@ -178,5 +182,73 @@ describe('каталог', () => {
 
     expect(screen.getByRole('link', { name: 'Сначала дешевле' })).toBeInTheDocument()
     expect(screen.getByText('Страница 1 из 2')).toBeInTheDocument()
+  })
+})
+
+/**
+ * Каталог рисует одну из четырёх взаимоисключающих веток: выдача, сбой, пустой
+ * поиск и пустой каталог. Первые две проверены выше, здесь — оставшиеся две.
+ *
+ * Отличать их важно словами, а не только фактом пустоты: «ничего не нашлось по
+ * запросу» и «пока ничего не опубликовано» ведут человека в разные стороны, и
+ * перепутать их — значит сказать гостю, что маркетплейс пуст, когда он просто
+ * ошибся в запросе.
+ */
+describe('состояния каталога', () => {
+  it('называет сбой каталога и даёт повторить', async () => {
+    server.use(
+      http.get(`${API_BASE_URL}${API_PREFIX}/marketplace/archives`, () =>
+        HttpResponse.json({ code: 'INTERNAL', message: 'boom' }, { status: 500 }),
+      ),
+    )
+
+    renderApp()
+
+    const alert = await screen.findByRole('alert')
+    expect(within(alert).getByText('The catalog did not load')).toBeInTheDocument()
+    expect(within(alert).getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+
+    // Сбой — не пустота: приглашений и предложений очистить поиск здесь нет.
+    expect(screen.queryByText('Nothing is published yet')).toBeNull()
+    expect(screen.queryByRole('article')).toBeNull()
+  })
+
+  it('повтор после сбоя доносит каталог', async () => {
+    const user = userEvent.setup()
+    server.use(
+      http.get(
+        `${API_BASE_URL}${API_PREFIX}/marketplace/archives`,
+        () => HttpResponse.json({ code: 'INTERNAL', message: 'boom' }, { status: 500 }),
+        { once: true },
+      ),
+    )
+
+    renderApp()
+
+    await user.click(await screen.findByRole('button', { name: 'Try again' }))
+
+    expect(await cardTitles()).toContain('Solana Program Security')
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('пустой каталог приглашает первого автора, а не сообщает об отсутствии данных', async () => {
+    db.archives = []
+
+    renderApp()
+
+    expect(await screen.findByRole('heading', { name: 'Nothing is published yet' })).toBeInTheDocument()
+    // Именно общая пустота, а не пустая выдача поиска: запроса не было.
+    expect(screen.queryByText(/Nothing matches/)).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Clear the search' })).toBeNull()
+    // Пагинация под пустым каталогом — это одна страница из ниоткуда.
+    expect(screen.queryByText('Page 1 of 1')).toBeNull()
+  })
+
+  it('пустой каталог по-русски остаётся приглашением', async () => {
+    db.archives = []
+
+    renderApp({ locale: 'ru' })
+
+    expect(await screen.findByRole('heading', { name: 'Пока ничего не опубликовано' })).toBeInTheDocument()
   })
 })
