@@ -6,6 +6,7 @@ import { WalletAddress } from '@/components/auth/wallet-address'
 import { Logo } from '@/components/brand/logo'
 import { Container } from '@/components/layout/container'
 import { LanguageSwitch } from '@/components/layout/language-switch'
+import { ProductNav } from '@/components/layout/product-nav'
 import { ThemeSwitch } from '@/components/layout/theme-switch'
 import { sessionQuery } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
@@ -49,6 +50,20 @@ export function SiteHeader() {
           >
             {t.nav.catalog}
           </Link>
+
+          {/* Продуктовые страницы («как это работает», дальше — Viewer) появляются
+              только с lg. Порог измерен, а не выбран на глаз. Худший случай —
+              вошедший автор в русской локали: логотип, три ссылки, выход, адрес
+              кошелька и два переключателя просят 750px. Мера страницы даёт 800
+              (54rem минус кромки), на md остаётся 689 — не хватает шестидесяти,
+              и шапка уехала бы за правый край вместе со всей страницей, как это
+              уже было со ссылкой в каталог (F50).
+              Запас в 50px значит, что третья такая ссылка сюда не встанет:
+              её придётся ставить вместо одной из этих, а не рядом.
+              Ниже lg продуктовые страницы несёт подвал — там они на любой ширине. */}
+          <div className="hidden items-center gap-4 lg:flex">
+            <ProductNav linkClassName={navLink} activeClassName={navLinkActive} />
+          </div>
 
           {session ? <SignedIn wallet={session.wallet} /> : <SignInLink />}
 

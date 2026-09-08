@@ -17,16 +17,62 @@ export const en = {
 
   nav: {
     catalog: 'Catalog',
+    howItWorks: 'How it works',
     viewer: 'Get the Viewer',
     dashboard: 'Dashboard',
     signIn: 'Sign in',
     language: 'Language',
     themeDark: 'Switch to the dark theme',
     themeLight: 'Switch to the light theme',
+    /** Подвал несёт вторую навигацию на странице, и она обязана быть названа. */
+    pages: 'Site pages',
   },
 
   footer: {
     rights: (year: number) => `© ${year} SolArch`,
+  },
+
+  /**
+   * Как это работает.
+   *
+   * Сюда вернулся текст, снятый с двух мест: три шага механики с главной (F41)
+   * и оба объяснения из подвала (F55). Убирали их не за содержание, а за место —
+   * продуктовая проза, размазанная по подвалам и подзаголовкам, читается шумом
+   * на каждом экране. Текст восстановлен слово в слово: он был написан
+   * и утверждён, и переезд — не повод его переписывать.
+   */
+  howItWorks: {
+    title: 'How it works',
+    /** Восстановлено из `footer.mechanic`. Одна фраза про весь продукт. */
+    lead: 'An .slr file downloads for free and travels like any other file. Paying in USDC inside the SolArch Viewer is what opens it.',
+
+    reader: {
+      title: 'If you want to read something',
+      /** Восстановлено из `catalog.steps`, слово в слово и в прежнем порядке. */
+      steps: [
+        {
+          title: 'Take the file',
+          body: 'Every .slr leaves the catalog for free and without an account. Keep it, copy it, pass it on.',
+        },
+        {
+          title: 'Open it in the Viewer',
+          body: 'The container stays sealed until the desktop SolArch Viewer opens it on your computer.',
+        },
+        {
+          title: 'Pay once in USDC',
+          body: 'One payment unlocks the archive on one device. The creator keeps 95% of it.',
+        },
+      ],
+    },
+
+    creator: {
+      title: 'If you want to sell something',
+      /** Восстановлено из `footer.fee`. */
+      fee: 'Creators keep 95% of every sale.',
+      payout: 'The payout goes straight to your own Solana wallet. SolArch never holds it and never asks for your keys.',
+    },
+
+    toCatalog: 'Browse the catalog',
   },
 
   catalog: {
