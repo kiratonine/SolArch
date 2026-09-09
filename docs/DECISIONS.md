@@ -210,7 +210,7 @@ Language preference является локальной настройкой Des
 
 ## ADR-019 — Exact `.slr` v1 bytes, signatures and resource profile
 
-**Status:** accepted/frozen by INTEGRATION_GATE_01 external review; Part 01 Rust Core/CLI implemented, Backend/Viewer integration pending.
+**Status:** accepted/frozen by INTEGRATION_GATE_01 external review; Core + Viewer archive verification implemented, Backend integration pending.
 **Scope:** Backend, Archive Core, Windows Viewer; normative bytes in SLR_FORMAT.md.
 
 Decision: 96-byte LE prelude, contiguous five sections, JCS header/manifest, binary IDX1 index/DAT1 data, XChaCha20-Poly1305 with HKDF-SHA-256 separate manifest/index/content keys and exact domain/nonce/AAD rules. ACK is fresh per build attempt. SIG1 is 104 bytes; pure Ed25519 signs the NUL-terminated `SolArch/slr-signature/v1` domain plus SHA-256 of every preceding byte including the 40-byte signature metadata. Final fingerprint is lowercase SHA-256 hex of the entire signed file and is absent from PublicHeader. Limits: 1 GiB finalized, 512 MiB plaintext/single file, 10000 files, 1 MiB per-file chunks, 16384 total chunks; remaining numeric caps in SLR_FORMAT are mandatory together.
@@ -236,7 +236,7 @@ MVP limitation: trusted same-host job/service boundary, managed runtime zeroizat
 
 ## ADR-021 — Canonical license and HPKE device envelope
 
-**Status:** accepted/frozen by the corrected INTEGRATION_GATE_01 review; implementation pending.
+**Status:** accepted/frozen by the corrected INTEGRATION_GATE_01 review; Viewer-side Part 02 license/HPKE implementation complete, Backend issuance/integration pending.
 **Scope:** Backend ↔ Windows Viewer; exact closed schemas in API.md §§9–10.
 
 Decision: canonical X25519 raw public key, padded standard Base64; RFC 9180 HPKE Base, KEM 32 / KDF 1 / AEAD 2 (X25519/HKDF-SHA256/AES-256-GCM). One fresh context/ephemeral key and one sequence-0 seal per response. Exact JCS(P) supplies info/AAD context; pure Ed25519 signs the domain plus JCS({payload:P,wrapped_content_key:W}), including the whole wrapper. Signatures use padded Base64 (64 raw bytes), distinct license-role key and domain from archive signing. Bundled authenticated Viewer release maps select trusted keys; input-provided keys never establish trust.

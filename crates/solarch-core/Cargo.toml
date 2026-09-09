@@ -20,6 +20,8 @@ zip.workspace = true
 bs58.workspace = true
 time.workspace = true
 quick-xml.workspace = true
+base64.workspace = true
+hpke.workspace = true
+getrandom.workspace = true
 
 [dev-dependencies]
-base64.workspace = true

@@ -94,17 +94,27 @@ pub fn to_jcs<T: Serialize>(value: &T) -> Result<Vec<u8>> {
 }
 
 pub fn parse_exact<T: DeserializeOwned + Serialize>(bytes: &[u8], error: Error) -> Result<T> {
-    let mut deserializer = serde_json::Deserializer::from_slice(bytes);
-    let value = StrictValue::deserialize(&mut deserializer).map_err(|_| error)?;
-    deserializer.end().map_err(|_| error)?;
-    if depth(&value.0) > MAX_JSON_DEPTH {
-        return Err(error);
-    }
-    let typed: T = serde_json::from_value(value.0).map_err(|_| error)?;
+    let typed = parse_bounded(bytes, MAX_JSON_DEPTH, error)?;
     if to_jcs(&typed)? != bytes {
         return Err(error);
     }
     Ok(typed)
+}
+
+/// Strictly parses a bounded transport JSON value without requiring the wire
+/// property order or whitespace to already be RFC 8785 canonical.
+pub(crate) fn parse_bounded<T: DeserializeOwned>(
+    bytes: &[u8],
+    max_depth: usize,
+    error: Error,
+) -> Result<T> {
+    let mut deserializer = serde_json::Deserializer::from_slice(bytes);
+    let value = StrictValue::deserialize(&mut deserializer).map_err(|_| error)?;
+    deserializer.end().map_err(|_| error)?;
+    if depth(&value.0) > max_depth {
+        return Err(error);
+    }
+    serde_json::from_value(value.0).map_err(|_| error)
 }
 
 #[cfg(test)]

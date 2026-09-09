@@ -1,0 +1,10 @@
+{
+  "name": "solarch-workspace",
+  "private": true,
+  "packageManager": "pnpm@10.32.1",
+  "scripts": {
+    "lint": "pnpm --filter @solarch/viewer lint",
+    "test": "pnpm --filter @solarch/viewer test",
+    "build": "pnpm --filter @solarch/viewer build"
+  }
+}

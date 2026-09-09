@@ -1,0 +1,36 @@
+[package]
+name = "solarch-viewer"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+name = "solarch_viewer"
+
+[features]
+default = []
+development-fixtures = []
+desktop-runtime = ["tauri/wry", "dep:tauri-build", "dep:tauri-plugin-dialog"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[dependencies]
+solarch-core = { path = "../../../crates/solarch-core" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+base64.workspace = true
+time.workspace = true
+zeroize.workspace = true
+thiserror.workspace = true
+atomic-write-file = "=0.3.1"
+
+[target.'cfg(windows)'.dependencies]
+tauri = { version = "=2.11.5", default-features = false, optional = true }
+tauri-plugin-dialog = { version = "=2.7.3", optional = true }
+keyring = { version = "=4.2.0", default-features = false, features = ["v1"] }
+
+[target.'cfg(windows)'.build-dependencies]
+tauri-build = { version = "=2.6.3", features = [], optional = true }
+
+[dev-dependencies]
+tempfile = "=3.22.0"

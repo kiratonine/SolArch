@@ -35,6 +35,18 @@ pub enum Error {
     InvalidBuilderInput,
     #[error("resource limit exceeded")]
     LimitExceeded,
+    #[error("invalid device key")]
+    InvalidDeviceKey,
+    #[error("invalid device license")]
+    InvalidLicense,
+    #[error("unknown trusted key")]
+    UnknownTrustKey,
+    #[error("device binding does not match")]
+    WrongDevice,
+    #[error("license is outside its local validity window")]
+    Expired,
+    #[error("online license refresh is required")]
+    RefreshRequired,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

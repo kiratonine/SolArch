@@ -49,6 +49,11 @@ impl ArchiveContentKey {
         bytes.zeroize();
         secret
     }
+
+    #[cfg(test)]
+    pub(crate) fn test_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
 }
 
 impl std::fmt::Debug for ArchiveContentKey {

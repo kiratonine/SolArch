@@ -65,6 +65,14 @@ pub struct FinalVerification {
     pub protected_content_verified: bool,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VerifiedArchive {
+    pub public_header: PublicHeader,
+    pub archive_fingerprint: String,
+    pub size_bytes: u64,
+    pub signing_key_id: String,
+}
+
 pub struct PendingBuild {
     result: PendingBuildResult,
     output_path: PathBuf,
@@ -263,6 +271,37 @@ pub fn verify_finalized(
     let result = verify_finalized_open(&mut file, &ranges, size, expected_key_id, public_key)?;
     identity.verify(path, &file)?;
     Ok(result)
+}
+
+/// Returns the untrusted SIG1 key ID used only to select an archive-role trust
+/// anchor. Callers must then verify the archive with that exact trusted key.
+pub fn inspect_signing_key_id(path: &Path) -> Result<String> {
+    let (mut file, ranges, _, identity) = open_layout(path, false)?;
+    let prefix_range = ranges[4].start..ranges[4].start + SIGNATURE_PREFIX_BYTES;
+    let prefix = read_range(&mut file, &prefix_range)?;
+    let key_id = SignaturePrefix::parse(&prefix)?.key_id().to_owned();
+    identity.verify(path, &file)?;
+    Ok(key_id)
+}
+
+/// Authenticates the finalized bytes and returns header metadata read from the
+/// same stable file handle. No unverified header value is returned on failure.
+pub fn verify_archive(
+    path: &Path,
+    expected_key_id: &str,
+    public_key: [u8; 32],
+) -> Result<VerifiedArchive> {
+    let (mut file, ranges, size, identity) = open_layout(path, false)?;
+    let verification =
+        verify_finalized_open(&mut file, &ranges, size, expected_key_id, public_key)?;
+    let header = format::parse_header(&read_range(&mut file, &ranges[0])?)?;
+    identity.verify(path, &file)?;
+    Ok(VerifiedArchive {
+        public_header: header,
+        archive_fingerprint: verification.archive_fingerprint,
+        size_bytes: verification.size_bytes,
+        signing_key_id: verification.signing_key_id,
+    })
 }
 
 /// Verifies the finalized signature/fingerprint and, with the caller-owned ACK,

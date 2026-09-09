@@ -3,9 +3,11 @@
 
 pub mod archive;
 mod canonical;
+pub mod device;
 pub mod error;
 pub mod format;
 pub mod integrity;
+pub mod license;
 pub mod manifest;
 pub mod paths;
 pub mod production_crypto;

@@ -18,7 +18,7 @@ pub const MAX_ENCRYPTED_INDEX: usize = 262_168;
 pub const MAX_ENCRYPTED_DATA: usize = 8 + 512 * 1024 * 1024 + 16_384 * 16;
 pub const SIGNATURE_BLOCK_LEN: usize = 104;
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct PublicHeader {
     pub format: String,
@@ -32,26 +32,26 @@ pub struct PublicHeader {
     pub backend: Backend,
     pub crypto: CryptoMetadata,
 }
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct CommercialSnapshot {
     pub price_amount: String,
     pub price_currency: String,
     pub platform_fee_bps: u16,
 }
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct LicenseSnapshot {
     pub max_devices: u32,
     pub allow_export: bool,
     pub watermark_enabled: bool,
 }
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Backend {
     pub archive_api_id: String,
 }
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct CryptoMetadata {
     pub content_algorithm: String,
@@ -91,7 +91,7 @@ impl PublicHeader {
     }
 }
 
-fn valid_id(value: &str) -> bool {
+pub(crate) fn valid_id(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 128
         && value
@@ -99,7 +99,7 @@ fn valid_id(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
 }
 
-fn valid_wallet(value: &str) -> bool {
+pub(crate) fn valid_wallet(value: &str) -> bool {
     bs58::decode(value)
         .into_vec()
         .ok()
@@ -107,7 +107,7 @@ fn valid_wallet(value: &str) -> bool {
         .is_some_and(|bytes| bs58::encode(bytes).into_string() == value)
 }
 
-fn valid_timestamp(value: &str) -> bool {
+pub(crate) fn parse_timestamp(value: &str) -> Option<time::OffsetDateTime> {
     let bytes = value.as_bytes();
     if bytes.len() != 20
         || bytes[4] != b'-'
@@ -120,7 +120,7 @@ fn valid_timestamp(value: &str) -> bool {
             !matches!(index, 4 | 7 | 10 | 13 | 16 | 19) && !byte.is_ascii_digit()
         })
     {
-        return false;
+        return None;
     }
     let parse = |range: std::ops::Range<usize>| {
         std::str::from_utf8(&bytes[range]).ok()?.parse::<u32>().ok()
@@ -133,16 +133,21 @@ fn valid_timestamp(value: &str) -> bool {
         parse(14..16),
         parse(17..19),
     ) else {
-        return false;
+        return None;
     };
     if !(1970..=9999).contains(&year) || second > 59 {
-        return false;
+        return None;
     }
     let Ok(month) = time::Month::try_from(month as u8) else {
-        return false;
+        return None;
     };
-    time::Date::from_calendar_date(year as i32, month, day as u8).is_ok()
-        && time::Time::from_hms(hour as u8, minute as u8, second as u8).is_ok()
+    let date = time::Date::from_calendar_date(year as i32, month, day as u8).ok()?;
+    let clock = time::Time::from_hms(hour as u8, minute as u8, second as u8).ok()?;
+    Some(date.with_time(clock).assume_utc())
+}
+
+pub(crate) fn valid_timestamp(value: &str) -> bool {
+    parse_timestamp(value).is_some()
 }
 
 fn valid_price(value: &str) -> bool {

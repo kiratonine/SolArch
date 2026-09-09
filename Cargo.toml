@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/solarch-core", "crates/solarch-cli"]
+members = ["crates/solarch-core", "crates/solarch-cli", "apps/viewer/src-tauri"]
 resolver = "2"
 
 [workspace.package]
@@ -24,3 +24,5 @@ zip = { version = "2.4.2", default-features = false, features = ["deflate"] }
 bs58 = "0.5.1"
 time = "=0.3.47"
 quick-xml = "=0.42.0"
+hpke = { version = "=0.14.1", default-features = false, features = ["alloc", "x25519", "aes"] }
+getrandom = "=0.3.4"
