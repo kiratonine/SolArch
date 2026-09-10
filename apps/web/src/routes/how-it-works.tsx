@@ -50,7 +50,7 @@ function HowItWorksPage() {
         </p>
       </section>
 
-      <section className="border-border mt-10 border-t pt-6">
+      <section className="border-border mt-6 border-t pt-6">
         <SectionHeading>{page.creator.title}</SectionHeading>
 
         <div className="mt-4 max-w-[62ch] space-y-2.5 text-[0.9375rem]">

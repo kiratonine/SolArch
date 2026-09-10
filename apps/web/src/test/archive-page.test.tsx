@@ -32,11 +32,27 @@ describe('страница архива', () => {
     renderApp({ path: '/archives/nebula-brand-kit' })
 
     expect(await screen.findByText('Free to download')).toBeInTheDocument()
-    // Цена в объяснении — та же строка, что пришла с backend, без пересчёта.
-    expect(
-      screen.getByText(/You pay 19\.00 USDC later, inside the SolArch Viewer/),
-    ).toBeInTheDocument()
+    expect(screen.getByText(/You pay later, inside the SolArch Viewer/)).toBeInTheDocument()
     expect(screen.getByText(/never in this browser/)).toBeInTheDocument()
+  })
+
+  it('за объяснением механики отсылает на отдельную страницу, а не пересказывает её', async () => {
+    renderApp({ path: '/archives/nebula-brand-kit' })
+
+    await screen.findByText('Free to download')
+
+    // Ни цены, ни сетевых комиссий у кнопки нет: цена стоит крупно вверху
+    // страницы, остальное рассказывает страница механики.
+    expect(screen.queryByText(/network fees/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/You pay 19\.00 USDC/)).not.toBeInTheDocument()
+
+    // Сужаем до страницы: та же ссылка есть в шапке и в карте сайта в подвале,
+    // а проверяем мы именно ту, что стоит у кнопки скачивания.
+    const page = screen.getByRole('main')
+    expect(within(page).getByRole('link', { name: 'How it works' })).toHaveAttribute(
+      'href',
+      '/how-it-works',
+    )
   })
 
   it('не выдаёт закрытые поля автора', async () => {

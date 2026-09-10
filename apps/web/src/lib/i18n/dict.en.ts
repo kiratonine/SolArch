@@ -126,9 +126,12 @@ export const en = {
     about: 'About this archive',
     back: 'Back to the catalog',
 
-    /** Главный вопрос гостя на этой странице: где и когда с него возьмут деньги. */
-    payment: (price: string) =>
-      `You pay ${price} later, inside the SolArch Viewer on your own computer — never in this browser. SolArch covers the Solana network fees.`,
+    /**
+     * Главный вопрос гостя на этой странице: где и когда с него возьмут деньги.
+     * Одна фраза, и только про это. Про сетевые комиссии и остальную механику
+     * рассказывает `/how-it-works` — ссылка стоит сразу за этой строкой.
+     */
+    payment: 'You pay later, inside the SolArch Viewer on your own computer, never in this browser.',
 
     files: {
       title: 'Contents',
@@ -238,14 +241,14 @@ export const en = {
     },
 
     declined: (wallet: string) =>
-      `${wallet} did not sign the message. Nothing was sent — you can sign again.`,
+      `${wallet} did not sign the message. Nothing was sent - you can sign again.`,
     failed: 'The wallet did not respond. Try again, or choose another wallet.',
     verifyFailed: 'SolArch could not verify that signature. Ask for a new message and sign it again.',
     serverFailed: 'SolArch did not answer. Try again in a moment.',
 
     noWallets: {
       title: 'No Solana wallet in this browser',
-      body: 'SolArch works with any wallet that follows the Solana Wallet Standard — Phantom and Solflare are the common ones. Install one, then come back to this page.',
+      body: 'SolArch works with any wallet that follows the Solana Wallet Standard - Phantom and Solflare are the common ones. Install one, then come back to this page.',
       reload: 'I installed one, look again',
     },
 
@@ -299,7 +302,7 @@ export const en = {
 
         draft: {
           title: 'Nothing sealed yet',
-          body: 'Add the files you are selling. SolArch packs them into a sealed .slr on its servers — nothing is encrypted in your browser.',
+          body: 'Add the files you are selling. SolArch packs them into a sealed .slr on its servers - nothing is encrypted in your browser.',
         },
         uploading: {
           title: 'Sending your files',
@@ -390,7 +393,7 @@ export const en = {
 
     upload: {
       title: 'Add files',
-      body: 'A ZIP keeps the folders you built inside it — SolArch unpacks it on the server. Single files land at the root of the archive.',
+      body: 'A ZIP keeps the folders you built inside it - SolArch unpacks it on the server. Single files land at the root of the archive.',
       formats: 'PDF, PNG, JPG, WebP, DOCX, XLSX or a ZIP.',
       choose: 'Choose files',
       drop: 'or drop them here',
@@ -444,7 +447,7 @@ export const en = {
       gross: 'Buyers paid',
       creator: 'Your payout',
       platform: 'SolArch fee',
-      note: 'Only payments confirmed on Solana are counted here. The payout goes straight to your wallet — SolArch never holds it.',
+      note: 'Only payments confirmed on Solana are counted here. The payout goes straight to your wallet - SolArch never holds it.',
     },
 
     empty: {

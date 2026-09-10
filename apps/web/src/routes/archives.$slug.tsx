@@ -107,8 +107,6 @@ function ArchivePage() {
     )
   }
 
-  const priceLine = `${data.price.amount} ${data.price.currency}`
-
   return (
     <Container>
       {/* Возврат — единственный путь со страницы наверх, и он должен читаться
@@ -139,7 +137,7 @@ function ArchivePage() {
       <p className="mt-6 max-w-[62ch] text-[0.9375rem] whitespace-pre-line">{data.description}</p>
 
       <MetricGrid
-        className="border-border mt-8 border-t pt-5"
+        className="border-border mt-6 border-t pt-6"
         items={[
           { value: format.count(data.file_count), label: t.units.files(data.file_count) },
           { value: format.bytes(data.size_bytes), label: t.metrics.size },
@@ -149,21 +147,36 @@ function ArchivePage() {
         ]}
       />
 
-      <div className="border-border mt-8 flex flex-wrap items-start gap-x-6 gap-y-3 border-t pt-6">
+      {/* Кнопка, а вокруг неё две строки: над ней — на каких условиях забирают файл,
+          под ней — где и когда возьмут деньги. Стояли они сбоку, и кнопка висела
+          у верха четырёх строк текста, перекашивая блок; в столбик читается сверху
+          вниз одинаково и на 390px, и на десктопе, где текст ещё и не переносится. */}
+      <div className="border-border mt-6 border-t pt-6">
+        <p className="text-[0.8125rem] font-medium">{t.archive.free}</p>
+
         <a
           href={marketplaceDownloadUrl(data.slug)}
           download={`${data.slug}.slr`}
-          className={cn(buttonVariants({ size: 'lg' }), 'shrink-0')}
+          className={cn(buttonVariants({ size: 'lg' }), 'mt-2')}
         >
           {t.archive.download}
         </a>
-        <div className="min-w-0 flex-1 text-[0.8125rem]">
-          <p className="font-medium">{t.archive.free}</p>
-          <p className="text-muted-foreground mt-0.5 max-w-[58ch]">{t.archive.payment(priceLine)}</p>
-        </div>
+
+        {/* Ни цены, ни сетевых комиссий здесь больше нет. Цена стоит крупно
+            вверху страницы, повторять её в подписи незачем; всё остальное про
+            механику рассказывает страница, куда ведёт ссылка сразу за фразой. */}
+        <p className="text-muted-foreground mt-2.5 max-w-[58ch] text-[0.8125rem]">
+          {t.archive.payment}{' '}
+          <Link
+            to="/how-it-works"
+            className="text-seal-ink font-medium underline underline-offset-4"
+          >
+            {t.nav.howItWorks}
+          </Link>
+        </p>
       </div>
 
-      <section className="border-border mt-10 border-t pt-6">
+      <section className="border-border mt-6 border-t pt-6">
         <SectionHeading>{t.archive.files.title}</SectionHeading>
 
         {files.isPending && (
@@ -186,7 +199,7 @@ function ArchivePage() {
           ))}
       </section>
 
-      <section className="border-border mt-10 border-t pt-6">
+      <section className="border-border mt-6 border-t pt-6">
         <SectionHeading>{t.archive.terms.title}</SectionHeading>
         <LicenseTerms policy={data.license_policy} />
       </section>

@@ -18,7 +18,7 @@ export function SiteFooter() {
   const { t } = useI18n()
 
   return (
-    <footer className="border-border mt-20 border-t">
+    <footer className="border-border mt-14 border-t">
       <Container className="flex flex-wrap items-center gap-x-8 gap-y-4 py-7">
         <Logo markClassName="size-4" wordClassName="text-[0.8125rem]" />
 

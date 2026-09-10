@@ -19,7 +19,7 @@ function RootLayout() {
   return (
     <div className="flex min-h-screen flex-col">
       <SiteHeader />
-      <main className="flex-1 pt-12 pb-4">
+      <main className="flex-1 pt-8 pb-4">
         <Outlet />
       </main>
       <SiteFooter />

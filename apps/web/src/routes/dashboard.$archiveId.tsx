@@ -137,7 +137,7 @@ function ArchiveDetailPage() {
 
       {/* Аналитика открывается прямо с манифеста: она и есть его продолжение —
           те же просмотры и скачивания, только с окном наблюдения и деньгами. */}
-      <div className="border-border mt-8 flex flex-wrap items-end justify-between gap-x-8 gap-y-4 border-t pt-5">
+      <div className="border-border mt-6 flex flex-wrap items-end justify-between gap-x-8 gap-y-4 border-t pt-6">
         <MetricGrid
           items={[
             { value: format.count(data.file_count), label: t.units.files(data.file_count) },
@@ -193,7 +193,7 @@ function ArchiveDetailPage() {
         )}
       </section>
 
-      <section className="border-border mt-10 border-t pt-6">
+      <section className="border-border mt-6 border-t pt-6">
         <SectionHeading>{t.dashboard.detail.files.title}</SectionHeading>
 
         {files.isPending && (
