@@ -125,6 +125,10 @@ export class MarketplaceService {
 
     return {
       items: cleanItems,
+      page,
+      per_page: limit,
+      total,
+      has_more: page < Math.ceil(total / limit),
       pagination: {
         page,
         limit,
@@ -204,16 +208,23 @@ export class MarketplaceService {
       },
       file_count: arc.publicFiles.length,
       size_bytes: sizeBytes,
+      license_policy: {
+        max_devices: arc.maxDevices,
+        allow_export: arc.allowExport,
+        watermark_enabled: arc.watermarkEnabled,
+      },
       access_rules: {
         max_devices: arc.maxDevices,
         allow_export: arc.allowExport,
         watermark_enabled: arc.watermarkEnabled,
       },
+      marketplace_status: listing.marketplaceStatus,
       metrics: {
         views: views + (shouldRecordView ? 1 : 0),
         downloads,
         paid_unlocks: paidUnlocks,
       },
+      download_available: arc.technicalStatus === 'ready',
       download_availability: arc.technicalStatus === 'ready',
     };
   }

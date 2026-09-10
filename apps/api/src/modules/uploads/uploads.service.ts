@@ -100,6 +100,7 @@ export class UploadsService {
     return {
       upload_id: upload.id,
       status: upload.status,
+      upload_url: `/v1/uploads/${upload.id}/data`,
     };
   }
 
@@ -294,6 +295,7 @@ export class UploadsService {
     });
 
     return {
+      upload_id: upload.id,
       archive_id: updatedArchive.id,
       technical_status: updatedArchive.technicalStatus,
       archive_fingerprint: updatedArchive.archiveFingerprint,

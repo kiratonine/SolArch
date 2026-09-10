@@ -3,11 +3,13 @@ import {
   Post,
   Param,
   Body,
+  Req,
   UseGuards,
   UseInterceptors,
   UploadedFile,
   BadRequestException,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import * as path from 'path';
@@ -29,6 +31,28 @@ export class UploadsController {
   @Post('init')
   async init(@CurrentUser() user: any, @Body() dto: InitUploadDto) {
     return this.uploadsService.init(user.id, dto);
+  }
+
+  @Post(':uploadId/data')
+  async uploadData(
+    @Param('uploadId') uploadId: string,
+    @Req() req: Request,
+  ) {
+    const uploadDir = path.join('./storage_data', 'uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    const targetPath = path.join(uploadDir, `${uploadId}-${Date.now()}.zip`);
+    const writeStream = fs.createWriteStream(targetPath);
+
+    await new Promise<void>((resolve, reject) => {
+      req.pipe(writeStream);
+      writeStream.on('finish', () => resolve());
+      writeStream.on('error', reject);
+      req.on('error', reject);
+    });
+
+    return this.uploadsService.setUploadedFile(uploadId, targetPath);
   }
 
   @Post(':uploadId/file')

@@ -37,6 +37,70 @@ export class ArchivesService {
     };
   }
 
+  formatCreatorArchive(arc: any) {
+    const economics = this.calculateEconomics(arc.priceAmount);
+    const views = arc.events?.filter((e: any) => e.eventType === 'archive_view').length || 0;
+    const downloads = arc.events?.filter((e: any) => e.eventType === 'archive_download').length || 0;
+    const paidUnlocks = arc.payments?.filter((p: any) => p.status === 'confirmed').length || 0;
+    const sizeBytes = arc.publicFiles?.reduce((acc: number, f: any) => acc + Number(f.sizeBytes), 0) || 0;
+
+    return {
+      // Canonical snake_case DTO matching API.md & FRONTEND_BACKEND_INTEGRATION_GUIDE.md
+      archive_id: arc.id,
+      slug: arc.listing?.slug || null,
+      title: arc.title,
+      short_description: arc.shortDescription || '',
+      description: arc.description || '',
+      cover_url: arc.listing?.coverStorageKey || null,
+      technical_status: arc.technicalStatus,
+      marketplace_status: arc.marketplaceStatus,
+      price: {
+        currency: arc.priceCurrency,
+        amount: arc.priceAmount,
+      },
+      economics,
+      license_policy: {
+        max_devices: arc.maxDevices,
+        allow_export: arc.allowExport,
+        watermark_enabled: arc.watermarkEnabled,
+      },
+      creator_payout_wallet: arc.creatorPayoutWallet,
+      payout_account_ready: Boolean(arc.creatorUsdcAta),
+      file_count: arc.publicFiles?.length || 0,
+      size_bytes: sizeBytes,
+      metrics: {
+        views,
+        downloads,
+        paid_unlocks: paidUnlocks,
+      },
+      created_at: arc.createdAt instanceof Date ? arc.createdAt.toISOString() : (arc.createdAt || new Date().toISOString()),
+
+      // Backward-compatibility aliases for Prisma camelCase consumers/existing tests
+      id: arc.id,
+      creatorUserId: arc.creatorUserId,
+      shortDescription: arc.shortDescription,
+      technicalStatus: arc.technicalStatus,
+      marketplaceStatus: arc.marketplaceStatus,
+      creatorPayoutWallet: arc.creatorPayoutWallet,
+      creatorUsdcAta: arc.creatorUsdcAta,
+      priceCurrency: arc.priceCurrency,
+      priceAmount: arc.priceAmount,
+      platformFeeBps: arc.platformFeeBps,
+      contentKeyRef: arc.contentKeyRef,
+      generatedSlrStorageKey: arc.generatedSlrStorageKey,
+      archiveFingerprint: arc.archiveFingerprint,
+      publicHeaderHash: arc.publicHeaderHash,
+      maxDevices: arc.maxDevices,
+      allowExport: arc.allowExport,
+      watermarkEnabled: arc.watermarkEnabled,
+      listing: arc.listing,
+      publicFiles: arc.publicFiles?.map((f: any) => ({
+        ...f,
+        sizeBytes: Number(f.sizeBytes),
+      })),
+    };
+  }
+
   async create(userId: string, dto: CreateArchiveDto) {
     if (dto.price.currency !== 'USDC') {
       throw new BadRequestException('Only USDC currency is accepted in MVP');
@@ -81,7 +145,7 @@ export class ArchivesService {
           },
         },
       },
-      include: { listing: true },
+      include: { listing: true, publicFiles: true, events: true, payments: true },
     });
 
     return {
@@ -93,13 +157,29 @@ export class ArchivesService {
         amount: archive.priceAmount,
       },
       economics,
+      ...this.formatCreatorArchive(archive),
     };
+  }
+
+  async listForCreator(userId: string) {
+    const archives = await this.prisma.archive.findMany({
+      where: { creatorUserId: userId },
+      include: {
+        listing: true,
+        publicFiles: true,
+        events: true,
+        payments: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return archives.map((arc) => this.formatCreatorArchive(arc));
   }
 
   async findOne(archiveId: string, userId: string) {
     const archive = await this.prisma.archive.findUnique({
       where: { id: archiveId },
-      include: { listing: true, publicFiles: true },
+      include: { listing: true, publicFiles: true, events: true, payments: true },
     });
 
     if (!archive) {
@@ -110,11 +190,35 @@ export class ArchivesService {
       throw new ForbiddenException('You do not own this archive');
     }
 
-    const economics = this.calculateEconomics(archive.priceAmount);
+    return this.formatCreatorArchive(archive);
+  }
+
+  async getFilesForCreator(archiveId: string, userId: string) {
+    const archive = await this.prisma.archive.findUnique({
+      where: { id: archiveId },
+      include: {
+        publicFiles: {
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    if (!archive) {
+      throw new NotFoundException('Archive not found');
+    }
+
+    if (archive.creatorUserId !== userId) {
+      throw new ForbiddenException('You do not own this archive');
+    }
 
     return {
-      ...archive,
-      economics,
+      files: (archive.publicFiles || []).map((f) => ({
+        display_path: f.displayPath,
+        display_name: f.displayName,
+        extension: f.fileExtension,
+        mime_type: f.mimeType,
+        size_bytes: Number(f.sizeBytes),
+      })),
     };
   }
 
@@ -211,12 +315,11 @@ export class ArchivesService {
           },
         },
       },
-      include: { listing: true },
+      include: { listing: true, publicFiles: true, events: true, payments: true },
     });
 
     return {
-      archive_id: updated.id,
-      marketplace_status: updated.marketplaceStatus,
+      ...this.formatCreatorArchive(updated),
       published_at: updated.listing?.publishedAt,
     };
   }
@@ -244,11 +347,38 @@ export class ArchivesService {
           },
         },
       },
+      include: { listing: true, publicFiles: true, events: true, payments: true },
     });
 
     return {
-      archive_id: updated.id,
-      marketplace_status: updated.marketplaceStatus,
+      ...this.formatCreatorArchive(updated),
+    };
+  }
+
+  async blockArchive(archiveId: string, userId?: string) {
+    const archive = await this.prisma.archive.findUnique({
+      where: { id: archiveId },
+    });
+
+    if (!archive) {
+      throw new NotFoundException('Archive not found');
+    }
+
+    const updated = await this.prisma.archive.update({
+      where: { id: archiveId },
+      data: {
+        marketplaceStatus: 'blocked',
+        listing: {
+          update: {
+            marketplaceStatus: 'blocked',
+          },
+        },
+      },
+      include: { listing: true, publicFiles: true, events: true, payments: true },
+    });
+
+    return {
+      ...this.formatCreatorArchive(updated),
     };
   }
 }

@@ -94,7 +94,14 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
       findMany: jest.fn().mockResolvedValue([mockArchive]),
       count: jest.fn().mockResolvedValue(1),
       create: jest.fn().mockResolvedValue(mockArchive),
-      update: jest.fn().mockResolvedValue(mockArchive),
+      update: jest.fn().mockImplementation(({ data }) => ({
+        ...mockArchive,
+        ...data,
+        listing: {
+          ...mockArchive.listing,
+          ...(data.listing?.update || {}),
+        },
+      })),
     },
     archiveListing: {
       findUnique: jest.fn().mockResolvedValue({
@@ -310,26 +317,66 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
         })
         .expect(400);
     });
+
+    it('/v1/archives (GET) returns creator archives list (My Archives)', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/v1/archives')
+        .set('Authorization', `Bearer ${creatorJwt}`)
+        .expect(200);
+
+      expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body[0].archive_id).toBe('arc_e2e_001');
+      expect(res.body[0].file_count).toBeDefined();
+      expect(res.body[0].metrics).toBeDefined();
+      expect(res.body[0].license_policy).toBeDefined();
+    });
+
+    it('/v1/archives/:id/files (GET) returns unpacked files list for creator', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/v1/archives/arc_e2e_001/files')
+        .set('Authorization', `Bearer ${creatorJwt}`)
+        .expect(200);
+
+      expect(res.body.files).toBeDefined();
+      expect(Array.isArray(res.body.files)).toBe(true);
+      expect(res.body.files[0].display_name).toBe('lesson-01.pdf');
+    });
+
+    it('/v1/archives/:id/block (POST) blocks archive listing (moderation hook)', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/v1/archives/arc_e2e_001/block')
+        .set('Authorization', `Bearer ${creatorJwt}`)
+        .expect(201);
+
+      expect(res.body.marketplace_status).toBe('blocked');
+    });
   });
 
   describe('Public Marketplace API', () => {
-    it('/v1/marketplace/archives (GET) returns public published catalog', async () => {
+    it('/v1/marketplace/archives (GET) returns public published catalog with flat & pagination fields', async () => {
       const res = await request(app.getHttpServer())
         .get('/v1/marketplace/archives')
         .expect(200);
 
       expect(res.body.items).toBeDefined();
       expect(Array.isArray(res.body.items)).toBe(true);
+      expect(res.body.page).toBe(1);
+      expect(res.body.per_page).toBeDefined();
+      expect(res.body.total).toBeDefined();
+      expect(res.body.has_more).toBeDefined();
       expect(res.body.pagination).toBeDefined();
     });
 
-    it('/v1/marketplace/archives/:slug (GET) returns public archive detail', async () => {
+    it('/v1/marketplace/archives/:slug (GET) returns public archive detail with aliases', async () => {
       const res = await request(app.getHttpServer())
         .get('/v1/marketplace/archives/solarch-masterclass')
         .expect(200);
 
       expect(res.body.title).toBe('SolArch Masterclass');
       expect(res.body.access_rules).toBeDefined();
+      expect(res.body.license_policy).toBeDefined();
+      expect(res.body.download_available).toBeDefined();
+      expect(res.body.marketplace_status).toBeDefined();
       expect(res.body.metrics).toBeDefined();
     });
 

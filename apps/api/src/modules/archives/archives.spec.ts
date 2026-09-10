@@ -55,4 +55,41 @@ describe('ArchivesService & Economics', () => {
     expect(() => service.calculateEconomics('-5.00')).toThrow(BadRequestException);
     expect(() => service.calculateEconomics('abc')).toThrow(BadRequestException);
   });
+
+  test('formatCreatorArchive produces canonical snake_case DTO with metrics and economics', () => {
+    const mockArc = {
+      id: 'arc_test_123',
+      creatorUserId: 'usr_001',
+      title: 'Course',
+      shortDescription: 'Desc',
+      description: 'Full',
+      priceCurrency: 'USDC',
+      priceAmount: '20.00',
+      technicalStatus: 'ready',
+      marketplaceStatus: 'published',
+      maxDevices: 1,
+      allowExport: false,
+      watermarkEnabled: true,
+      creatorPayoutWallet: 'Wallet1111',
+      creatorUsdcAta: 'Ata1111',
+      createdAt: new Date('2026-09-01T00:00:00Z'),
+      listing: { slug: 'course-slug', coverStorageKey: 'cover.png' },
+      publicFiles: [{ sizeBytes: BigInt(2048) }],
+      events: [{ eventType: 'archive_view' }, { eventType: 'archive_download' }],
+      payments: [{ status: 'confirmed' }],
+    };
+
+    const formatted = service.formatCreatorArchive(mockArc);
+    expect(formatted.archive_id).toBe('arc_test_123');
+    expect(formatted.slug).toBe('course-slug');
+    expect(formatted.economics.creator_share).toBe('19.00');
+    expect(formatted.economics.platform_share).toBe('1.00');
+    expect(formatted.license_policy.max_devices).toBe(1);
+    expect(formatted.file_count).toBe(1);
+    expect(formatted.size_bytes).toBe(2048);
+    expect(formatted.metrics.views).toBe(1);
+    expect(formatted.metrics.downloads).toBe(1);
+    expect(formatted.metrics.paid_unlocks).toBe(1);
+    expect(formatted.payout_account_ready).toBe(true);
+  });
 });

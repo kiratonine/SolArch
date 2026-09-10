@@ -26,9 +26,19 @@ export class ArchivesController {
     return this.archivesService.create(user.id, dto);
   }
 
+  @Get()
+  async listMyArchives(@CurrentUser() user: any) {
+    return this.archivesService.listForCreator(user.id);
+  }
+
   @Get(':archiveId')
   async findOne(@Param('archiveId') archiveId: string, @CurrentUser() user: any) {
     return this.archivesService.findOne(archiveId, user.id);
+  }
+
+  @Get(':archiveId/files')
+  async getArchiveFiles(@Param('archiveId') archiveId: string, @CurrentUser() user: any) {
+    return this.archivesService.getFilesForCreator(archiveId, user.id);
   }
 
   @Patch(':archiveId')
@@ -38,6 +48,11 @@ export class ArchivesController {
     @Body() dto: UpdateArchiveDto,
   ) {
     return this.archivesService.update(archiveId, user.id, dto);
+  }
+
+  @Post(':archiveId/block')
+  async block(@Param('archiveId') archiveId: string, @CurrentUser() user: any) {
+    return this.archivesService.blockArchive(archiveId, user.id);
   }
 
   @Post(':archiveId/publish')
