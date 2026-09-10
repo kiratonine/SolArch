@@ -138,4 +138,127 @@ describe('PaymentsService & Solana Pay', () => {
     const txBuf = Buffer.from(res.transaction, 'base64');
     expect(txBuf.length).toBeGreaterThan(100);
   });
+
+  test('verifies payment when transaction matches 95/5 USDC split and reference', async () => {
+    const creatorAta = Keypair.generate().publicKey.toBase58();
+    const platformAta = Keypair.generate().publicKey.toBase58();
+    const reference = Keypair.generate().publicKey.toBase58();
+    const secret = 'test_secret_32_bytes_token32_random_secret_43';
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const secretHmac = require('@/crypto/token32.util').hashSecretToken(secret, 'test-hmac-secret-pepper-minimum-32');
+
+    prisma.paymentIntent.findUnique.mockResolvedValue({
+      id: 'pi_001',
+      archiveId: 'arc_001',
+      devicePublicKey: DEVICE_A,
+      clientSecretHmac: secretHmac,
+      expectedPriceAmount: '10.00',
+      creatorAta,
+      platformAta,
+      reference,
+      status: 'pending',
+      archive: {
+        allowExport: false,
+        watermarkEnabled: true,
+      },
+    });
+    prisma.payment.findUnique.mockResolvedValue(null);
+    prisma.paymentIntent.update.mockResolvedValue({});
+    prisma.payment.create.mockResolvedValue({ id: 'pay_001' });
+    prisma.entitlement.create.mockResolvedValue({ id: 'ent_001' });
+    prisma.marketplaceEvent.create.mockResolvedValue({});
+
+    jest.spyOn(service, 'getConnection').mockReturnValue({
+      getParsedTransaction: jest.fn().mockResolvedValue({
+        slot: 100,
+        blockTime: 123456,
+        confirmationStatus: 'finalized',
+        meta: { err: null },
+        transaction: {
+          message: {
+            accountKeys: [
+              { pubkey: { toBase58: () => reference }, signer: false },
+              { pubkey: { toBase58: () => 'BuyerWallet1111111111111111111111111111111' }, signer: true },
+            ],
+            instructions: [
+              {
+                parsed: {
+                  type: 'transferChecked',
+                  info: {
+                    destination: creatorAta,
+                    amount: '9500000',
+                    mint: usdcMint.toBase58(),
+                  },
+                },
+              },
+              {
+                parsed: {
+                  type: 'transferChecked',
+                  info: {
+                    destination: platformAta,
+                    amount: '500000',
+                    mint: usdcMint.toBase58(),
+                  },
+                },
+              },
+            ],
+          },
+        },
+      }),
+    } as any);
+
+    const res = await service.verifyPayment('pi_001', `SolArchIntent ${secret}`, {
+      device_public_key: DEVICE_A,
+      transaction_signature: 'sig_valid_1111111111111111111111111111111111111111111111111111111111111111',
+    });
+
+    expect(res.verified).toBe(true);
+    expect(res.payment_id).toBe('pay_001');
+    expect(res.entitlement_id).toBe('ent_001');
+  });
+
+  test('rejects payment when reference is missing in on-chain transaction', async () => {
+    const creatorAta = Keypair.generate().publicKey.toBase58();
+    const platformAta = Keypair.generate().publicKey.toBase58();
+    const reference = Keypair.generate().publicKey.toBase58();
+    const secret = 'test_secret_32_bytes_token32_random_secret_43';
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const secretHmac = require('@/crypto/token32.util').hashSecretToken(secret, 'test-hmac-secret-pepper-minimum-32');
+
+    prisma.paymentIntent.findUnique.mockResolvedValue({
+      id: 'pi_001',
+      archiveId: 'arc_001',
+      devicePublicKey: DEVICE_A,
+      clientSecretHmac: secretHmac,
+      expectedPriceAmount: '10.00',
+      creatorAta,
+      platformAta,
+      reference,
+      status: 'pending',
+    });
+    prisma.payment.findUnique.mockResolvedValue(null);
+
+    jest.spyOn(service, 'getConnection').mockReturnValue({
+      getParsedTransaction: jest.fn().mockResolvedValue({
+        confirmationStatus: 'finalized',
+        meta: { err: null },
+        transaction: {
+          message: {
+            accountKeys: [
+              { pubkey: { toBase58: () => 'AnotherKey' }, signer: false },
+              { pubkey: { toBase58: () => 'BuyerWallet' }, signer: true },
+            ],
+            instructions: [],
+          },
+        },
+      }),
+    } as any);
+
+    await expect(
+      service.verifyPayment('pi_001', `SolArchIntent ${secret}`, {
+        device_public_key: DEVICE_A,
+        transaction_signature: 'sig_invalid_reference',
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
 });

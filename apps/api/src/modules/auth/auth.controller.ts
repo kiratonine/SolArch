@@ -12,23 +12,23 @@ import { ChallengeRequestDto, VerifyRequestDto } from './auth.dto';
 import { WalletAuthGuard } from '@/common/guards/wallet-auth.guard';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 
-@Controller('v1/auth')
+@Controller('v1')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('wallet/challenge')
+  @Post('auth/wallet/challenge')
   @HttpCode(HttpStatus.OK)
   async challenge(@Body() dto: ChallengeRequestDto) {
     return this.authService.createChallenge(dto);
   }
 
-  @Post('wallet/verify')
+  @Post('auth/wallet/verify')
   @HttpCode(HttpStatus.OK)
   async verify(@Body() dto: VerifyRequestDto) {
     return this.authService.verifyChallenge(dto);
   }
 
-  @Get('/me')
+  @Get(['me', 'auth/me'])
   @UseGuards(WalletAuthGuard)
   async getMe(@CurrentUser() user: any) {
     return {
@@ -38,7 +38,7 @@ export class AuthController {
     };
   }
 
-  @Post('logout')
+  @Post('auth/logout')
   @HttpCode(HttpStatus.OK)
   @UseGuards(WalletAuthGuard)
   async logout() {

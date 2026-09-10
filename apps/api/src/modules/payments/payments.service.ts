@@ -343,6 +343,62 @@ export class PaymentsService {
         return { verified: false, status: 'awaiting_finality' };
       }
 
+      // Defense-in-depth: Verify reference account presence
+      const accountKeyStrings = txInfo.transaction?.message?.accountKeys?.map((k: any) =>
+        typeof k === 'string' ? k : k.pubkey?.toBase58?.() || k.pubkey?.toString?.() || String(k),
+      ) || [];
+
+      if (intent.reference && !accountKeyStrings.includes(intent.reference)) {
+        this.logger.warn(`Transaction ${signature} does not contain reference key: ${intent.reference}`);
+        throw new BadRequestException('Transaction does not contain the required PaymentIntent reference');
+      }
+
+      // Defense-in-depth: Verify 95/5 USDC split token transfer instructions
+      const priceNum = parseFloat(intent.expectedPriceAmount);
+      const totalUnits = Math.round(priceNum * 1_000_000);
+      const platformUnits = Math.round((totalUnits * 500) / 10000);
+      const creatorUnits = totalUnits - platformUnits;
+
+      const allInstructions = [
+        ...(txInfo.transaction?.message?.instructions || []),
+        ...(txInfo.meta?.innerInstructions?.flatMap((i: any) => i.instructions) || []),
+      ];
+
+      const usdcMintStr = this.env.usdcMint.toBase58();
+      let foundCreatorTransfer = false;
+      let foundPlatformTransfer = false;
+
+      for (const ix of allInstructions) {
+        if (ix.parsed && (ix.parsed.type === 'transfer' || ix.parsed.type === 'transferChecked')) {
+          const info = ix.parsed.info;
+          const dest = info?.destination;
+          const amount = BigInt(info?.amount || info?.tokenAmount?.amount || 0);
+          const mint = info?.mint;
+
+          if (mint && mint !== usdcMintStr) {
+            continue; // Not USDC
+          }
+
+          if (dest === intent.creatorAta && amount === BigInt(creatorUnits)) {
+            foundCreatorTransfer = true;
+          }
+          if (dest === intent.platformAta && amount === BigInt(platformUnits)) {
+            foundPlatformTransfer = true;
+          }
+        }
+      }
+
+      // If parsed instructions are present, enforce both 95% creator and 5% platform transfers
+      const hasParsedInstructions = allInstructions.some((i: any) => i.parsed);
+      if (hasParsedInstructions) {
+        if (!foundCreatorTransfer || !foundPlatformTransfer) {
+          this.logger.warn(
+            `Transaction does not match expected 95/5 USDC split: creator=${foundCreatorTransfer}, platform=${foundPlatformTransfer}`,
+          );
+          throw new BadRequestException('Transaction does not contain valid 95/5 USDC split transfers');
+        }
+      }
+
       // Extract buyer wallet from account keys
       const signers = txInfo.transaction.message.accountKeys.filter((k: any) => k.signer);
       if (signers.length > 0) {

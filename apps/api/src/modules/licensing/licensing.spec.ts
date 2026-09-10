@@ -1,8 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ForbiddenException, ConflictException } from '@nestjs/common';
+import { ForbiddenException, ConflictException, UnauthorizedException } from '@nestjs/common';
 import { LicensingService } from './licensing.service';
 import { PrismaService } from '@/common/prisma.service';
 import { EnvService } from '@/config/env.service';
+import { hashSecretToken } from '@/crypto/token32.util';
 import * as nacl from 'tweetnacl';
 
 describe('LicensingService & Device Enforcement', () => {
@@ -11,6 +12,10 @@ describe('LicensingService & Device Enforcement', () => {
 
   const DEVICE_A = 'aTZYJUYw9zrY2nj7Mxv5ds1C+Q4OnJ6D9AxRBypvdBc=';
   const DEVICE_B = Buffer.alloc(32, 2).toString('base64');
+  const PEPPER = 'test-hmac-secret-pepper-minimum-32';
+  const VALID_SECRET = 'abc123def456ghi789jkl012mno345pqr678stu9012';
+  const VALID_HMAC = hashSecretToken(VALID_SECRET, PEPPER);
+  const VALID_AUTH_HEADER = `SolArchIntent ${VALID_SECRET}`;
 
   beforeEach(async () => {
     const seed = new Uint8Array(32);
@@ -45,13 +50,31 @@ describe('LicensingService & Device Enforcement', () => {
           useValue: {
             licenseKeyId: 'lic-test-01',
             licenseSigningKeypair: testSigningKeys,
-            intentHmacSecret: 'test-hmac-secret-pepper-minimum-32',
+            intentHmacSecret: PEPPER,
           },
         },
       ],
     }).compile();
 
     service = module.get<LicensingService>(LicensingService);
+  });
+
+  test('rejects activation without SolArchIntent authorization header', async () => {
+    const fakeEntitlement = {
+      id: 'ent_001',
+      devicePublicKey: DEVICE_A,
+      activations: [],
+      archive: {},
+      payment: { paymentIntent: { clientSecretHmac: VALID_HMAC } },
+    };
+    prisma.entitlement.findFirst.mockResolvedValue(fakeEntitlement);
+
+    await expect(
+      service.activateDevice('ent_001', '', {
+        device_public_key: DEVICE_A,
+        request_nonce: 'gIGCg4SFhoeIiYqLjI2Oj5CRkpOUlZaXmJmam5ydnp8=',
+      }),
+    ).rejects.toThrow(UnauthorizedException);
   });
 
   test('successfully activates Device A with exact 72-hour window and wrapped key', async () => {
@@ -69,7 +92,7 @@ describe('LicensingService & Device Enforcement', () => {
       },
       payment: {
         paymentIntent: {
-          clientSecretHmac: 'dummy_hmac',
+          clientSecretHmac: VALID_HMAC,
         },
       },
       activations: [],
@@ -80,7 +103,7 @@ describe('LicensingService & Device Enforcement', () => {
     prisma.deviceActivation.create.mockResolvedValue({ id: 'act_001' });
     prisma.deviceLicense.create.mockResolvedValue({ id: 'lic_001' });
 
-    const res = await service.activateDevice('ent_001', '', {
+    const res = await service.activateDevice('ent_001', VALID_AUTH_HEADER, {
       device_public_key: DEVICE_A,
       device_name: 'Test PC',
       viewer_version: '0.1.0',
@@ -106,13 +129,13 @@ describe('LicensingService & Device Enforcement', () => {
       devicePublicKey: DEVICE_A,
       activations: [],
       archive: {},
-      payment: { paymentIntent: {} },
+      payment: { paymentIntent: { clientSecretHmac: VALID_HMAC } },
     };
 
     prisma.entitlement.findFirst.mockResolvedValue(fakeEntitlement);
 
     await expect(
-      service.activateDevice('ent_001', '', {
+      service.activateDevice('ent_001', VALID_AUTH_HEADER, {
         device_public_key: DEVICE_B,
         request_nonce: 'gIGCg4SFhoeIiYqLjI2Oj5CRkpOUlZaXmJmam5ydnp8=',
       }),
@@ -125,7 +148,7 @@ describe('LicensingService & Device Enforcement', () => {
       devicePublicKey: DEVICE_A,
       activations: [],
       archive: {},
-      payment: { paymentIntent: {} },
+      payment: { paymentIntent: { clientSecretHmac: VALID_HMAC } },
     };
 
     prisma.entitlement.findFirst.mockResolvedValue(fakeEntitlement);
@@ -133,7 +156,7 @@ describe('LicensingService & Device Enforcement', () => {
     prisma.requestNonceRecord.findUnique.mockResolvedValue({ id: 'nonce_rec_001' });
 
     await expect(
-      service.activateDevice('ent_001', '', {
+      service.activateDevice('ent_001', VALID_AUTH_HEADER, {
         device_public_key: DEVICE_A,
         request_nonce: 'gIGCg4SFhoeIiYqLjI2Oj5CRkpOUlZaXmJmam5ydnp8=',
       }),

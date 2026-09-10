@@ -54,10 +54,14 @@ export class LicensingService {
       throw new NotFoundException('Entitlement or PaymentIntent not found');
     }
 
-    // Verify credential
-    if (authHeader && authHeader.startsWith('SolArchIntent ')) {
-      const secret = authHeader.replace('SolArchIntent ', '').trim();
-      const clientHmac = entitlement.payment.paymentIntent.clientSecretHmac;
+    // Verify credential (mandatory for initial activation)
+    if (!authHeader || !authHeader.startsWith('SolArchIntent ')) {
+      throw new UnauthorizedException('Missing or invalid SolArchIntent authorization header');
+    }
+
+    const secret = authHeader.replace('SolArchIntent ', '').trim();
+    const clientHmac = entitlement.payment?.paymentIntent?.clientSecretHmac;
+    if (clientHmac) {
       const isValid = verifySecretToken(secret, clientHmac, this.env.intentHmacSecret);
       if (!isValid) {
         throw new UnauthorizedException('Invalid payment intent secret credential');
