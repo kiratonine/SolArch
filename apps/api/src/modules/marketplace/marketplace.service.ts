@@ -59,12 +59,28 @@ export class MarketplaceService {
       this.prisma.archive.count({ where }),
     ]);
 
+    const isWeek = query.sort === 'popular_week';
+    const isMonth = query.sort === 'popular_month';
+    const now = new Date();
+    const windowStart = isWeek
+      ? new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+      : isMonth
+      ? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+      : null;
+
     const items = archives.map((arc) => {
       const views = arc.events.filter((e) => e.eventType === 'archive_view').length;
       const downloads = arc.events.filter((e) => e.eventType === 'archive_download').length;
       const paidUnlocks = arc.payments.filter((p) => p.status === 'confirmed').length;
 
       const sizeBytes = arc.publicFiles.reduce((acc, f) => acc + Number(f.sizeBytes), 0);
+
+      const windowPaid = windowStart
+        ? arc.payments.filter((p) => p.status === 'confirmed' && new Date(p.confirmedAt) >= windowStart).length
+        : paidUnlocks;
+      const windowDownloads = windowStart
+        ? arc.events.filter((e) => e.eventType === 'archive_download' && new Date(e.occurredAt) >= windowStart).length
+        : downloads;
 
       return {
         archive_id: arc.id,
@@ -88,23 +104,27 @@ export class MarketplaceService {
           downloads,
           paid_unlocks: paidUnlocks,
         },
+        _windowPaid: windowPaid,
+        _windowDownloads: windowDownloads,
       };
     });
 
     // Handle popularity / most_downloaded in-memory sort if requested
     if (query.sort === 'most_downloaded') {
       items.sort((a, b) => b.metrics.downloads - a.metrics.downloads);
-    } else if (query.sort === 'popular_week' || query.sort === 'popular_month') {
+    } else if (isWeek || isMonth) {
       items.sort((a, b) => {
-        if (b.metrics.paid_unlocks !== a.metrics.paid_unlocks) {
-          return b.metrics.paid_unlocks - a.metrics.paid_unlocks;
+        if (b._windowPaid !== a._windowPaid) {
+          return b._windowPaid - a._windowPaid;
         }
-        return b.metrics.downloads - a.metrics.downloads;
+        return b._windowDownloads - a._windowDownloads;
       });
     }
 
+    const cleanItems = items.map(({ _windowPaid, _windowDownloads, ...rest }) => rest);
+
     return {
-      items,
+      items: cleanItems,
       pagination: {
         page,
         limit,
@@ -139,14 +159,32 @@ export class MarketplaceService {
     const paidUnlocks = arc.payments.filter((p) => p.status === 'confirmed').length;
     const sizeBytes = arc.publicFiles.reduce((acc, f) => acc + Number(f.sizeBytes), 0);
 
-    // Record archive_view event
-    await this.prisma.marketplaceEvent.create({
-      data: {
-        archiveId: arc.id,
-        eventType: 'archive_view',
-        anonymousSessionId: sessionId || null,
-      },
-    });
+    // Deduplication window: 15 minutes for the same anonymous session ID
+    let shouldRecordView = true;
+    if (sessionId) {
+      const dedupeWindow = new Date(Date.now() - 15 * 60 * 1000);
+      const recentView = await this.prisma.marketplaceEvent.findFirst({
+        where: {
+          archiveId: arc.id,
+          eventType: 'archive_view',
+          anonymousSessionId: sessionId,
+          occurredAt: { gte: dedupeWindow },
+        },
+      });
+      if (recentView) {
+        shouldRecordView = false;
+      }
+    }
+
+    if (shouldRecordView) {
+      await this.prisma.marketplaceEvent.create({
+        data: {
+          archiveId: arc.id,
+          eventType: 'archive_view',
+          anonymousSessionId: sessionId || null,
+        },
+      });
+    }
 
     return {
       archive_id: arc.id,
@@ -172,7 +210,7 @@ export class MarketplaceService {
         watermark_enabled: arc.watermarkEnabled,
       },
       metrics: {
-        views: views + 1,
+        views: views + (shouldRecordView ? 1 : 0),
         downloads,
         paid_unlocks: paidUnlocks,
       },

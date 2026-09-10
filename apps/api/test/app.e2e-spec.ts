@@ -177,6 +177,7 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
     },
     marketplaceEvent: {
       create: jest.fn().mockResolvedValue({}),
+      findFirst: jest.fn().mockResolvedValue(null),
       findMany: jest.fn().mockResolvedValue([
         { eventType: 'archive_view' },
         { eventType: 'archive_download' },

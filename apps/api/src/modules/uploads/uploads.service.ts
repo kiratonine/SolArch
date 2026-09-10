@@ -40,6 +40,19 @@ const MIME_MAP: Record<string, string> = {
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 };
 
+const SUPPORTED_EXTENSIONS = new Set([
+  'pdf',
+  'png',
+  'jpg',
+  'jpeg',
+  'webp',
+  'docx',
+  'xlsx',
+]);
+
+const MAX_FILES_LIMIT = 10_000;
+const MAX_UNCOMPRESSED_TOTAL_BYTES = 512 * 1024 * 1024; // 512 MiB
+
 @Injectable()
 export class UploadsService {
   private readonly logger = new Logger(UploadsService.name);
@@ -145,6 +158,14 @@ export class UploadsService {
     }
 
     const entries = zip.getEntries();
+    if (entries.length > MAX_FILES_LIMIT) {
+      await this.prisma.archive.update({
+        where: { id: upload.archiveId },
+        data: { technicalStatus: 'failed' },
+      });
+      throw new BadRequestException(`Archive contains too many files (max ${MAX_FILES_LIMIT})`);
+    }
+
     const filesToInsert: Array<{
       archiveId: string;
       displayPath: string;
@@ -156,6 +177,8 @@ export class UploadsService {
     }> = [];
 
     let sortOrder = 0;
+    let totalUncompressedBytes = 0;
+
     for (const entry of entries) {
       if (entry.isDirectory) continue;
 
@@ -168,6 +191,11 @@ export class UploadsService {
         throw new BadRequestException(`Directory traversal detected in ZIP entry: ${entry.entryName}`);
       }
 
+      // Skip macOS metadata files
+      if (normalized.startsWith('__MACOSX/') || normalized.endsWith('.DS_Store')) {
+        continue;
+      }
+
       const ext = path.extname(normalized).toLowerCase();
       if (FORBIDDEN_EXTENSIONS.has(ext)) {
         await this.prisma.archive.update({
@@ -178,7 +206,26 @@ export class UploadsService {
       }
 
       const cleanExt = ext.replace('.', '');
-      const mime = MIME_MAP[cleanExt] || 'application/octet-stream';
+      if (!SUPPORTED_EXTENSIONS.has(cleanExt)) {
+        await this.prisma.archive.update({
+          where: { id: upload.archiveId },
+          data: { technicalStatus: 'failed' },
+        });
+        throw new BadRequestException(
+          `Unsupported file format in archive: ${entry.entryName}. Supported formats in MVP are: PDF, PNG, JPG, JPEG, WebP, DOCX, XLSX`,
+        );
+      }
+
+      totalUncompressedBytes += entry.header.size;
+      if (totalUncompressedBytes > MAX_UNCOMPRESSED_TOTAL_BYTES) {
+        await this.prisma.archive.update({
+          where: { id: upload.archiveId },
+          data: { technicalStatus: 'failed' },
+        });
+        throw new BadRequestException('Total uncompressed content exceeds 512 MiB limit');
+      }
+
+      const mime = MIME_MAP[cleanExt];
       const displayName = path.basename(normalized);
 
       filesToInsert.push({
@@ -190,6 +237,14 @@ export class UploadsService {
         sizeBytes: BigInt(entry.header.size),
         sortOrder: sortOrder++,
       });
+    }
+
+    if (filesToInsert.length === 0) {
+      await this.prisma.archive.update({
+        where: { id: upload.archiveId },
+        data: { technicalStatus: 'failed' },
+      });
+      throw new BadRequestException('Uploaded archive contains no valid supported files');
     }
 
     // Build the .slr container
