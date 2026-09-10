@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { useRef, useState } from 'react'
 
 import { SignOutButton } from '@/components/auth/sign-out-button'
 import { WalletAddress } from '@/components/auth/wallet-address'
@@ -8,7 +7,7 @@ import { Logo } from '@/components/brand/logo'
 import { Container } from '@/components/layout/container'
 import { LanguageSwitch } from '@/components/layout/language-switch'
 import { ProductNav } from '@/components/layout/product-nav'
-import { MenuPanel, MenuToggle } from '@/components/layout/site-menu'
+import { SiteMenu } from '@/components/layout/site-menu'
 import { ThemeSwitch } from '@/components/layout/theme-switch'
 import { sessionQuery } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
@@ -28,16 +27,15 @@ import { useI18n } from '@/lib/i18n'
  */
 export function SiteHeader() {
   const { data: session } = useQuery(sessionQuery())
-  const [menuOpen, setMenuOpen] = useState(false)
-  const toggleRef = useRef<HTMLButtonElement>(null)
 
   return (
     <header className="border-border bg-background/85 sticky top-0 z-40 border-b backdrop-blur-sm">
-      <Container className="flex h-14 items-center gap-4">
+      {/* Высота строки — общий токен: меню рисуется в портале и висит ровно
+          под ней, а достать её оттуда через DOM нельзя. */}
+      <Container className="flex h-(--header-height) items-center gap-4">
         <Link
           to="/"
           className="focus-visible:ring-ring/60 rounded-sm focus-visible:ring-2 focus-visible:outline-none"
-          onClick={() => setMenuOpen(false)}
         >
           <Logo markClassName="size-4.5" wordClassName="text-[0.95rem]" />
         </Link>
@@ -49,30 +47,21 @@ export function SiteHeader() {
         <nav className="ml-auto flex items-center gap-2 sm:gap-4">
           <FullNav wallet={session?.wallet} />
 
-          <MenuToggle
-            ref={toggleRef}
-            open={menuOpen}
-            onToggle={() => setMenuOpen((open) => !open)}
-            className="lg:hidden"
-          />
-
           <LanguageSwitch />
-          <ThemeSwitch className="-mr-1.5" />
+          <ThemeSwitch className="lg:-mr-1.5" />
+
+          {/* Кнопка стоит последней, у самого края: на телефоне это единственное
+              место строки, куда большой палец достаёт не перехватывая телефон.
+              Панель уходит в портал и висит слоем под шапкой — обе половины меню
+              живут в одном компоненте.
+
+              Отрицательный отступ отбирается у последнего в ряду: у кнопки-значка
+              бокс шире самого значка, и без поправки край значка не совпал бы
+              с кромкой страницы. Ниже `lg` последняя здесь кнопка меню, с `lg`
+              она скрыта и последним снова становится переключатель темы. */}
+          <SiteMenu wallet={session?.wallet} className="-mr-1.5 lg:hidden" />
         </nav>
       </Container>
-
-      {menuOpen && (
-        <MenuPanel
-          wallet={session?.wallet}
-          onNavigate={() => setMenuOpen(false)}
-          // Escape возвращает фокус на кнопку: человек закрыл меню с клавиатуры
-          // и должен остаться там, откуда его открыл, а не в начале страницы.
-          onEscape={() => {
-            setMenuOpen(false)
-            toggleRef.current?.focus()
-          }}
-        />
-      )}
     </header>
   )
 }

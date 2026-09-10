@@ -36,6 +36,19 @@ describe('меню узкого экрана', () => {
     expect(within(menu).getByRole('link', { name: 'Sign in' })).toBeInTheDocument()
   })
 
+  it('кнопка без надписи сообщает, открыто меню или нет', async () => {
+    renderApp()
+    await screen.findAllByRole('article')
+
+    // Бургер — значок, а не слово: состояние он показывает движением черт,
+    // и единственное, чем он говорит о нём вслух, — `aria-expanded`.
+    const toggle = screen.getByRole('button', { name: 'Menu' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+
+    await userEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  })
+
   it('доводит до страницы и закрывается за собой', async () => {
     renderApp()
     await screen.findAllByRole('article')
