@@ -47,6 +47,7 @@ Thumbs.db
 
 # generated artifacts
 *.slr
+storage_data/
 
 # playwright mcp artifacts
 .playwright-mcp/

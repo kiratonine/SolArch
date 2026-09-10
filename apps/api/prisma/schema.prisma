@@ -1,0 +1,305 @@
+// SolArch Prisma Schema
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum ArchiveTechnicalStatus {
+  draft
+  uploading
+  processing
+  ready
+  failed
+}
+
+enum ArchiveMarketplaceStatus {
+  draft
+  published
+  unpublished
+  blocked
+}
+
+enum PaymentIntentStatus {
+  created
+  pending
+  awaiting_finality
+  confirmed
+  expired
+  failed
+}
+
+enum PaymentStatus {
+  confirmed
+  failed
+}
+
+enum EntitlementStatus {
+  active
+  expired
+  revoked
+}
+
+enum LicenseStatus {
+  active
+  expired
+  revoked
+}
+
+enum EventType {
+  archive_view
+  archive_download
+  payment_confirmed
+}
+
+model User {
+  id        String   @id @default(uuid())
+  status    String   @default("active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  wallets   Wallet[]
+  archives  Archive[]
+
+  @@map("users")
+}
+
+model Wallet {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  chain       String    @default("solana")
+  address     String    @unique
+  verifiedAt  DateTime? @map("verified_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("wallets")
+}
+
+model Archive {
+  id                      String                   @id @default(uuid())
+  creatorUserId           String                   @map("creator_user_id")
+  title                   String
+  shortDescription        String                   @default("") @map("short_description")
+  description             String                   @default("")
+  technicalStatus         ArchiveTechnicalStatus   @default(draft) @map("technical_status")
+  marketplaceStatus       ArchiveMarketplaceStatus @default(draft) @map("marketplace_status")
+  
+  creatorPayoutWallet     String                   @map("creator_payout_wallet")
+  creatorUsdcAta          String?                  @map("creator_usdc_ata")
+  
+  priceCurrency           String                   @default("USDC") @map("price_currency")
+  priceAmount             String                   @map("price_amount")
+  platformFeeBps          Int                      @default(500) @map("platform_fee_bps")
+  
+  contentKeyRef           String?                  @map("content_key_ref")
+  generatedSlrStorageKey  String?                  @map("generated_slr_storage_key")
+  archiveFingerprint      String?                  @map("archive_fingerprint")
+  publicHeaderHash        String?                  @map("public_header_hash")
+  
+  maxDevices              Int                      @default(1) @map("max_devices")
+  allowExport             Boolean                  @default(false) @map("allow_export")
+  watermarkEnabled        Boolean                  @default(true) @map("watermark_enabled")
+  
+  createdAt               DateTime                 @default(now()) @map("created_at")
+  updatedAt               DateTime                 @updatedAt @map("updated_at")
+
+  creator                 User                     @relation(fields: [creatorUserId], references: [id], onDelete: Restrict)
+  listing                 ArchiveListing?
+  publicFiles             ArchivePublicFile[]
+  uploads                 Upload[]
+  paymentIntents          PaymentIntent[]
+  payments                Payment[]
+  entitlements            Entitlement[]
+  events                  MarketplaceEvent[]
+
+  @@map("archives")
+}
+
+model ArchiveListing {
+  id                String                   @id @default(uuid())
+  archiveId         String                   @unique @map("archive_id")
+  slug              String                   @unique
+  title             String
+  shortDescription  String                   @default("") @map("short_description")
+  description       String                   @default("")
+  coverStorageKey   String?                  @map("cover_storage_key")
+  category          String?
+  tags              String[]                 @default([])
+  marketplaceStatus ArchiveMarketplaceStatus @default(draft) @map("marketplace_status")
+  publishedAt       DateTime?                @map("published_at")
+  updatedAt         DateTime                 @updatedAt @map("updated_at")
+
+  archive           Archive                  @relation(fields: [archiveId], references: [id], onDelete: Cascade)
+
+  @@map("archive_listings")
+}
+
+model ArchivePublicFile {
+  id               String   @id @default(uuid())
+  archiveId        String   @map("archive_id")
+  displayPath      String   @map("display_path")
+  displayName      String   @map("display_name")
+  fileExtension    String   @map("file_extension")
+  mimeType         String   @map("mime_type")
+  sizeBytes        BigInt   @map("size_bytes")
+  sortOrder        Int      @default(0) @map("sort_order")
+  isPubliclyListed Boolean  @default(true) @map("is_publicly_listed")
+
+  archive          Archive  @relation(fields: [archiveId], references: [id], onDelete: Cascade)
+
+  @@map("archive_public_files")
+}
+
+model Upload {
+  id               String   @id @default(uuid())
+  archiveId        String   @map("archive_id")
+  sourceType       String   @default("zip") @map("source_type")
+  originalFilename String   @map("original_filename")
+  sizeBytes        BigInt   @map("size_bytes")
+  storageKey       String   @map("storage_key")
+  status           String   @default("pending")
+  createdAt        DateTime @default(now()) @map("created_at")
+  completedAt      DateTime? @map("completed_at")
+
+  archive          Archive  @relation(fields: [archiveId], references: [id], onDelete: Cascade)
+
+  @@map("uploads")
+}
+
+model PaymentIntent {
+  id                  String              @id @default(uuid())
+  archiveId           String              @map("archive_id")
+  devicePublicKey     String              @map("device_public_key")
+  clientSecretHmac    String              @map("client_secret_hmac")
+  
+  expectedPriceAmount String              @map("expected_price_amount")
+  currency            String              @default("USDC")
+  
+  creatorWallet       String              @map("creator_wallet")
+  creatorAta          String              @map("creator_ata")
+  creatorShareAmount  String              @map("creator_share_amount")
+  
+  platformWallet      String              @map("platform_wallet")
+  platformAta         String              @map("platform_ata")
+  platformShareAmount String              @map("platform_share_amount")
+  
+  reference           String              @unique
+  status              PaymentIntentStatus @default(created)
+  expiresAt           DateTime            @map("expires_at")
+  createdAt           DateTime            @default(now()) @map("created_at")
+
+  archive             Archive             @relation(fields: [archiveId], references: [id], onDelete: Restrict)
+  payment             Payment?
+
+  @@map("payment_intents")
+}
+
+model Payment {
+  id                   String        @id @default(uuid())
+  paymentIntentId      String        @unique @map("payment_intent_id")
+  archiveId            String        @map("archive_id")
+  buyerWallet          String        @map("buyer_wallet")
+  transactionSignature String        @unique @map("transaction_signature")
+  status               PaymentStatus @default(confirmed)
+  confirmedAt          DateTime      @default(now()) @map("confirmed_at")
+  rawTxSafeJson        Json?         @map("raw_tx_safe_json")
+  createdAt            DateTime      @default(now()) @map("created_at")
+
+  paymentIntent        PaymentIntent @relation(fields: [paymentIntentId], references: [id], onDelete: Restrict)
+  archive              Archive       @relation(fields: [archiveId], references: [id], onDelete: Restrict)
+  entitlement          Entitlement?
+  events               MarketplaceEvent[]
+
+  @@map("payments")
+}
+
+model Entitlement {
+  id               String            @id @default(uuid())
+  archiveId        String            @map("archive_id")
+  buyerWallet      String            @map("buyer_wallet")
+  devicePublicKey  String            @map("device_public_key")
+  paymentId        String            @unique @map("payment_id")
+  status           EntitlementStatus @default(active)
+  maxDevices       Int               @default(1) @map("max_devices")
+  devicesActivated Int               @default(0) @map("devices_activated")
+  policySnapshot   Json              @map("policy_snapshot")
+  startsAt         DateTime          @default(now()) @map("starts_at")
+  expiresAt        DateTime?         @map("expires_at")
+  createdAt        DateTime          @default(now()) @map("created_at")
+
+  payment          Payment           @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  archive          Archive           @relation(fields: [archiveId], references: [id], onDelete: Restrict)
+  activations      DeviceActivation[]
+  licenses         DeviceLicense[]
+
+  @@map("entitlements")
+}
+
+model DeviceActivation {
+  id              String   @id @default(uuid())
+  entitlementId   String   @map("entitlement_id")
+  devicePublicKey String   @map("device_public_key")
+  deviceLabel     String   @default("Default Device") @map("device_label")
+  viewerVersion   String   @default("0.1.0") @map("viewer_version")
+  activatedAt     DateTime @default(now()) @map("activated_at")
+  lastSeenAt      DateTime @default(now()) @map("last_seen_at")
+  status          String   @default("active")
+
+  entitlement     Entitlement     @relation(fields: [entitlementId], references: [id], onDelete: Cascade)
+  licenses        DeviceLicense[]
+
+  @@unique([entitlementId, devicePublicKey])
+  @@map("device_activations")
+}
+
+model DeviceLicense {
+  id                 String        @id @default(uuid())
+  entitlementId      String        @map("entitlement_id")
+  deviceActivationId String        @map("device_activation_id")
+  archiveId          String        @map("archive_id")
+  devicePublicKey    String        @map("device_public_key")
+  status             LicenseStatus @default(active)
+  rightsJson         Json          @map("rights_json")
+  serverSignature    String        @map("server_signature")
+  issuedAt           DateTime      @default(now()) @map("issued_at")
+  offlineValidUntil  DateTime      @map("offline_valid_until")
+  refreshTokenHmac   String?       @map("refresh_token_hmac")
+  revokedAt          DateTime?     @map("revoked_at")
+  createdAt          DateTime      @default(now()) @map("created_at")
+
+  entitlement        Entitlement      @relation(fields: [entitlementId], references: [id], onDelete: Cascade)
+  deviceActivation   DeviceActivation @relation(fields: [deviceActivationId], references: [id], onDelete: Cascade)
+
+  @@map("device_licenses")
+}
+
+model RequestNonceRecord {
+  id                  String   @id @default(uuid())
+  credentialRecordId  String   @map("credential_record_id")
+  requestNonceHash    String   @map("request_nonce_hash")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  @@unique([credentialRecordId, requestNonceHash])
+  @@map("request_nonce_records")
+}
+
+model MarketplaceEvent {
+  id                 String    @id @default(uuid())
+  archiveId          String    @map("archive_id")
+  eventType          EventType @map("event_type")
+  occurredAt         DateTime  @default(now()) @map("occurred_at")
+  anonymousSessionId String?   @map("anonymous_session_id")
+  paymentId          String?   @map("payment_id")
+  metadata           Json?
+
+  archive            Archive   @relation(fields: [archiveId], references: [id], onDelete: Cascade)
+  payment            Payment?  @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([archiveId, eventType, occurredAt])
+  @@map("marketplace_events")
+}
