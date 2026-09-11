@@ -74,7 +74,7 @@ export const ru: Dictionary = {
 
     search: {
       label: 'Поиск по каталогу',
-      placeholder: 'Название, автор или описание',
+      placeholder: 'Название или описание',
       clear: 'Очистить поиск',
     },
 
@@ -291,6 +291,8 @@ export const ru: Dictionary = {
         },
 
         download: 'Скачать .slr',
+        downloading: 'Готовим .slr',
+        downloadFailed: 'Скачать .slr не получилось. Попробуйте ещё раз.',
       },
 
       listing: {
@@ -320,7 +322,6 @@ export const ru: Dictionary = {
 
         requires: {
           notReady: 'Пока контейнер не собран, выставить архив в каталог нельзя.',
-          payout: 'SolArch ещё готовит USDC-аккаунт для вашего payout wallet. Это занимает несколько секунд.',
         },
 
         link: {
@@ -354,6 +355,7 @@ export const ru: Dictionary = {
       title: 'Добавить файлы',
       body: 'ZIP сохраняет папки, которые вы в нём собрали, - SolArch распакует его на сервере. Отдельные файлы лягут в корень архива.',
       formats: 'PDF, PNG, JPG, WebP, DOCX, XLSX или ZIP.',
+      replaces: 'Новая загрузка заменит всё, что сейчас лежит в архиве.',
       choose: 'Выбрать файлы',
       drop: 'или перетащите их сюда',
       dropping: 'Отпустите файлы',
@@ -366,6 +368,7 @@ export const ru: Dictionary = {
         failed: 'Не передан',
       },
       progress: (name: string) => `Передаём ${name}`,
+      bundle: (files: string) => `${files} одним ZIP`,
       cancel: 'Отменить',
       retry: 'Передать заново',
 
@@ -373,6 +376,7 @@ export const ru: Dictionary = {
         title: 'Эти файлы не приняты',
         unsupportedType: 'Viewer не умеет показывать такой формат',
         empty: 'файл пустой',
+        zipNotAlone: 'ZIP загружается один, без других файлов',
       },
     },
   },
@@ -470,7 +474,7 @@ export const ru: Dictionary = {
       'descriptionTooLong': 'Описание длиннее, чем вмещает страница.',
       'priceRequired': 'Укажите цену.',
       'priceFormat': 'Цена записывается числом, например 10.00.',
-      'pricePrecision': 'USDC хранит шесть знаков после запятой, не больше.',
+      'pricePrecision': 'Не больше двух знаков после точки, например 10.25.',
       'priceNotPositive': 'Цена должна быть больше нуля.',
       'payoutWalletRequired': 'Укажите адрес, на который придут выплаты.',
       'payoutWalletInvalid': 'Это не адрес Solana.',

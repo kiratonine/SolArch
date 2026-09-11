@@ -115,11 +115,21 @@ describe('каталог', () => {
     await expectTitles(['Nebula Brand Kit'])
   })
 
-  it('находит архивы по имени автора, а не только по названию', async () => {
-    // Человек чаще помнит, чей это архив, чем как он назывался.
+  it('ищет и по полному описанию, а не только по названию', async () => {
+    // Как backend (ответ на Q11): название и оба описания. Слово стоит только
+    // в полном описании архива.
+    renderApp({ path: `/?q=${encodeURIComponent('токенсейл')}` })
+
+    await expectTitles(['Web3 Legal Templates'])
+  })
+
+  it('по имени автора не ищет — как и backend', async () => {
+    // У backend имя автора — сокращённый адрес кошелька, и в поиске оно не участвует.
     renderApp({ path: '/?q=Studio%20Kirn' })
 
-    await expectTitles(['Nebula Brand Kit'])
+    expect(
+      await screen.findByRole('heading', { name: 'Nothing matches “Studio Kirn”' }),
+    ).toBeInTheDocument()
   })
 
   it('называет пустую выдачу поиска запросом, а не общей пустотой', async () => {

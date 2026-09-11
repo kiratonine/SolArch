@@ -38,6 +38,8 @@ export interface MockUpload {
   archive_id: string
   filename: string
   size_bytes: number
+  /** Байты ZIP, пришедшие в `/data`. Пока их нет, собирать нечего. */
+  bytes: ArrayBuffer | null
 }
 
 export const MOCK_CREATOR: SessionUser = {
@@ -45,6 +47,12 @@ export const MOCK_CREATOR: SessionUser = {
   wallet: '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU',
   display_name: 'Aurora Labs',
 }
+
+/**
+ * Токен, который мок выдаёт на `verify`. Настоящий backend выдаёт JWT; моку хватает
+ * одной строки, потому что проверяет он не подпись, а то, что запрос принёс именно её.
+ */
+export const MOCK_TOKEN = 'tok_mock_session'
 
 const DEFAULT_POLICY: LicensePolicy = {
   max_devices: 1,
@@ -472,6 +480,8 @@ interface MockDb {
   archives: MockArchive[]
   uploads: MockUpload[]
   session: SessionUser | null
+  /** Токен вошедшего автора; запросы кабинета обязаны принести его в `Authorization`. */
+  token: string | null
   challenges: Map<string, string>
   counter: number
 }
@@ -480,6 +490,7 @@ export const db: MockDb = {
   archives: seed(),
   uploads: [],
   session: null,
+  token: null,
   challenges: new Map(),
   counter: 0,
 }
@@ -489,6 +500,7 @@ export function resetDb(): void {
   db.archives = seed()
   db.uploads = []
   db.session = null
+  db.token = null
   db.challenges = new Map()
   db.counter = 0
 }

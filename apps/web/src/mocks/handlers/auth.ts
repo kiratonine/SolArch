@@ -1,14 +1,15 @@
 import { HttpResponse, http } from 'msw'
 
 import type { WalletChallengeRequest, WalletVerifyRequest } from '@/lib/api/types'
-import { MOCK_CREATOR, db, nextId } from '../db'
-import { apiError, route } from './shared'
+import { MOCK_CREATOR, MOCK_TOKEN, db, nextId } from '../db'
+import { apiError, requireSession, route } from './shared'
 
 /**
  * Мок аутентификации по подписи кошелька.
  *
  * Подпись здесь не проверяется — настоящая верификация ed25519 выполняется backend
- * (`docs/SECURITY.md`). Мок нужен только для UX-потока логина.
+ * (`docs/SECURITY.md`). Мок нужен только для UX-потока логина. Сессию он выдаёт так же,
+ * как backend: токеном в ответе на `verify`, который дальше едет в `Authorization`.
  */
 export const authHandlers = [
   http.post(route('/auth/wallet/challenge'), async ({ request }) => {
@@ -41,17 +42,24 @@ export const authHandlers = [
 
     db.challenges.delete(body.challenge_id)
     db.session = { ...MOCK_CREATOR, wallet: body.wallet }
+    db.token = MOCK_TOKEN
 
-    return HttpResponse.json({ authenticated: true, user: db.session })
+    return HttpResponse.json({ authenticated: true, access_token: db.token, user: db.session })
   }),
 
-  http.get(route('/me'), () => {
-    if (!db.session) return apiError(401, 'UNAUTHORIZED', 'Требуется вход автора')
+  http.get(route('/me'), ({ request }) => {
+    const unauthorized = requireSession(request)
+    if (unauthorized) return unauthorized
+
     return HttpResponse.json(db.session)
   }),
 
-  http.post(route('/auth/logout'), () => {
+  http.post(route('/auth/logout'), ({ request }) => {
+    const unauthorized = requireSession(request)
+    if (unauthorized) return unauthorized
+
     db.session = null
-    return new HttpResponse(null, { status: 204 })
+    db.token = null
+    return HttpResponse.json({ success: true })
   }),
 ]

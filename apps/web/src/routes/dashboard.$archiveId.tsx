@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { ArrowLeftIcon } from 'lucide-react'
 
@@ -15,17 +15,18 @@ import { EmptyState } from '@/components/state/empty-state'
 import { ErrorState } from '@/components/state/error-state'
 import { UploadQueue } from '@/components/upload/upload-queue'
 import { UploadZone } from '@/components/upload/upload-zone'
-import { buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
+  downloadMyArchive,
   isApiError,
   myArchiveFilesQuery,
   myArchiveWithProcessingQuery,
-  ownerDownloadUrl,
   toUserMessage,
   type CreatorArchive,
 } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
+import { saveFile } from '@/lib/save-file'
 import { useArchiveUpload } from '@/lib/use-archive-upload'
 import { cn } from '@/lib/utils'
 
@@ -81,8 +82,9 @@ function ArchiveDetailPage() {
   }
 
   if (isError) {
-    // Чужой архив для автора не существует: владение проверяет backend и отвечает 404.
-    const missing = isApiError(error) && error.isNotFound
+    // Чужой архив для автора не существует. Backend отвечает на него 403, а не 404,
+    // но для автора это одно и то же: архива, который он может открыть, нет.
+    const missing = isApiError(error) && (error.isNotFound || error.isForbidden)
 
     return (
       <Container>
@@ -169,6 +171,8 @@ function ArchiveDetailPage() {
             className="mt-6"
             onFiles={upload.add}
             rejected={upload.rejected}
+            holding={data.file_count}
+            disabled={upload.isBusy}
           />
         )}
 
@@ -283,18 +287,38 @@ function BuildState({ archive, className }: { archive: CreatorArchive; className
         </p>
       )}
 
-      {status === 'ready' && (
-        <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2">
-          {/* Скачивание — обычная ссылка, а не fetch: так срабатывает
-              Content-Disposition и файл уходит на диск с правильным именем. */}
-          <a
-            href={ownerDownloadUrl(archive.archive_id)}
-            download={`${archive.slug ?? archive.archive_id}.slr`}
-            className={buttonVariants({ variant: 'outline' })}
-          >
-            {t.dashboard.detail.build.download}
-          </a>
-        </div>
+      {status === 'ready' && <DownloadButton archive={archive} className="mt-5" />}
+    </div>
+  )
+}
+
+/**
+ * Скачивание собственного `.slr`.
+ *
+ * Кнопка, а не ссылка: эндпоинт закрыт сессией, а ссылка не несёт заголовок
+ * `Authorization`. Файл приходит запросом и кладётся на диск из памяти. Имя
+ * страница даёт сама — то же, каким его называет backend: заголовок
+ * `Content-Disposition` чужого origin браузер скрипту не показывает.
+ */
+function DownloadButton({ archive, className }: { archive: CreatorArchive; className?: string }) {
+  const { t } = useI18n()
+  const build = t.dashboard.detail.build
+
+  const download = useMutation({
+    mutationFn: () => downloadMyArchive(archive.archive_id),
+    onSuccess: (blob) => saveFile(blob, `${archive.slug ?? archive.archive_id}.slr`),
+  })
+
+  return (
+    <div className={cn('flex flex-wrap items-center gap-x-5 gap-y-2', className)}>
+      <Button variant="outline" disabled={download.isPending} onClick={() => download.mutate()}>
+        {download.isPending ? build.downloading : build.download}
+      </Button>
+
+      {download.isError && (
+        <p className="text-state-error text-[0.8125rem]" role="alert">
+          {build.downloadFailed}
+        </p>
       )}
     </div>
   )

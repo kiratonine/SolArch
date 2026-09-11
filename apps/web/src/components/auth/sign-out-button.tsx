@@ -40,8 +40,8 @@ export function SignOutButton({ className }: { className?: string }) {
     mutationFn: logout,
     onSuccess: async () => {
       setOpen(false)
-      // Сессия обнуляется вручную, а не инвалидацией: повторный запрос `/me`
-      // ответил бы 401, и человек увидел бы вспышку ошибки на ровном месте.
+      // Сессия обнуляется вручную, а не инвалидацией: токен уже стёрт, и спрашивать
+      // `/me` о том, что известно заранее, незачем.
       queryClient.setQueryData(queryKeys.session, null)
       queryClient.removeQueries({ queryKey: queryKeys.archives.all })
       await navigate({ to: '/' })

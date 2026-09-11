@@ -1,7 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 
-import { apiUrl } from './config'
-import { apiRequest } from './http'
+import { apiDownload, apiRequest } from './http'
 import { queryKeys } from './query-keys'
 import {
   createArchiveResponseSchema,
@@ -37,8 +36,8 @@ export function createArchive(input: CreateArchiveRequest): Promise<CreateArchiv
 }
 
 /**
- * ДОПУЩЕНИЕ (открытый вопрос Q8): в `docs/API.md` нет эндпоинта списка архивов автора,
- * хотя раздел My Archives обязателен по роли §6.1. Считаем, что это `GET /v1/archives`.
+ * Список архивов автора. В `docs/API.md` его нет, хотя раздел My Archives обязателен
+ * по роли §6.1; backend подтвердил `GET /v1/archives` (ответ на Q8).
  */
 export function listMyArchives(signal?: AbortSignal): Promise<CreatorArchive[]> {
   return apiRequest('/archives', { signal, schema: creatorArchiveListSchema })
@@ -51,13 +50,10 @@ export function getMyArchive(archiveId: string, signal?: AbortSignal): Promise<C
 /**
  * Опись файлов собственного архива.
  *
- * ДОПУЩЕНИЕ (открытый вопрос Q15): в `docs/API.md` описи для автора нет вовсе.
- * `GET /v1/archives/:archiveId` отдаёт только `file_count` и `size_bytes`, а разбор
- * по `display_path` есть лишь у опубликованного архива — на публичном эндпоинте
- * по slug. До публикации slug'а не существует, то есть автор не может увидеть,
- * что backend распаковал из его ZIP, до того как выставит архив на витрину.
- * Считаем, что это `GET /v1/archives/:archiveId/files` с той же формой ответа,
- * что и публичный listing.
+ * Публичная опись есть только у опубликованного архива, по slug, — а автору нужно
+ * видеть, что backend распаковал из его ZIP, до того как выставить архив на витрину.
+ * Backend подтвердил `GET /v1/archives/:archiveId/files` с формой публичного
+ * listing (ответ на Q15).
  */
 export function getMyArchiveFiles(
   archiveId: string,
@@ -99,9 +95,14 @@ export function unpublishArchive(archiveId: string): Promise<CreatorArchive> {
   })
 }
 
-/** Ссылка на скачивание собственного `.slr`. Открывается навигацией браузера. */
-export function ownerDownloadUrl(archiveId: string): string {
-  return apiUrl(`/archives/${encodeURIComponent(archiveId)}/download`)
+/**
+ * Собранный `.slr` собственного архива.
+ *
+ * Ссылкой его не скачать: эндпоинт закрыт сессией, а ссылка не несёт заголовок
+ * `Authorization`. Поэтому файл приходит запросом, а на диск его кладёт `saveFile`.
+ */
+export function downloadMyArchive(archiveId: string): Promise<Blob> {
+  return apiDownload(`/archives/${encodeURIComponent(archiveId)}/download`)
 }
 
 // ------------------------------------------------------------ query options

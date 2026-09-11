@@ -106,4 +106,14 @@ describe('validatePriceInput', () => {
     expect(validatePriceInput('0')).toBe('notPositive')
     expect(validatePriceInput('0.00')).toBe('notPositive')
   })
+
+  /**
+   * USDC делится до шести знаков, но backend хранит цену с двумя и молча округлил бы
+   * третий. Цена неизменяема — поэтому третий знак отсекается на вводе.
+   */
+  it('takes at most two decimal places', () => {
+    expect(validatePriceInput('12.34')).toBeNull()
+    expect(validatePriceInput('12.5')).toBeNull()
+    expect(validatePriceInput('12.345')).toBe('precision')
+  })
 })

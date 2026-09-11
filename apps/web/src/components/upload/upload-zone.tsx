@@ -19,11 +19,14 @@ import { cn } from '@/lib/utils'
 export function UploadZone({
   onFiles,
   rejected,
+  holding = 0,
   disabled = false,
   className,
 }: {
   onFiles: (files: File[]) => void
   rejected: RejectedFile[]
+  /** Сколько файлов уже лежит в архиве. Новая загрузка заменит их все. */
+  holding?: number
   disabled?: boolean
   className?: string
 }) {
@@ -65,6 +68,14 @@ export function UploadZone({
         <p className="text-muted-foreground mt-2 max-w-[58ch] text-sm">
           {t.dashboard.upload.body}
         </p>
+
+        {/* Backend не дописывает архив, а собирает его заново из того, что пришло
+            последним. Автор должен узнать об этом до выбора, а не по пропавшей описи. */}
+        {holding > 0 && (
+          <p className="text-foreground mt-2 max-w-[58ch] text-sm font-medium">
+            {t.dashboard.upload.replaces}
+          </p>
+        )}
 
         <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2">
           <Button size="lg" disabled={disabled} onClick={() => input.current?.click()}>

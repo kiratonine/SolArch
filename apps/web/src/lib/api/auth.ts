@@ -1,5 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 
+import { clearAuthToken, readAuthToken, saveAuthToken } from './auth-token'
 import { ApiError } from './errors'
 import { apiRequest } from './http'
 import { queryKeys } from './query-keys'
@@ -26,24 +27,32 @@ export function requestWalletChallenge(wallet: string): Promise<WalletChallengeR
   })
 }
 
-/** Шаг 2: отправить подпись и получить сессию. */
-export function verifyWalletSignature(input: {
+/** Шаг 2: отправить подпись и получить сессию — токен, который дальше едет с каждым запросом. */
+export async function verifyWalletSignature(input: {
   challenge_id: string
   wallet: string
   signature: string
 }): Promise<WalletVerifyResponse> {
-  return apiRequest('/auth/wallet/verify', {
+  const result = await apiRequest('/auth/wallet/verify', {
     method: 'POST',
     body: input,
     schema: walletVerifyResponseSchema,
   })
+
+  saveAuthToken(result.access_token)
+  return result
 }
 
 /**
  * Текущая сессия. `null` означает «гость», а не ошибку:
  * публичная часть маркетплейса работает без логина.
+ *
+ * Без токена backend заведомо ответит 401 (ответ на Q12), поэтому гость узнаётся
+ * без запроса — и консоль не краснеет ошибкой на каждой публичной странице.
  */
 export async function getSession(signal?: AbortSignal): Promise<SessionUser | null> {
+  if (!readAuthToken()) return null
+
   try {
     return await apiRequest('/me', { signal, schema: sessionUserSchema })
   } catch (error) {
@@ -52,8 +61,22 @@ export async function getSession(signal?: AbortSignal): Promise<SessionUser | nu
   }
 }
 
-export function logout(): Promise<void> {
-  return apiRequest('/auth/logout', { method: 'POST' })
+/**
+ * Выход.
+ *
+ * Токен — JWT без состояния: backend не хранит сессий и отозвать его у себя
+ * не может. Выход поэтому совершается здесь, стиранием токена, а запрос к backend
+ * лишь сообщает о нём. Его сбой выхода не отменяет: токена, которого нет,
+ * предъявить уже нечем.
+ */
+export async function logout(): Promise<void> {
+  try {
+    await apiRequest('/auth/logout', { method: 'POST' })
+  } catch {
+    // Выход уже состоялся — ниже, в `finally`.
+  } finally {
+    clearAuthToken()
+  }
 }
 
 // ------------------------------------------------------------ query options

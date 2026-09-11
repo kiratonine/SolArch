@@ -4,9 +4,9 @@ import { HttpResponse, http } from 'msw'
 import { describe, expect, it } from 'vitest'
 
 import { API_BASE_URL, API_PREFIX } from '@/lib/api/config'
-import { MOCK_CREATOR, db } from '@/mocks/db'
 import { server } from '@/mocks/node'
 import { renderApp } from '@/test/render'
+import { signIn } from '@/test/session'
 
 /**
  * Аналитика архива.
@@ -30,7 +30,7 @@ function report(): HTMLElement {
 
 describe('аналитика архива', () => {
   it('показывает воронку и обе конверсии за всё время', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     renderApp({ path: '/dashboard/arc_solana_course/analytics' })
 
@@ -51,7 +51,7 @@ describe('аналитика архива', () => {
   })
 
   it('показывает выручку тем же расщеплением 95 / 5, что и цена', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     renderApp({ path: '/dashboard/arc_solana_course/analytics' })
 
@@ -66,7 +66,7 @@ describe('аналитика архива', () => {
   })
 
   it('открывается на периоде по умолчанию — за всё время', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     renderApp({ path: '/dashboard/arc_solana_course/analytics' })
 
@@ -78,7 +78,7 @@ describe('аналитика архива', () => {
   })
 
   it('сужает окно наблюдения и кладёт период в адрес', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
     const user = userEvent.setup()
 
     const { router } = renderApp({ path: '/dashboard/arc_solana_course/analytics' })
@@ -101,7 +101,7 @@ describe('аналитика архива', () => {
   })
 
   it('открывает период из адреса, а не из умолчания', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     renderApp({ path: '/dashboard/arc_solana_course/analytics?period=30d' })
 
@@ -115,7 +115,7 @@ describe('аналитика архива', () => {
   })
 
   it('битый период в адресе даёт аналитику за всё время, а не белый экран', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     renderApp({ path: '/dashboard/arc_solana_course/analytics?period=yesterday' })
 
@@ -123,7 +123,7 @@ describe('аналитика архива', () => {
   })
 
   it('вместо трёх нулей говорит, что считать пока нечего', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     // Собранный, но ни разу не опубликованный архив: событий у него не было.
     renderApp({ path: '/dashboard/arc_zk_primer/analytics' })
@@ -134,7 +134,7 @@ describe('аналитика архива', () => {
   })
 
   it('чужой архив для автора не существует', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     renderApp({ path: '/dashboard/arc_brand_kit/analytics' })
 
@@ -150,7 +150,7 @@ describe('аналитика архива', () => {
   })
 
   it('сбой аналитики не уносит страницу и даёт повторить', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
     const user = userEvent.setup()
 
     let attempts = 0
@@ -179,7 +179,7 @@ describe('аналитика архива', () => {
   })
 
   it('открывается со страницы архива, прямо с манифеста', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
     const user = userEvent.setup()
 
     const { router } = renderApp({ path: '/dashboard/arc_solana_course' })

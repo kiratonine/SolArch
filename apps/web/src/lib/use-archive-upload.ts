@@ -2,18 +2,21 @@ import { useCallback, useRef, useState } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
 
-import { queryKeys, toUserMessage, uploadArchiveFile } from '@/lib/api'
-import { splitUploadFiles, type RejectedFile } from '@/lib/upload-files'
+import { queryKeys, toUserMessage, uploadArchiveContent } from '@/lib/api'
+import { packForUpload, splitUploadFiles, type RejectedFile } from '@/lib/upload-files'
 
 /**
- * Очередь загрузки файлов в архив.
+ * Загрузка содержимого архива.
  *
- * Файлы уходят по одному, а не разом. Причин две. Технический статус у архива один
- * на всех, и backend двигает его на каждом `complete` (`uploading → processing`):
- * параллельные загрузки гонялись бы за общий статус, и экран показывал бы то одно,
- * то другое. Вторая — прогресс: две полосы, ползущие по одному каналу, врут обе.
+ * Backend принимает один ZIP за раз и каждой загрузкой заменяет всё, что лежало
+ * в архиве (ответ на Q2). Поэтому один выбор — одна загрузка: отдельные файлы
+ * склеиваются в ZIP здесь же, в браузере, а готовый ZIP уходит как есть.
  *
- * Криптографии здесь нет и быть не может: браузер передаёт байты как есть, контейнер
+ * Пока загрузка идёт, новую не начинают (страница гасит выбор): вторая заменила бы
+ * первую, и в архиве оказалось бы не то, что автор выбрал последним, а то, что
+ * последним дошло.
+ *
+ * Криптографии здесь нет и быть не может: ZIP — упаковка, а не защита. Запечатанный
  * `.slr` собирает backend (`docs/roles/02_MARKETPLACE_FRONTEND.md` §9).
  */
 
@@ -21,12 +24,14 @@ export type UploadItemStatus = 'queued' | 'uploading' | 'done' | 'failed' | 'can
 
 export interface UploadItem {
   id: string
+  /** Имя файла, когда он один. Пакет из нескольких страница называет их числом. */
   name: string
+  fileCount: number
   sizeBytes: number
   status: UploadItemStatus
   /** Доля от 0 до 1. Осмысленна, пока статус `uploading`. */
   ratio: number
-  /** Формулировка backend, когда файл не дошёл. */
+  /** Формулировка backend, когда загрузка не дошла. */
   error?: string
 }
 
@@ -38,7 +43,7 @@ export interface ArchiveUpload {
   items: UploadItem[]
   /** Что не прошло проверку до сети. Держится до следующего выбора файлов. */
   rejected: RejectedFile[]
-  /** Есть ли ещё что передавать: на это время экран не предлагает выбрать новое. */
+  /** Идёт ли загрузка: на это время страница не предлагает выбрать новое. */
   isBusy: boolean
   add: (files: File[]) => void
   cancel: (id: string) => void
@@ -57,7 +62,7 @@ export function useArchiveUpload(archiveId: string): ArchiveUpload {
    * когда очередь до него дойдёт.
    */
   const itemsRef = useRef<UploadItem[]>([])
-  const filesRef = useRef(new Map<string, File>())
+  const filesRef = useRef(new Map<string, File[]>())
   const abortsRef = useRef(new Map<string, AbortController>())
   const runningRef = useRef(false)
   const counterRef = useRef(0)
@@ -75,7 +80,7 @@ export function useArchiveUpload(archiveId: string): ArchiveUpload {
   )
 
   /**
-   * После каждого файла экран обязан перечитать архив: `complete` меняет его
+   * После каждой загрузки экран обязан перечитать архив: `complete` меняет его
    * технический статус, число файлов и размер, и знает об этом только backend.
    */
   const refresh = useCallback(async () => {
@@ -94,9 +99,9 @@ export function useArchiveUpload(archiveId: string): ArchiveUpload {
         const next = itemsRef.current.find((item) => item.status === 'queued')
         if (!next) break
 
-        const file = filesRef.current.get(next.id)
-        if (!file) {
-          // Файл забрали отменой ровно между выбором и очередью.
+        const files = filesRef.current.get(next.id)
+        if (!files) {
+          // Выбор забрали отменой ровно между выбором и очередью.
           patch(next.id, { status: 'canceled' })
           continue
         }
@@ -110,7 +115,13 @@ export function useArchiveUpload(archiveId: string): ArchiveUpload {
         let shownPercent = -1
 
         try {
-          await uploadArchiveFile(archiveId, file, {
+          const content = await packForUpload(files)
+
+          // Отмена, нажатая, пока файлы склеивались, не должна заводить загрузку
+          // на backend: `init` уже сдвинул бы статус архива.
+          if (controller.signal.aborted) throw new DOMException('Upload aborted', 'AbortError')
+
+          await uploadArchiveContent(archiveId, content, {
             signal: controller.signal,
             onProgress: ({ ratio }) => {
               const percent = Math.round(ratio * 100)
@@ -127,8 +138,8 @@ export function useArchiveUpload(archiveId: string): ArchiveUpload {
             patch(next.id, { status: 'canceled' })
             filesRef.current.delete(next.id)
           } else {
-            // Файл остаётся в памяти: упавшую загрузку можно повторить, не выбирая
-            // всё заново — из десяти файлов не дошёл один.
+            // Файлы остаются в памяти: упавшую загрузку можно повторить, не выбирая
+            // всё заново.
             patch(next.id, { status: 'failed', error: toUserMessage(error) })
           }
         } finally {
@@ -144,8 +155,7 @@ export function useArchiveUpload(archiveId: string): ArchiveUpload {
        *
        * Найдено на живом экране: после удачной загрузки страница показывала один
        * и тот же список дважды подряд — «передан» в очереди и он же в описи архива.
-       * Опись — свидетельство сильнее: она пришла с backend. Строка «передан» нужна,
-       * пока файл идёт, и не нужна, когда он уже лежит внутри.
+       * Опись — свидетельство сильнее: она пришла с backend.
        *
        * Упавшие остаются: у них есть незаконченное дело — кнопка «передать заново».
        */
@@ -161,14 +171,21 @@ export function useArchiveUpload(archiveId: string): ArchiveUpload {
       setRejected(refused)
       if (accepted.length === 0) return
 
-      const queued = accepted.map((file) => {
-        counterRef.current += 1
-        const id = `upl-${counterRef.current}`
-        filesRef.current.set(id, file)
-        return { id, name: file.name, sizeBytes: file.size, status: 'queued' as const, ratio: 0 }
-      })
+      counterRef.current += 1
+      const id = `upl-${counterRef.current}`
+      filesRef.current.set(id, accepted)
 
-      commit([...itemsRef.current, ...queued])
+      commit([
+        ...itemsRef.current,
+        {
+          id,
+          name: accepted[0]?.name ?? '',
+          fileCount: accepted.length,
+          sizeBytes: accepted.reduce((sum, file) => sum + file.size, 0),
+          status: 'queued',
+          ratio: 0,
+        },
+      ])
       void pump()
     },
     [commit, pump],
@@ -178,7 +195,7 @@ export function useArchiveUpload(archiveId: string): ArchiveUpload {
     (id: string) => {
       const controller = abortsRef.current.get(id)
       if (controller) {
-        // Идущую передачу обрывает `uploadArchiveFile`: он же скажет backend
+        // Идущую передачу обрывает `uploadArchiveContent`: он же скажет backend
         // отменить загрузку, чтобы она не висела там незакрытой.
         controller.abort()
         return

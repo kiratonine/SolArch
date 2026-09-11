@@ -50,12 +50,10 @@ export const marketplaceHandlers = [
     let visible = db.archives.filter((archive) => archive.marketplace_status === 'published')
 
     if (search) {
-      // ДОПУЩЕНИЕ (открытый вопрос Q11): по каким полям ищет backend, `docs/API.md`
-      // не говорит. Имя автора включено намеренно: человек часто помнит автора,
-      // а не название, и поиск, который на «Studio Kirn» отвечает «ничего нет»,
-      // выглядит сломанным.
+      // Как backend (ответ на Q11): название и оба описания. Имя автора в поиске
+      // не участвует — у backend оно и есть только сокращённый адрес кошелька.
       visible = visible.filter((archive) =>
-        [archive.title, archive.short_description, archive.creator_display_name].some((field) =>
+        [archive.title, archive.short_description, archive.description].some((field) =>
           field.toLowerCase().includes(search),
         ),
       )

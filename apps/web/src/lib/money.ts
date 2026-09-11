@@ -14,6 +14,16 @@
 /** USDC на Solana использует 6 знаков после запятой. */
 export const USDC_DECIMALS = 6
 
+/**
+ * Сколько знаков после точки принимает цена архива.
+ *
+ * Сам USDC делится до шести знаков, но backend хранит цену с двумя (`toFixed(2)`)
+ * и молча округлит всё, что длиннее. Цена неизменяема после создания, поэтому
+ * уйти обязано ровно то число, которое автор видел: лишние знаки отсекаются
+ * на вводе, а не доверяются округлению.
+ */
+export const PRICE_DECIMALS = 2
+
 /** Комиссия платформы: 5% = 500 базисных пунктов (`docs/DECISIONS.md` ADR-006). */
 export const PLATFORM_FEE_BPS = 500
 
@@ -120,7 +130,7 @@ export function validatePriceInput(value: string): PriceProblem | null {
   if (!DECIMAL_PATTERN.test(trimmed)) return 'format'
 
   const fraction = trimmed.split('.')[1] ?? ''
-  if (fraction.length > USDC_DECIMALS) return 'precision'
+  if (fraction.length > PRICE_DECIMALS) return 'precision'
 
   if (parseUsdc(trimmed) <= 0n) return 'notPositive'
 

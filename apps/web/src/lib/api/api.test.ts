@@ -1,13 +1,15 @@
 import { HttpResponse, http } from 'msw'
 import { describe, expect, it } from 'vitest'
 
-import { db } from '@/mocks/db'
+import { createZip } from '@/lib/zip'
+import { MOCK_TOKEN, db } from '@/mocks/db'
 import { route } from '@/mocks/handlers/shared'
 import { server } from '@/mocks/node'
 
 import { getArchiveAnalytics } from './analytics'
 import {
   createArchive,
+  downloadMyArchive,
   getMyArchive,
   listMyArchives,
   publishArchive,
@@ -15,6 +17,8 @@ import {
   updateArchive,
 } from './archives'
 import { getSession, logout, requestWalletChallenge, verifyWalletSignature } from './auth'
+import { readAuthToken } from './auth-token'
+import { API_BASE_URL } from './config'
 import { ApiError, ContractError } from './errors'
 import {
   getMarketplaceArchive,
@@ -23,6 +27,7 @@ import {
   marketplaceDownloadUrl,
 } from './marketplace'
 import type { CreateArchiveRequest } from './types'
+import { uploadArchiveContent } from './uploads'
 
 const WALLET = '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU'
 
@@ -179,6 +184,116 @@ describe('contract validation', () => {
   it('ignores extra fields the backend adds', async () => {
     const archive = await getMarketplaceArchive('solana-program-security')
     expect(archive.title).toBe('Solana Program Security')
+  })
+
+  it('names the visitor with one X-Session-Id on every card request', async () => {
+    const seen: (string | null)[] = []
+    server.use(
+      http.get(route('/marketplace/archives/:slug'), ({ request }) => {
+        seen.push(request.headers.get('X-Session-Id'))
+      }),
+    )
+
+    await getMarketplaceArchive('solana-program-security')
+    await getMarketplaceArchive('solana-program-security')
+
+    // Backend отбрасывает повторный просмотр только от того же посетителя (Q10).
+    expect(seen[0]).toMatch(/^vis_[0-9a-f]{32}$/)
+    expect(seen[1]).toBe(seen[0])
+  })
+})
+
+describe('session token (Bearer)', () => {
+  it('keeps the token from verify and presents it on creator requests', async () => {
+    const presented: (string | null)[] = []
+    await signIn()
+    server.use(
+      http.get(route('/archives'), ({ request }) => {
+        presented.push(request.headers.get('Authorization'))
+      }),
+    )
+
+    await listMyArchives()
+    expect(presented).toEqual([`Bearer ${MOCK_TOKEN}`])
+  })
+
+  it('sends no Authorization header for a guest', async () => {
+    const presented: (string | null)[] = []
+    server.use(
+      http.get(route('/marketplace/archives'), ({ request }) => {
+        presented.push(request.headers.get('Authorization'))
+      }),
+    )
+
+    await listMarketplaceArchives()
+    expect(presented).toEqual([null])
+  })
+
+  it('answers "guest" without asking the backend when there is no token', async () => {
+    let asked = false
+    server.use(
+      http.get(route('/me'), () => {
+        asked = true
+      }),
+    )
+
+    await expect(getSession()).resolves.toBeNull()
+    expect(asked).toBe(false)
+  })
+
+  it('forgets a token the backend no longer accepts', async () => {
+    await signIn()
+    // Токен истёк: backend перестал его узнавать.
+    db.session = null
+
+    await expect(listMyArchives()).rejects.toMatchObject({ status: 401 })
+    expect(readAuthToken()).toBeNull()
+  })
+
+  it('signs out locally even when the backend call fails', async () => {
+    await signIn()
+    server.use(
+      http.post(route('/auth/logout'), () =>
+        HttpResponse.json({ code: 'SERVER_ERROR', message: 'down' }, { status: 503 }),
+      ),
+    )
+
+    await logout()
+    expect(readAuthToken()).toBeNull()
+  })
+})
+
+describe('uploads API', () => {
+  it('sends the ZIP to the API itself, with the session token', async () => {
+    await signIn()
+    const created = await createArchive(draftArchive())
+
+    const seen: { url: string; auth: string | null }[] = []
+    server.use(
+      http.post(route('/uploads/:uploadId/data'), ({ request }) => {
+        seen.push({ url: request.url, auth: request.headers.get('Authorization') })
+      }),
+    )
+
+    const zip = await createZip([new File(['%PDF-1.7'], 'lesson.pdf')])
+    const done = await uploadArchiveContent(created.archive_id, zip)
+
+    expect(done.archive_id).toBe(created.archive_id)
+    // `upload_url` из ответа — путь относительно API; принятый как есть, он ушёл бы
+    // на origin фронтенда. Адрес строится от API_BASE_URL.
+    expect(seen).toHaveLength(1)
+    expect(seen[0]?.url.startsWith(`${API_BASE_URL}/v1/uploads/`)).toBe(true)
+    expect(seen[0]?.auth).toBe(`Bearer ${MOCK_TOKEN}`)
+
+    const stored = db.archives.find((item) => item.archive_id === created.archive_id)
+    expect(stored?.files.map((file) => file.display_path)).toEqual(['lesson.pdf'])
+  })
+
+  it('downloads the owner .slr with the session token', async () => {
+    await signIn()
+
+    const blob = await downloadMyArchive('arc_solana_course')
+    expect(await blob.text()).toContain('arc_solana_course')
   })
 })
 

@@ -9,7 +9,7 @@ import { renderWithI18n } from '@/test/render'
 /**
  * Очередь передачи как экран, а не как поведение.
  *
- * Сама передача проверена на `archive-detail.test.tsx`: файлы уходят по одному,
+ * Сама передача проверена на `archive-detail.test.tsx`: выбор уходит одним ZIP,
  * упавший остаётся в очереди, формат отсеивается до сети. Чего там проверить
  * нельзя — это ход передачи: `XMLHttpRequest.upload.onprogress` в jsdom
  * срабатывает как придётся, и промежуточные доли до экрана не доезжают.
@@ -20,6 +20,7 @@ import { renderWithI18n } from '@/test/render'
 const BASE: UploadItem = {
   id: 'up_1',
   name: 'security/00-intro.pdf',
+  fileCount: 1,
   sizeBytes: 820 * 1024,
   status: 'queued',
   ratio: 0,
@@ -81,6 +82,16 @@ describe('ход передачи', () => {
       'aria-valuenow',
       '100',
     )
+  })
+
+  it('пакет из нескольких файлов называет их числом, а не первым именем', () => {
+    renderQueue([{ ...BASE, name: 'one.pdf', fileCount: 3, status: 'uploading', ratio: 0.2 }])
+
+    expect(screen.getByText('3 files in one ZIP')).toBeInTheDocument()
+    expect(
+      screen.getByRole('progressbar', { name: 'Sending 3 files in one ZIP' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('one.pdf')).toBeNull()
   })
 
   it('полосу рисует только идущему файлу', () => {

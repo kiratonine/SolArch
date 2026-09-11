@@ -7,6 +7,7 @@ import { API_BASE_URL, API_PREFIX } from '@/lib/api/config'
 import { MOCK_CREATOR, db } from '@/mocks/db'
 import { server } from '@/mocks/node'
 import { renderApp } from '@/test/render'
+import { signIn } from '@/test/session'
 
 /**
  * Создание архива.
@@ -18,7 +19,7 @@ import { renderApp } from '@/test/render'
 
 describe('создание архива', () => {
   it('создаёт архив и ведёт автора к загрузке файлов', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
     const user = userEvent.setup()
 
     const { router } = renderApp({ path: '/dashboard/new' })
@@ -50,7 +51,7 @@ describe('создание архива', () => {
   })
 
   it('подставляет кошелёк, которым автор вошёл', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     renderApp({ path: '/dashboard/new' })
 
@@ -58,7 +59,7 @@ describe('создание архива', () => {
   })
 
   it('уносит в запрос выбранные условия лицензии', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
     const user = userEvent.setup()
 
     renderApp({ path: '/dashboard/new' })
@@ -82,7 +83,7 @@ describe('создание архива', () => {
 
 describe('путь к форме', () => {
   it('ведёт в форму из кабинета', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
     const user = userEvent.setup()
 
     const { router } = renderApp({ path: '/dashboard' })
@@ -95,7 +96,7 @@ describe('путь к форме', () => {
   })
 
   it('зовёт создать первый архив, когда их нет', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
     db.archives = []
 
     renderApp({ path: '/dashboard' })
@@ -109,7 +110,7 @@ describe('путь к форме', () => {
 
 describe('проверка формы', () => {
   it('называет незаполненные поля и не идёт на сервер', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
     const user = userEvent.setup()
     const before = db.archives.length
 
@@ -126,7 +127,7 @@ describe('проверка формы', () => {
   })
 
   it('ставит фокус на первое незаполненное поле', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
     const user = userEvent.setup()
 
     renderApp({ path: '/dashboard/new' })
@@ -137,7 +138,7 @@ describe('проверка формы', () => {
   })
 
   it('убирает ошибку, как только её исправили', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
     const user = userEvent.setup()
 
     renderApp({ path: '/dashboard/new' })
@@ -153,7 +154,7 @@ describe('проверка формы', () => {
   })
 
   it('не отправляет чужую строку вместо адреса выплат', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
     const user = userEvent.setup()
     const before = db.archives.length
 
@@ -176,7 +177,7 @@ describe('проверка формы', () => {
 
 describe('экономика на форме', () => {
   it('показывает долю автора по введённой цене и предупреждает о неизменности', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
     const user = userEvent.setup()
 
     renderApp({ path: '/dashboard/new' })
@@ -196,7 +197,7 @@ describe('экономика на форме', () => {
   })
 
   it('пересчитывает долю, пока цену правят', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
     const user = userEvent.setup()
 
     renderApp({ path: '/dashboard/new' })
@@ -214,7 +215,7 @@ describe('экономика на форме', () => {
 
 describe('отказ backend', () => {
   it('показывает отказ у поля и не теряет введённое', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
     const user = userEvent.setup()
 
     server.use(

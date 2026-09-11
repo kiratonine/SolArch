@@ -25,7 +25,7 @@ function ratio(numerator: number, denominator: number): number {
 
 export const analyticsHandlers = [
   http.get(route('/archives/:archiveId/analytics'), ({ params, request }) => {
-    const unauthorized = requireSession()
+    const unauthorized = requireSession(request)
     if (unauthorized) return unauthorized
 
     // Аналитика — только для владельца (`docs/API.md` §11).

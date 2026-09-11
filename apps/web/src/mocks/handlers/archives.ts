@@ -22,7 +22,7 @@ import { apiError, findOwned, requireSession, route } from './shared'
 const PRICE_MESSAGES: Record<PriceProblem, string> = {
   required: 'Укажите цену архива',
   format: 'Цена должна быть числом, например 10.00',
-  precision: 'USDC поддерживает не более 6 знаков после запятой',
+  precision: 'Цена указывается не точнее двух знаков после точки',
   notPositive: 'Цена должна быть больше нуля',
 }
 
@@ -37,9 +37,9 @@ function slugify(title: string): string {
 }
 
 export const archiveHandlers = [
-  // ДОПУЩЕНИЕ Q8: списка архивов автора нет в docs/API.md, считаем это GET /v1/archives.
-  http.get(route('/archives'), () => {
-    const unauthorized = requireSession()
+  // Списка архивов автора нет в docs/API.md; backend подтвердил GET /v1/archives (Q8).
+  http.get(route('/archives'), ({ request }) => {
+    const unauthorized = requireSession(request)
     if (unauthorized) return unauthorized
 
     // Сборка идёт на стороне backend: к моменту ответа он уже мог её закончить.
@@ -64,7 +64,7 @@ export const archiveHandlers = [
   }),
 
   http.post(route('/archives'), async ({ request }) => {
-    const unauthorized = requireSession()
+    const unauthorized = requireSession(request)
     if (unauthorized) return unauthorized
 
     const body = (await request.json()) as CreateArchiveRequest
@@ -122,8 +122,8 @@ export const archiveHandlers = [
     )
   }),
 
-  http.get(route('/archives/:archiveId'), ({ params }) => {
-    const unauthorized = requireSession()
+  http.get(route('/archives/:archiveId'), ({ params, request }) => {
+    const unauthorized = requireSession(request)
     if (unauthorized) return unauthorized
 
     advanceProcessing()
@@ -135,10 +135,10 @@ export const archiveHandlers = [
     return HttpResponse.json(rest)
   }),
 
-  // ДОПУЩЕНИЕ Q15: описи собственного архива нет в docs/API.md, а автору она нужна
-  // до публикации — иначе он не видит, что backend распаковал из его ZIP.
-  http.get(route('/archives/:archiveId/files'), ({ params }) => {
-    const unauthorized = requireSession()
+  // Описи собственного архива нет в docs/API.md, а автору она нужна до публикации —
+  // иначе он не видит, что backend распаковал из его ZIP. Backend её отдаёт (Q15).
+  http.get(route('/archives/:archiveId/files'), ({ params, request }) => {
+    const unauthorized = requireSession(request)
     if (unauthorized) return unauthorized
 
     const archive = findOwned(String(params.archiveId))
@@ -148,7 +148,7 @@ export const archiveHandlers = [
   }),
 
   http.patch(route('/archives/:archiveId'), async ({ params, request }) => {
-    const unauthorized = requireSession()
+    const unauthorized = requireSession(request)
     if (unauthorized) return unauthorized
 
     const archive = findOwned(String(params.archiveId))
@@ -174,8 +174,8 @@ export const archiveHandlers = [
     return HttpResponse.json(rest)
   }),
 
-  http.post(route('/archives/:archiveId/publish'), ({ params }) => {
-    const unauthorized = requireSession()
+  http.post(route('/archives/:archiveId/publish'), ({ params, request }) => {
+    const unauthorized = requireSession(request)
     if (unauthorized) return unauthorized
 
     const archive = findOwned(String(params.archiveId))
@@ -191,9 +191,10 @@ export const archiveHandlers = [
       return apiError(409, 'ARCHIVE_NOT_READY', 'Архив ещё не собран')
     }
 
-    if (!archive.payout_account_ready) {
-      return apiError(409, 'PAYOUT_ACCOUNT_NOT_READY', 'USDC-аккаунт автора ещё не готов')
-    }
+    // USDC-аккаунт автора backend создаёт в момент публикации, а не заранее.
+    // Отказ (409 PAYOUT_ACCOUNT_NOT_READY) бывает, когда создать его не вышло;
+    // тесты вызывают его через `server.use`.
+    archive.payout_account_ready = true
 
     archive.marketplace_status = 'published'
     archive.slug ??= slugify(archive.title)
@@ -202,8 +203,8 @@ export const archiveHandlers = [
     return HttpResponse.json(rest)
   }),
 
-  http.post(route('/archives/:archiveId/unpublish'), ({ params }) => {
-    const unauthorized = requireSession()
+  http.post(route('/archives/:archiveId/unpublish'), ({ params, request }) => {
+    const unauthorized = requireSession(request)
     if (unauthorized) return unauthorized
 
     const archive = findOwned(String(params.archiveId))
@@ -215,8 +216,8 @@ export const archiveHandlers = [
     return HttpResponse.json(rest)
   }),
 
-  http.get(route('/archives/:archiveId/download'), ({ params }) => {
-    const unauthorized = requireSession()
+  http.get(route('/archives/:archiveId/download'), ({ params, request }) => {
+    const unauthorized = requireSession(request)
     if (unauthorized) return unauthorized
 
     const archive = findOwned(String(params.archiveId))

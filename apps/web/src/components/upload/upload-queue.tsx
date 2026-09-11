@@ -4,7 +4,7 @@ import type { UploadItem } from '@/lib/use-archive-upload'
 import { cn } from '@/lib/utils'
 
 /**
- * Очередь передачи: строка на файл.
+ * Очередь передачи: строка на загрузку — один файл или пакет из нескольких.
  *
  * Полоса та же по толщине, что корешок карточки, — три пикселя цвета «идёт работа».
  * Ни теней, ни объёма: заполненная часть отличается от пустой цветом, и только.
@@ -48,7 +48,15 @@ export function UploadQueue({
       <ul className="border-border divide-border divide-y rounded-lg border">
         {items.map((item) => {
           const running = item.status === 'uploading'
-          const label = t.dashboard.upload.progress(item.name)
+          // Несколько файлов уходят одним ZIP, и строка называет пакет, а не первый
+          // файл в нём. Имя одиночного файла — машинная строка, число — нет.
+          const bundle = item.fileCount > 1
+          const title = bundle
+            ? t.dashboard.upload.bundle(
+                `${format.count(item.fileCount)} ${t.units.files(item.fileCount)}`,
+              )
+            : item.name
+          const label = t.dashboard.upload.progress(title)
           // Пока файл идёт, состояние называет процент; в покое — слово.
           const state =
             item.status === 'uploading'
@@ -58,7 +66,9 @@ export function UploadQueue({
           return (
             <li key={item.id} className="px-4 py-3">
               <div className="flex items-baseline justify-between gap-4">
-                <span className="min-w-0 truncate font-mono text-[0.8125rem]">{item.name}</span>
+                <span className={cn('min-w-0 truncate text-[0.8125rem]', !bundle && 'font-mono')}>
+                  {title}
+                </span>
 
                 <span className="flex shrink-0 items-baseline gap-3">
                   {/* Процент вытесняет слово статуса, пока файл идёт: и то и другое

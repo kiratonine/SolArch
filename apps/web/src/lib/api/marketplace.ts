@@ -15,6 +15,7 @@ import type {
   Paginated,
   PublicFileListResponse,
 } from './types'
+import { visitorId } from './visitor'
 
 /**
  * Публичный Marketplace API (`docs/API.md` §5).
@@ -43,12 +44,19 @@ export function listMarketplaceArchives(
   })
 }
 
+/**
+ * Карточка архива.
+ *
+ * Каждый такой запрос backend засчитывает как просмотр (ответ на Q10), а повторы
+ * отбрасывает только по заголовку `X-Session-Id`. Поэтому запрос называет посетителя.
+ */
 export function getMarketplaceArchive(
   slug: string,
   signal?: AbortSignal,
 ): Promise<MarketplaceArchiveDetail> {
   return apiRequest(`/marketplace/archives/${encodeURIComponent(slug)}`, {
     signal,
+    headers: { 'X-Session-Id': visitorId() },
     schema: marketplaceArchiveDetailSchema,
   })
 }

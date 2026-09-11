@@ -177,7 +177,7 @@ function MenuRows({ wallet, onNavigate }: { wallet?: string; onNavigate: () => v
                 моноширинным: это машинная строка, а не ссылка (F53). */}
             <WalletAddress
               address={wallet}
-              className="text-muted-foreground border-border border-t py-3 text-xs"
+              className="border-border border-t py-3 text-xs"
             />
           </>
         ) : (

@@ -6,6 +6,7 @@ import { fakeWallet, registerFakeWallets } from '@/test/fake-wallet'
 import { queryKeys } from '@/lib/api'
 import { MOCK_CREATOR, db } from '@/mocks/db'
 import { renderApp } from '@/test/render'
+import { signIn } from '@/test/session'
 
 /**
  * Вход автора целиком: настоящее дерево маршрутов, настоящий API-клиент, MSW вместо
@@ -107,7 +108,7 @@ describe('страница входа', () => {
 describe('сессия автора', () => {
   it('показывает кошелёк в шапке и выпускает по кнопке выхода', async () => {
     const user = userEvent.setup()
-    db.session = MOCK_CREATOR
+    signIn()
 
     const { router } = renderApp({ path: '/dashboard' })
 
@@ -130,7 +131,7 @@ describe('сессия автора', () => {
 
   it('не выпускает по случайному нажатию: выход спрашивает подтверждение', async () => {
     const user = userEvent.setup()
-    db.session = MOCK_CREATOR
+    signIn()
 
     const { router } = renderApp({ path: '/dashboard' })
 
@@ -148,7 +149,7 @@ describe('сессия автора', () => {
 
   it('отпускает вопрос по клику мимо и по Escape, оставляя сессию', async () => {
     const user = userEvent.setup()
-    db.session = MOCK_CREATOR
+    signIn()
 
     renderApp({ path: '/dashboard' })
 
@@ -176,7 +177,7 @@ describe('сессия автора', () => {
   })
 
   it('не держит вошедшего автора на странице входа', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     const { router } = renderApp({ path: '/login' })
 
@@ -186,7 +187,7 @@ describe('сессия автора', () => {
   })
 
   it('выводит из кабинета, когда сессия перестала действовать', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     const { router, queryClient } = renderApp({ path: '/dashboard' })
     await screen.findByRole('heading', { name: 'Your archives' })

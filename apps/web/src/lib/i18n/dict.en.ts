@@ -93,7 +93,7 @@ export const en = {
 
     search: {
       label: 'Search the catalog',
-      placeholder: 'Title, author or description',
+      placeholder: 'Title or description',
       clear: 'Clear the search',
     },
 
@@ -322,6 +322,8 @@ export const en = {
         },
 
         download: 'Download the .slr',
+        downloading: 'Preparing the .slr',
+        downloadFailed: 'The .slr did not download. Try again.',
       },
 
       /**
@@ -356,7 +358,6 @@ export const en = {
         /** Почему кнопка погашена. Проверяет это backend, называем — мы. */
         requires: {
           notReady: 'The container has to be built before the archive can go in the catalog.',
-          payout: 'SolArch is still preparing the USDC account for your payout wallet. This takes a moment.',
         },
 
         link: {
@@ -395,6 +396,7 @@ export const en = {
       title: 'Add files',
       body: 'A ZIP keeps the folders you built inside it - SolArch unpacks it on the server. Single files land at the root of the archive.',
       formats: 'PDF, PNG, JPG, WebP, DOCX, XLSX or a ZIP.',
+      replaces: 'A new upload replaces everything the archive holds now.',
       choose: 'Choose files',
       drop: 'or drop them here',
       dropping: 'Drop the files',
@@ -407,6 +409,7 @@ export const en = {
         failed: 'Not sent',
       },
       progress: (name: string) => `Sending ${name}`,
+      bundle: (files: string) => `${files} in one ZIP`,
       cancel: 'Cancel',
       retry: 'Send again',
 
@@ -414,6 +417,7 @@ export const en = {
         title: 'These files were not taken',
         unsupportedType: 'the Viewer cannot show this format',
         empty: 'the file is empty',
+        zipNotAlone: 'a ZIP goes on its own, without other files',
       },
     },
   },
@@ -516,7 +520,7 @@ export const en = {
       'descriptionTooLong': 'The description is longer than the page can hold.',
       'priceRequired': 'Set the price.',
       'priceFormat': 'Write the price as a number, for example 10.00.',
-      'pricePrecision': 'USDC keeps six decimal places, no more.',
+      'pricePrecision': 'Two decimal places at most, like 10.25.',
       'priceNotPositive': 'The price has to be above zero.',
       'payoutWalletRequired': 'Enter the address the payout goes to.',
       'payoutWalletInvalid': 'This is not a Solana address.',

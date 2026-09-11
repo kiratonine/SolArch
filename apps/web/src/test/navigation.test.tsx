@@ -2,8 +2,9 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 
-import { MOCK_CREATOR, db } from '@/mocks/db'
+import { MOCK_CREATOR } from '@/mocks/db'
 import { renderApp } from '@/test/render'
+import { signIn } from '@/test/session'
 
 /**
  * Меню узкого экрана.
@@ -78,7 +79,7 @@ describe('меню узкого экрана', () => {
   })
 
   it('вошедшему автору показывает кабинет, выход и адрес кошелька', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     renderApp()
     await screen.findAllByRole('article')
@@ -92,7 +93,7 @@ describe('меню узкого экрана', () => {
   })
 
   it('выход из меню уводит на главную и закрывает меню', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     const { router } = renderApp({ path: '/dashboard' })
     await screen.findByRole('heading', { level: 1, name: 'Your archives' })

@@ -5,9 +5,9 @@ import { describe, expect, it } from 'vitest'
 
 import { ArchiveCardSkeleton } from '@/components/state/archive-card-skeleton'
 import { API_BASE_URL, API_PREFIX } from '@/lib/api/config'
-import { MOCK_CREATOR, db } from '@/mocks/db'
 import { server } from '@/mocks/node'
 import { renderApp, renderWithI18n } from '@/test/render'
+import { signIn } from '@/test/session'
 
 /**
  * Состояния загрузки — единственный слой из `docs/TESTING.md` §5, который рос
@@ -91,7 +91,7 @@ describe('пока данных нет', () => {
   })
 
   it('кабинет ждёт скелетами, а не приглашением создать первый архив', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
     server.use(slow('/archives'))
 
     renderApp({ path: '/dashboard' })
@@ -110,7 +110,7 @@ describe('пока данных нет', () => {
   })
 
   it('аналитика ждёт скелетом вместо трёх нулей', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
     server.use(slow('/archives/:archiveId/analytics'))
 
     renderApp({ path: '/dashboard/arc_solana_course/analytics' })
@@ -174,7 +174,7 @@ describe('пока данные обновляются', () => {
   })
 
   it('аналитика не роняет цифры в скелет при смене периода', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     renderApp({ path: '/dashboard/arc_solana_course/analytics' })
     expect(await screen.findByText('18,420')).toBeInTheDocument()

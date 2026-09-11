@@ -17,8 +17,14 @@ export function apiError(status: number, code: string, message: string) {
   return HttpResponse.json({ code, message, request_id: 'req_mock_0001' }, { status })
 }
 
-export function requireSession() {
-  return db.session ? null : apiError(401, 'UNAUTHORIZED', 'Требуется вход автора')
+/**
+ * Сессия предъявляется заголовком `Authorization: Bearer`, как у backend (ответ на Q1).
+ * Проверяются обе стороны: мок помнит, кого впустил, а запрос обязан принести тот самый токен.
+ */
+export function requireSession(request: Request) {
+  const presented = request.headers.get('Authorization')
+  const valid = db.session !== null && db.token !== null && presented === `Bearer ${db.token}`
+  return valid ? null : apiError(401, 'UNAUTHORIZED', 'Требуется вход автора')
 }
 
 /**

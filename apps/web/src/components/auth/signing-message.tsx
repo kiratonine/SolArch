@@ -45,7 +45,7 @@ export function SigningMessage({
       <div className="text-muted-foreground mt-3 flex items-center gap-2 text-[0.8125rem]">
         <img src={wallet.icon} alt="" className="size-4 rounded-sm" />
         <span>{t.auth.message.wallet}</span>
-        <WalletAddress address={wallet.address} className="text-foreground" />
+        <WalletAddress address={wallet.address} />
       </div>
 
       <div className="mt-5 flex flex-wrap items-center gap-2">

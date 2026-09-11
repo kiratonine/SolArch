@@ -69,7 +69,7 @@ function DashboardPage() {
       {session && (
         <p className="text-muted-foreground mb-8 flex flex-wrap items-baseline gap-2 text-[0.8125rem]">
           {t.dashboard.signedInAs}
-          <WalletAddress address={session.wallet} className="text-foreground break-all" full />
+          <WalletAddress address={session.wallet} className="break-all" full />
         </p>
       )}
 

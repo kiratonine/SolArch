@@ -2,6 +2,10 @@
  * Настройки доступа к Marketplace Backend.
  *
  * Все пути API живут под префиксом `/v1` (`docs/API.md`).
+ *
+ * Cookie backend не выдаёт: сессия — Bearer-токен (ответ на Q1, `auth-token.ts`).
+ * Поэтому запросы уходят без `credentials`, и фронту не о чем договариваться
+ * с API насчёт SameSite, даже когда они живут на разных origin (Q7).
  */
 
 const rawBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000'
@@ -15,10 +19,3 @@ export const API_PREFIX = '/v1'
 export function apiUrl(path: string): string {
   return `${API_BASE_URL}${API_PREFIX}${path}`
 }
-
-/**
- * ДОПУЩЕНИЕ (открытый вопрос Q1): считаем, что backend выдаёт httpOnly cookie-сессию,
- * поэтому запросы идут с `credentials: 'include'`. Если команда выберет Bearer-токен,
- * менять нужно только это место и `http.ts`.
- */
-export const API_CREDENTIALS: RequestCredentials = 'include'

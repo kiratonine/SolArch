@@ -35,9 +35,14 @@ export const Route = createFileRoute('/archives/$slug')({
    * с публикации архива в обработчик ошибок роутера, и вместо аккуратного «архив
    * недоступен» человек увидел бы аварийный экран. `prefetchQuery` не бросает,
    * а компонент, который умеет отличить снятый архив от сбоя, разбирает ответ сам.
+   *
+   * Наведение, однако, ещё не просмотр. Backend засчитывает `view` на каждый запрос
+   * карточки (ответ на Q10), и прогрев по наведению накручивал бы автору просмотры
+   * мышью. Поэтому по наведению греется только опись — её чтение ничего не считает,
+   * — а карточка уходит, когда страницу действительно открыли.
    */
-  loader: ({ context, params }) => {
-    void context.queryClient.prefetchQuery(marketplaceArchiveQuery(params.slug))
+  loader: ({ context, params, preload }) => {
+    if (!preload) void context.queryClient.prefetchQuery(marketplaceArchiveQuery(params.slug))
     void context.queryClient.prefetchQuery(marketplaceArchiveFilesQuery(params.slug))
   },
   component: ArchivePage,

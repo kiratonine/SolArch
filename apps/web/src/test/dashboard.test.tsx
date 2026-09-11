@@ -4,9 +4,10 @@ import { HttpResponse, http } from 'msw'
 import { describe, expect, it } from 'vitest'
 
 import { API_BASE_URL, API_PREFIX } from '@/lib/api/config'
-import { MOCK_CREATOR, db } from '@/mocks/db'
+import { db } from '@/mocks/db'
 import { server } from '@/mocks/node'
 import { renderApp } from '@/test/render'
+import { signIn } from '@/test/session'
 
 /**
  * Кабинет автора: список собственных архивов.
@@ -26,7 +27,7 @@ function card(title: string): HTMLElement {
 
 describe('список своих архивов', () => {
   it('показывает архивы автора и не показывает чужие', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     renderApp({ path: '/dashboard' })
 
@@ -41,7 +42,7 @@ describe('список своих архивов', () => {
   })
 
   it('ставит новые архивы наверх', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     renderApp({ path: '/dashboard' })
     await screen.findByRole('heading', { name: 'Rust FFI Field Notes' })
@@ -63,7 +64,7 @@ describe('список своих архивов', () => {
   })
 
   it('называет оба статуса порознь', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     renderApp({ path: '/dashboard' })
     await screen.findByRole('heading', { name: 'Solana Program Security' })
@@ -85,7 +86,7 @@ describe('список своих архивов', () => {
   })
 
   it('не ставит новому архиву одну и ту же подпись дважды', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     renderApp({ path: '/dashboard' })
     await screen.findByRole('heading', { name: 'Untitled research notes' })
@@ -98,7 +99,7 @@ describe('список своих архивов', () => {
   })
 
   it('показывает архив готовым, как только backend закончил сборку', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     // Так выглядит закончившаяся сборка: backend отдаёт другой technical_status.
     const building = db.archives.find((archive) => archive.archive_id === 'arc_field_notes')
@@ -112,7 +113,7 @@ describe('список своих архивов', () => {
   })
 
   it('показывает цену и долю автора из ответа backend', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     renderApp({ path: '/dashboard' })
     await screen.findByRole('heading', { name: 'Solana Program Security' })
@@ -124,7 +125,7 @@ describe('список своих архивов', () => {
   })
 
   it('передаёт причину, по которой сборка не удалась', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     renderApp({ path: '/dashboard' })
     await screen.findByRole('heading', { name: 'Archive Scans 1997' })
@@ -135,7 +136,7 @@ describe('список своих архивов', () => {
   })
 
   it('ведёт на публичную страницу только опубликованный архив', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     renderApp({ path: '/dashboard' })
     await screen.findByRole('heading', { name: 'Solana Program Security' })
@@ -158,7 +159,7 @@ describe('список своих архивов', () => {
   })
 
   it('ведёт из карточки в сам архив', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     renderApp({ path: '/dashboard' })
     await screen.findByRole('heading', { name: 'Untitled research notes' })
@@ -172,7 +173,7 @@ describe('список своих архивов', () => {
   })
 
   it('не выдаёт полей, которых нет в контракте', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     renderApp({ path: '/dashboard' })
     await screen.findByRole('heading', { name: 'Solana Program Security' })
@@ -184,7 +185,7 @@ describe('список своих архивов', () => {
 
 describe('состояния кабинета', () => {
   it('говорит прямо, когда архивов ещё нет', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
     db.archives = []
 
     renderApp({ path: '/dashboard' })
@@ -193,7 +194,7 @@ describe('состояния кабинета', () => {
   })
 
   it('называет сбой и даёт повторить', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
     server.use(
       http.get(`${API_BASE_URL}${API_PREFIX}/archives`, () =>
         HttpResponse.json({ code: 'INTERNAL', message: 'boom' }, { status: 500 }),
@@ -208,7 +209,7 @@ describe('состояния кабинета', () => {
 
   it('повтор после сбоя доносит список', async () => {
     const user = userEvent.setup()
-    db.session = MOCK_CREATOR
+    signIn()
     server.use(
       http.get(
         `${API_BASE_URL}${API_PREFIX}/archives`,
@@ -227,7 +228,7 @@ describe('состояния кабинета', () => {
   })
 
   it('говорит с автором по-русски', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     renderApp({ path: '/dashboard', locale: 'ru' })
 

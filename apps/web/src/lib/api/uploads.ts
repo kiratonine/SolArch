@@ -1,14 +1,16 @@
-import { API_CREDENTIALS, apiUrl } from './config'
-import { ApiError, NetworkError } from './errors'
-import { apiRequest } from './http'
+import { clearAuthToken } from './auth-token'
+import { apiUrl } from './config'
+import { ApiError, NetworkError, type ApiErrorBody } from './errors'
+import { apiRequest, authHeaders } from './http'
 import { uploadCompleteResponseSchema, uploadInitResponseSchema } from './types'
 import type { UploadCompleteResponse, UploadInitRequest, UploadInitResponse } from './types'
 
 /**
- * Загрузка исходных файлов автора (`docs/API.md` §4).
+ * Загрузка содержимого архива (`docs/API.md` §4).
  *
- * Криптографическая упаковка выполняется на backend. Браузер только передаёт байты
- * (`docs/roles/02_MARKETPLACE_FRONTEND.md` §9).
+ * Транспорт один — через сам API (ответ на Q2): `init` → байты ZIP
+ * в `POST /uploads/:id/data` → `complete`. Распаковку, проверку и сборку `.slr`
+ * делает backend. Браузер только передаёт байты (`docs/roles/02_MARKETPLACE_FRONTEND.md` §9).
  */
 
 export interface UploadProgress {
@@ -42,25 +44,39 @@ export function cancelUpload(uploadId: string): Promise<void> {
   return apiRequest(`/uploads/${encodeURIComponent(uploadId)}/cancel`, { method: 'POST' })
 }
 
+/** Формулировка отказа из тела ответа, если backend её прислал. */
+function errorBody(xhr: XMLHttpRequest): ApiErrorBody {
+  try {
+    const body = JSON.parse(xhr.responseText) as Partial<ApiErrorBody>
+    if (typeof body.code === 'string' && typeof body.message === 'string') {
+      return body as ApiErrorBody
+    }
+  } catch {
+    // тело не JSON — ниже общая фраза
+  }
+
+  return {
+    code: 'UPLOAD_FAILED',
+    message: `Загрузка файла завершилась с кодом ${xhr.status}`,
+  }
+}
+
 /**
- * Передаёт байты файла.
+ * Передаёт байты ZIP.
  *
- * Используется XMLHttpRequest, а не fetch: только он даёт события прогресса
- * отправки, а прогресс-бар обязателен по роли §9.
+ * XMLHttpRequest, а не fetch: только он даёт события прогресса отправки, а полоса
+ * прогресса обязательна по роли §9.
  *
- * Работают оба транспорта из вопроса Q2: если backend вернул `upload_url` —
- * пишем прямо в хранилище, иначе отправляем через сам API.
+ * Адрес backend присылает и сам (`upload_url`), но это относительный путь того же
+ * API: принятый как есть, он ушёл бы на origin фронтенда. Поэтому адрес строится
+ * здесь, от `API_BASE_URL`, — и заодно токен сессии не может уехать на чужой хост.
  */
-export function uploadFileData(
-  init: UploadInitResponse,
-  file: File,
+export function uploadArchiveData(
+  uploadId: string,
+  content: Blob,
   options: UploadOptions = {},
 ): Promise<void> {
   const { onProgress, signal } = options
-
-  const direct = Boolean(init.upload_url)
-  const url = init.upload_url ?? apiUrl(`/uploads/${encodeURIComponent(init.upload_id)}/data`)
-  const method = init.method ?? (direct ? 'PUT' : 'POST')
 
   return new Promise<void>((resolve, reject) => {
     if (signal?.aborted) {
@@ -69,12 +85,10 @@ export function uploadFileData(
     }
 
     const xhr = new XMLHttpRequest()
-    xhr.open(method, url, true)
+    xhr.open('POST', apiUrl(`/uploads/${encodeURIComponent(uploadId)}/data`), true)
+    xhr.setRequestHeader('Content-Type', 'application/zip')
 
-    // Cookie-сессия нужна только своему API; в подписанный URL хранилища её слать нельзя.
-    xhr.withCredentials = !direct && API_CREDENTIALS === 'include'
-
-    for (const [header, value] of Object.entries(init.headers ?? {})) {
+    for (const [header, value] of Object.entries(authHeaders())) {
       xhr.setRequestHeader(header, value)
     }
 
@@ -95,16 +109,14 @@ export function uploadFileData(
     xhr.onload = () => {
       cleanup()
       if (xhr.status >= 200 && xhr.status < 300) {
-        onProgress?.({ loaded: file.size, total: file.size, ratio: 1 })
+        onProgress?.({ loaded: content.size, total: content.size, ratio: 1 })
         resolve()
         return
       }
-      reject(
-        new ApiError(xhr.status, {
-          code: 'UPLOAD_FAILED',
-          message: `Загрузка файла завершилась с кодом ${xhr.status}`,
-        }),
-      )
+
+      // То же правило, что у остальных запросов (`http.ts`): отвергнутый токен не держим.
+      if (xhr.status === 401) clearAuthToken()
+      reject(new ApiError(xhr.status, errorBody(xhr)))
     }
 
     xhr.onerror = () => {
@@ -117,29 +129,29 @@ export function uploadFileData(
       reject(new DOMException('Upload aborted', 'AbortError'))
     }
 
-    xhr.send(file)
+    xhr.send(content)
   })
 }
 
 /**
- * Полный цикл загрузки одного файла: init → передача байтов → complete.
+ * Полный цикл одной загрузки: init → байты → complete.
  *
  * Загрузка считается завершённой только после подтверждения backend (роль §9):
  * до ответа `complete` архив в UI не может считаться готовым.
  */
-export async function uploadArchiveFile(
+export async function uploadArchiveContent(
   archiveId: string,
-  file: File,
+  content: File,
   options: UploadOptions = {},
 ): Promise<UploadCompleteResponse> {
   const init = await initUpload({
     archive_id: archiveId,
-    filename: file.name,
-    size_bytes: file.size,
+    filename: content.name,
+    size_bytes: content.size,
   })
 
   try {
-    await uploadFileData(init, file, options)
+    await uploadArchiveData(init.upload_id, content, options)
   } catch (error) {
     // Отменённую или упавшую загрузку не оставляем висеть на backend.
     await cancelUpload(init.upload_id).catch(() => undefined)

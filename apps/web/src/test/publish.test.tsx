@@ -4,9 +4,10 @@ import { HttpResponse, http } from 'msw'
 import { describe, expect, it } from 'vitest'
 
 import { API_BASE_URL, API_PREFIX } from '@/lib/api/config'
-import { MOCK_CREATOR, db } from '@/mocks/db'
+import { db } from '@/mocks/db'
 import { server } from '@/mocks/node'
 import { renderApp } from '@/test/render'
+import { signIn } from '@/test/session'
 
 /**
  * Витрина архива: публикация, снятие с публикации и предпросмотр карточки.
@@ -26,7 +27,7 @@ function listing(): HTMLElement {
 
 describe('витрина архива', () => {
   it('публикует собранный архив и отдаёт публичную ссылку', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
     const user = userEvent.setup()
 
     renderApp({ path: '/dashboard/arc_zk_primer' })
@@ -47,7 +48,7 @@ describe('витрина архива', () => {
   })
 
   it('копирует публичную ссылку целиком', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
     const user = userEvent.setup()
 
     renderApp({ path: '/dashboard/arc_solana_course' })
@@ -62,7 +63,7 @@ describe('витрина архива', () => {
   })
 
   it('не даёт публиковать несобранный архив и называет причину', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     renderApp({ path: '/dashboard/arc_draft_notes' })
     await screen.findByText('Not in the catalog')
@@ -73,22 +74,28 @@ describe('витрина архива', () => {
     ).toBeInTheDocument()
   })
 
-  it('не даёт публиковать, пока backend готовит USDC-аккаунт автора', async () => {
-    db.session = MOCK_CREATOR
+  it('публикует, даже если USDC-аккаунта автора ещё нет: backend создаёт его сам', async () => {
+    signIn()
+    const user = userEvent.setup()
 
-    // Аккаунт готовит backend (ADR-009); фронт только читает флаг.
+    // До публикации backend честно отвечает `false`: аккаунт появится в её момент.
+    // Гасить кнопку по флагу — ждать того, что случится только после нажатия
+    // (найдено живым прогоном против настоящего backend на S12).
     const archive = db.archives.find((item) => item.archive_id === 'arc_zk_primer')
     if (archive) archive.payout_account_ready = false
 
     renderApp({ path: '/dashboard/arc_zk_primer' })
     await screen.findByText('Not in the catalog')
 
-    expect(screen.getByRole('button', { name: 'Publish' })).toBeDisabled()
-    expect(screen.getByText(/still preparing the USDC account/)).toBeInTheDocument()
+    const publish = screen.getByRole('button', { name: 'Publish' })
+    expect(publish).toBeEnabled()
+
+    await user.click(publish)
+    expect(await screen.findByText('In the catalog')).toBeInTheDocument()
   })
 
   it('снимает архив с публикации только после подтверждения', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
     const user = userEvent.setup()
 
     renderApp({ path: '/dashboard/arc_solana_course' })
@@ -115,7 +122,7 @@ describe('витрина архива', () => {
   })
 
   it('возвращает снятый архив в каталог', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
     const user = userEvent.setup()
 
     renderApp({ path: '/dashboard/arc_retired_guide' })
@@ -127,7 +134,7 @@ describe('витрина архива', () => {
   })
 
   it('заблокированному архиву публикации не предлагает', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     renderApp({ path: '/dashboard/arc_blocked_atlas' })
 
@@ -137,7 +144,7 @@ describe('витрина архива', () => {
   })
 
   it('показывает отказ backend теми же словами, какими он его сформулировал', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
     const user = userEvent.setup()
 
     server.use(
@@ -162,7 +169,7 @@ describe('витрина архива', () => {
 
 describe('предпросмотр карточки каталога', () => {
   it('показывает неопубликованный архив так, как его увидит посетитель', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     renderApp({ path: '/dashboard/arc_zk_primer' })
     await screen.findByText('How the catalog will show it')
@@ -178,7 +185,7 @@ describe('предпросмотр карточки каталога', () => {
   })
 
   it('опубликованному архиву показывает ссылку вместо предпросмотра', async () => {
-    db.session = MOCK_CREATOR
+    signIn()
 
     renderApp({ path: '/dashboard/arc_solana_course' })
     await screen.findByText('In the catalog')

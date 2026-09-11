@@ -104,7 +104,7 @@ function FullNav({ wallet }: { wallet?: string }) {
               и поставлен в один ряд с переключателями языка и темы. */}
           <WalletAddress
             address={wallet}
-            className="border-border text-muted-foreground rounded-sm border px-2 py-1.5 text-xs leading-none"
+            className="border-border rounded-sm border px-2 py-1.5 text-xs leading-none"
           />
         </>
       ) : (

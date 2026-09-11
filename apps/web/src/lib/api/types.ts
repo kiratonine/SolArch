@@ -95,8 +95,8 @@ export const creatorSummarySchema = z.object({
 export type CreatorSummary = z.infer<typeof creatorSummarySchema>
 
 /**
- * ДОПУЩЕНИЕ (открытый вопрос Q4): форма постраничного ответа каталога.
- * Если backend выберет курсорную пагинацию, правится только это место и `marketplace.ts`.
+ * Форма постраничного ответа каталога. Backend подтвердил её (ответ на Q4) и рядом
+ * кладёт тот же счёт вложенным объектом `pagination` — его не читаем, это повтор.
  */
 export function paginatedSchema<T extends z.ZodTypeAny>(item: T) {
   return z.object({
@@ -143,6 +143,8 @@ export type SessionUser = z.infer<typeof sessionUserSchema>
 
 export const walletVerifyResponseSchema = z.object({
   authenticated: z.boolean(),
+  /** JWT сессии. Едет в `Authorization: Bearer` с каждым запросом кабинета (ответ на Q1). */
+  access_token: z.string(),
   user: sessionUserSchema,
 })
 export type WalletVerifyResponse = z.infer<typeof walletVerifyResponseSchema>
@@ -237,11 +239,9 @@ export const creatorArchiveSchema = z.object({
   license_policy: licensePolicySchema,
   creator_payout_wallet: z.string(),
   /**
-   * ДОПУЩЕНИЕ (открытый вопрос Q17): публикация требует подготовленного USDC ATA
-   * автора (`docs/API.md` §3), но поля, по которому фронт мог бы это узнать,
-   * в контракте нет. Аккаунт заводит backend сам (ADR-009), поэтому ожидание
-   * короткое — и всё же кнопку публикации надо на чём-то гасить, иначе автор
-   * узнаёт о неготовности только из отказа.
+   * Готов ли USDC ATA автора, без которого публикация невозможна (`docs/API.md` §3).
+   * В контракте поля не было; backend его отдаёт (ответ на Q17), и на нём гаснет
+   * кнопка публикации — иначе автор узнавал бы о неготовности только из отказа.
    */
   payout_account_ready: z.boolean(),
   file_count: z.number(),
@@ -274,17 +274,11 @@ export interface UploadInitRequest {
 }
 
 /**
- * ДОПУЩЕНИЕ (открытый вопрос Q2): поддерживаем оба транспорта сразу.
- *
- * Если backend вернул `upload_url` — грузим файл прямо в хранилище.
- * Если нет — отправляем байты через сам API. Ответ на Q2 не сломает код,
- * изменится только то, какая ветка отработает.
+ * Ответ на `init`. Байты идут через сам API (ответ на Q2), и из ответа нужен только
+ * идентификатор: `upload_url` backend тоже присылает, но адрес строит `uploads.ts`.
  */
 export const uploadInitResponseSchema = z.object({
   upload_id: z.string(),
-  upload_url: z.string().optional(),
-  method: z.enum(['PUT', 'POST']).optional(),
-  headers: z.record(z.string(), z.string()).optional(),
 })
 export type UploadInitResponse = z.infer<typeof uploadInitResponseSchema>
 

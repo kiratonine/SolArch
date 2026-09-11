@@ -64,8 +64,10 @@ function AnalyticsPage() {
   })
 
   if (archive.isError) {
-    // Чужой архив для автора не существует: владение проверяет backend и отвечает 404.
-    const missing = isApiError(archive.error) && archive.error.isNotFound
+    // Чужой архив для автора не существует. Backend отвечает на него 403, а не 404,
+    // но для автора это одно и то же: архива, который он может открыть, нет.
+    const missing =
+      isApiError(archive.error) && (archive.error.isNotFound || archive.error.isForbidden)
 
     return (
       <Container>
