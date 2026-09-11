@@ -36,8 +36,11 @@ export class UploadsController {
   @Post(':uploadId/data')
   async uploadData(
     @Param('uploadId') uploadId: string,
+    @CurrentUser() user: any,
     @Req() req: Request,
   ) {
+    await this.uploadsService.assertUploadOwner(user.id, uploadId);
+
     const uploadDir = path.join('./storage_data', 'uploads');
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
@@ -52,7 +55,7 @@ export class UploadsController {
       req.on('error', reject);
     });
 
-    return this.uploadsService.setUploadedFile(uploadId, targetPath);
+    return this.uploadsService.setUploadedFile(user.id, uploadId, targetPath);
   }
 
   @Post(':uploadId/file')
@@ -76,12 +79,13 @@ export class UploadsController {
   )
   async uploadFile(
     @Param('uploadId') uploadId: string,
+    @CurrentUser() user: any,
     @UploadedFile() file: Express.Multer.File,
   ) {
     if (!file) {
       throw new BadRequestException('No file uploaded');
     }
-    return this.uploadsService.setUploadedFile(uploadId, file.path);
+    return this.uploadsService.setUploadedFile(user.id, uploadId, file.path);
   }
 
   @Post(':uploadId/complete')

@@ -42,11 +42,15 @@ export class MarketplaceService {
       orderBy = { priceAmount: 'desc' };
     }
 
+    const isPopularitySort =
+      query.sort === 'popular_week' ||
+      query.sort === 'popular_month' ||
+      query.sort === 'most_downloaded';
+
     const [archives, total] = await Promise.all([
       this.prisma.archive.findMany({
         where,
-        skip,
-        take: limit,
+        ...(isPopularitySort ? {} : { skip, take: limit }),
         orderBy,
         include: {
           listing: true,
@@ -84,6 +88,7 @@ export class MarketplaceService {
 
       return {
         archive_id: arc.id,
+        id: arc.id,
         slug: arc.listing?.slug || arc.id,
         title: arc.title,
         short_description: arc.shortDescription,
@@ -121,7 +126,11 @@ export class MarketplaceService {
       });
     }
 
-    const cleanItems = items.map(({ _windowPaid, _windowDownloads, ...rest }) => rest);
+    const pagedItems = isPopularitySort
+      ? items.slice(skip, skip + limit)
+      : items;
+
+    const cleanItems = pagedItems.map(({ _windowPaid, _windowDownloads, ...rest }) => rest);
 
     return {
       items: cleanItems,
@@ -192,10 +201,12 @@ export class MarketplaceService {
 
     return {
       archive_id: arc.id,
+      id: arc.id,
       slug: listing.slug,
       title: arc.title,
       short_description: arc.shortDescription,
       description: arc.description,
+      cover_url: listing.coverStorageKey || null,
       price: {
         amount: arc.priceAmount,
         currency: arc.priceCurrency,

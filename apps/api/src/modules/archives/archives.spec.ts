@@ -92,4 +92,68 @@ describe('ArchivesService & Economics', () => {
     expect(formatted.metrics.paid_unlocks).toBe(1);
     expect(formatted.payout_account_ready).toBe(true);
   });
+
+  test('findOne throws NotFoundException when caller does not own archive (B8)', async () => {
+    const prisma = (service as any).prisma;
+    prisma.archive.findUnique.mockResolvedValue({
+      id: 'arc_001',
+      creatorUserId: 'usr_owner',
+    });
+
+    await expect(service.findOne('arc_001', 'usr_other')).rejects.toThrow('Archive not found');
+  });
+
+  test('update handles cover_url and maps to coverStorageKey (B9)', async () => {
+    const prisma = (service as any).prisma;
+    prisma.archive.findUnique.mockResolvedValue({
+      id: 'arc_001',
+      creatorUserId: 'usr_001',
+      title: 'Old Title',
+      listing: { coverStorageKey: null },
+    });
+    prisma.archive.update.mockResolvedValue({
+      id: 'arc_001',
+      title: 'New Title',
+      listing: { coverStorageKey: 'covers/my-cover.png' },
+    });
+
+    await service.update('arc_001', 'usr_001', {
+      title: 'New Title',
+      cover_url: 'covers/my-cover.png',
+    });
+
+    expect(prisma.archive.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          listing: expect.objectContaining({
+            update: expect.objectContaining({
+              coverStorageKey: 'covers/my-cover.png',
+            }),
+          }),
+        }),
+      }),
+    );
+  });
+
+  test('publish throws ConflictException when ATA is not ready and skipAtaVerification is false (B5)', async () => {
+    const prisma = (service as any).prisma;
+    const env = (service as any).env;
+    env.skipAtaVerification = false;
+    env.solanaRpcUrl = 'http://localhost:8899';
+    env.feePayerKeypair = { publicKey: { toBase58: () => '11111111111111111111111111111111' } };
+
+    prisma.archive.findUnique.mockResolvedValue({
+      id: 'arc_001',
+      creatorUserId: 'usr_001',
+      technicalStatus: 'ready',
+      creatorPayoutWallet: '11111111111111111111111111111111',
+      creatorUsdcAta: '22222222222222222222222222222222',
+    });
+
+    await expect(service.publish('arc_001', 'usr_001')).rejects.toThrow(
+      expect.objectContaining({
+        response: expect.objectContaining({ code: 'PAYOUT_ACCOUNT_NOT_READY' }),
+      }),
+    );
+  });
 });

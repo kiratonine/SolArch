@@ -7,7 +7,9 @@ import {
 } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
-import AdmZip from 'adm-zip';
+import * as AdmZipModule from 'adm-zip';
+const AdmZip = (AdmZipModule as any).default || AdmZipModule;
+type AdmZip = import('adm-zip');
 import { PrismaService } from '@/common/prisma.service';
 import { EnvService } from '@/config/env.service';
 import { ArchiveBuilderAdapter } from './archive-builder.adapter';
@@ -73,11 +75,18 @@ export class UploadsService {
     }
 
     if (archive.creatorUserId !== userId) {
-      throw new ForbiddenException('You do not own this archive');
+      throw new NotFoundException('Archive not found');
+    }
+
+    const filename = dto.filename || dto.file_name;
+    const sizeBytes = dto.size_bytes !== undefined ? dto.size_bytes : dto.file_size;
+
+    if (!filename || sizeBytes === undefined) {
+      throw new BadRequestException('filename and size_bytes are required');
     }
 
     const maxBytes = 512 * 1024 * 1024; // 512 MiB
-    if (dto.size_bytes > maxBytes) {
+    if (sizeBytes > maxBytes) {
       throw new BadRequestException('Uploaded archive exceeds 512 MiB size limit');
     }
 
@@ -85,8 +94,8 @@ export class UploadsService {
       data: {
         archiveId: dto.archive_id,
         sourceType: 'zip',
-        originalFilename: dto.filename,
-        sizeBytes: BigInt(dto.size_bytes),
+        originalFilename: filename,
+        sizeBytes: BigInt(sizeBytes),
         storageKey: '',
         status: 'pending',
       },
@@ -104,11 +113,43 @@ export class UploadsService {
     };
   }
 
-  async setUploadedFile(uploadId: string, filePath: string) {
+  async assertUploadOwner(userId: string, uploadId: string) {
     const upload = await this.prisma.upload.findUnique({
       where: { id: uploadId },
+      include: { archive: true },
+    });
+
+    if (!upload) {
+      throw new NotFoundException('Upload not found');
+    }
+
+    if (upload.archive.creatorUserId !== userId) {
+      throw new NotFoundException('Upload not found');
+    }
+
+    return upload;
+  }
+
+  async setUploadedFile(userId: string, uploadId: string, filePath: string) {
+    const upload = await this.prisma.upload.findUnique({
+      where: { id: uploadId },
+      include: { archive: true },
     });
     if (!upload) {
+      if (fs.existsSync(filePath)) {
+        try {
+          fs.unlinkSync(filePath);
+        } catch {}
+      }
+      throw new NotFoundException('Upload not found');
+    }
+
+    if (upload.archive.creatorUserId !== userId) {
+      if (fs.existsSync(filePath)) {
+        try {
+          fs.unlinkSync(filePath);
+        } catch {}
+      }
       throw new NotFoundException('Upload not found');
     }
 
@@ -134,7 +175,7 @@ export class UploadsService {
     }
 
     if (upload.archive.creatorUserId !== userId) {
-      throw new ForbiddenException('You do not own this archive');
+      throw new NotFoundException('Upload not found');
     }
 
     if (!upload.storageKey || !fs.existsSync(upload.storageKey)) {
@@ -315,12 +356,24 @@ export class UploadsService {
     }
 
     if (upload.archive.creatorUserId !== userId) {
-      throw new ForbiddenException('You do not own this archive');
+      throw new NotFoundException('Upload not found');
     }
 
     await this.prisma.upload.update({
       where: { id: uploadId },
       data: { status: 'cancelled' },
+    });
+
+    // Check if the archive already has ready files or revert to draft
+    const fileCount = await this.prisma.archivePublicFile.count({
+      where: { archiveId: upload.archiveId },
+    });
+
+    await this.prisma.archive.update({
+      where: { id: upload.archiveId },
+      data: {
+        technicalStatus: fileCount > 0 ? 'ready' : 'draft',
+      },
     });
 
     return { status: 'cancelled' };

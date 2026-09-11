@@ -144,7 +144,6 @@ describe('PaymentsService & Solana Pay', () => {
     const platformAta = Keypair.generate().publicKey.toBase58();
     const reference = Keypair.generate().publicKey.toBase58();
     const secret = 'test_secret_32_bytes_token32_random_secret_43';
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const secretHmac = require('@/crypto/token32.util').hashSecretToken(secret, 'test-hmac-secret-pepper-minimum-32');
 
     prisma.paymentIntent.findUnique.mockResolvedValue({
@@ -222,7 +221,6 @@ describe('PaymentsService & Solana Pay', () => {
     const platformAta = Keypair.generate().publicKey.toBase58();
     const reference = Keypair.generate().publicKey.toBase58();
     const secret = 'test_secret_32_bytes_token32_random_secret_43';
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const secretHmac = require('@/crypto/token32.util').hashSecretToken(secret, 'test-hmac-secret-pepper-minimum-32');
 
     prisma.paymentIntent.findUnique.mockResolvedValue({

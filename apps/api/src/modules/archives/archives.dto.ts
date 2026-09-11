@@ -79,6 +79,10 @@ export class UpdateArchiveDto {
 
   @IsOptional()
   @IsString()
+  cover_url?: string;
+
+  @IsOptional()
+  @IsString()
   category?: string;
 
   @IsOptional()

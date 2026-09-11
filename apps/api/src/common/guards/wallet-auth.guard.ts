@@ -3,15 +3,20 @@ import {
   CanActivate,
   ExecutionContext,
   UnauthorizedException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '@/common/prisma.service';
+import { AuthService } from '@/modules/auth/auth.service';
 
 @Injectable()
 export class WalletAuthGuard implements CanActivate {
   constructor(
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => AuthService))
+    private readonly authService: AuthService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -22,6 +27,10 @@ export class WalletAuthGuard implements CanActivate {
     }
 
     const token = authHeader.substring(7).trim();
+    if (this.authService && this.authService.isTokenRevoked(token)) {
+      throw new UnauthorizedException('Token has been revoked');
+    }
+
     try {
       const decoded = await this.jwtService.verifyAsync(token);
       const user = await this.prisma.user.findUnique({

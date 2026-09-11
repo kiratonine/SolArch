@@ -189,30 +189,32 @@ SolArch — децентрализованная платформа дистри
 {
   "items": [
     {
+      "archive_id": "arc_01j7...",
       "id": "arc_01j7...",
       "slug": "secure-financial-models-2026",
       "title": "Financial Models 2026",
       "short_description": "Production models",
       "cover_url": null,
+      "creator": {
+        "display_name": "7xKX...gAsU"
+      },
       "price": {
         "currency": "USDC",
-        "amount": 25.00
+        "amount": "25.00"
       },
       "economics": {
-        "price_usdc": 25.00,
         "platform_fee_bps": 500,
-        "creator_share_bps": 9500,
-        "creator_payout_usdc": 23.75,
-        "platform_fee_usdc": 1.25,
-        "solana_network_fee_paid_by": "platform"
+        "creator_share": "23.75",
+        "platform_share": "1.25",
+        "network_fees_paid_by": "solarch"
       },
+      "file_count": 4,
+      "size_bytes": 1420580,
       "metrics": {
         "views": 142,
         "downloads": 38,
         "paid_unlocks": 12
-      },
-      "tags": ["finance", "excel"],
-      "created_at": "2026-09-08T12:00:00.000Z"
+      }
     }
   ],
   "page": 1,
@@ -229,8 +231,8 @@ SolArch — децентрализованная платформа дистри
 ```
 
 #### Задачи для фронтенда:
-- `apps/web/src/lib/api/marketplace.ts` парсит ответ через `marketplaceArchiveListSchema.parse(data)` **без каких-либо изменений**.
-- Поддерживаются параметры запроса: `page`, `per_page` (или `limit`), `query`, `category`, `sort_by` (`newest`, `popular`, `price_asc`, `price_desc`).
+- `apps/web/src/lib/api/marketplace.ts` парсит ответ через `marketplaceArchiveListSchema.parse(data)`.
+- Поддерживаются параметры запроса: `page`, `per_page` (или `limit`), `search` (или `query`), `category`, `sort` (или `sort_by`: `popular_week`, `popular_month`, `most_downloaded`, `price_asc`, `price_desc`).
 
 ---
 
@@ -242,20 +244,17 @@ SolArch — децентрализованная платформа дистри
 #### Пример ответа бэкенда:
 ```json
 {
+  "archive_id": "arc_01j7...",
   "id": "arc_01j7...",
   "slug": "secure-financial-models-2026",
   "title": "Financial Models 2026",
   "short_description": "Production models",
   "description": "Full archive details",
   "cover_url": null,
-  "price": { "currency": "USDC", "amount": 25.00 },
-  "economics": {
-    "price_usdc": 25.00,
-    "platform_fee_bps": 500,
-    "creator_share_bps": 9500,
-    "creator_payout_usdc": 23.75,
-    "platform_fee_usdc": 1.25,
-    "solana_network_fee_paid_by": "platform"
+  "price": { "currency": "USDC", "amount": "25.00" },
+  "creator": {
+    "display_name": "7xKX...gAsU",
+    "wallet": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU"
   },
   "license_policy": {
     "max_devices": 1,
@@ -272,8 +271,7 @@ SolArch — децентрализованная платформа дистри
   "download_availability": true,
   "file_count": 4,
   "size_bytes": 1420580,
-  "metrics": { "views": 142, "downloads": 38, "paid_unlocks": 12 },
-  "created_at": "2026-09-08T12:00:00.000Z"
+  "metrics": { "views": 142, "downloads": 38, "paid_unlocks": 12 }
 }
 ```
 
@@ -288,7 +286,8 @@ SolArch — децентрализованная платформа дистри
 1. `GET /v1/archives`: возвращает массив объектов текущего авторизованного автора в формате `creatorArchiveSchema`.
 2. `GET /v1/archives/:archiveId`: возвращает детальный объект архива автора.
 3. `GET /v1/archives/:archiveId/files`: возвращает массив файлов распакованного архива (включая неопубликованные черновики).
-4. `POST /v1/archives/:archiveId/publish`: переводит архив в статус `published`, гарантирует наличие USDC ATA автора и возвращает обновлённый объект архива автора.
+4. `PATCH /v1/archives/:archiveId`: обновляет метаданные архива, принимает как `cover_storage_key`, так и `cover_url`.
+5. `POST /v1/archives/:archiveId/publish`: переводит архив в статус `published`, верифицирует/создаёт USDC ATA автора (при недоступности в production возвращает `409 PAYOUT_ACCOUNT_NOT_READY`) и возвращает обновлённый объект архива автора.
 
 #### Формат объекта автора (`CreatorArchive`):
 ```json
@@ -303,15 +302,13 @@ SolArch — децентрализованная платформа дистри
   "marketplace_status": "draft",
   "price": {
     "currency": "USDC",
-    "amount": 10.00
+    "amount": "10.00"
   },
   "economics": {
-    "price_usdc": 10.00,
     "platform_fee_bps": 500,
-    "creator_share_bps": 9500,
-    "creator_payout_usdc": 9.50,
-    "platform_fee_usdc": 0.50,
-    "solana_network_fee_paid_by": "platform"
+    "creator_share": "9.50",
+    "platform_share": "0.50",
+    "network_fees_paid_by": "solarch"
   },
   "license_policy": {
     "max_devices": 1,
@@ -348,7 +345,7 @@ sequenceDiagram
     participant Storage as Temp Storage
     participant Engine as ArchiveBuilder (solarch-cli)
 
-    Creator->>API: POST /v1/uploads/init { archive_id, file_name, file_size }
+    Creator->>API: POST /v1/uploads/init { archive_id, filename, size_bytes }
     API-->>Creator: 201 Created { upload_id, upload_url, max_chunk_size }
     
     Creator->>API: POST /v1/uploads/:uploadId/data (Бинарный поток ZIP)
@@ -360,6 +357,8 @@ sequenceDiagram
     API->>Engine: Сборка .slr контейнера
     API-->>Creator: 200 OK { upload_id, archive_id, technical_status: "ready", ... }
 ```
+
+> **Параметры `init`:** бэкенд принимает как канонические имена `filename` и `size_bytes`, так и snake_case алиасы `file_name` и `file_size`.
 
 #### Поддерживаемые протоколы передачи файла:
 1. **Бинарный стрим (Основной)**:
@@ -382,6 +381,9 @@ sequenceDiagram
 }
 ```
 > Поле `upload_id` гарантированно возвращается, что полностью удовлетворяет схему `uploadCompleteResponseSchema` на фронтенде.
+
+> [!NOTE]
+> **Архитектурный статус упаковки `.slr` (B7):** В соответствии с Инвариантом #9 (`AGENTS.md`) бэкенд не реализует бинарную упаковку контейнеров на TypeScript, а делегирует её CLI-адаптеру `ArchiveBuilderAdapter`. На этапе текущей изолированной разработки `ArchiveBuilderAdapter` упаковывает валидный канонический JCS-заголовок (Public Header Snapshot) и эмулирует зашифрованные чанки до прямой интеграции с бинарником `solarch-cli` из ветки viewer.
 
 ---
 

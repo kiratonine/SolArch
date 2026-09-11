@@ -91,7 +91,6 @@ export function verifyWalletSignature(
     ) {
       sigBytes = Buffer.from(signatureBase58OrBase64, 'base64');
     } else {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const bs58 = require('bs58');
       sigBytes = Buffer.from(bs58.decode(signatureBase58OrBase64));
     }

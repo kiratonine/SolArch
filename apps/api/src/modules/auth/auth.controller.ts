@@ -3,10 +3,12 @@ import {
   Post,
   Get,
   Body,
+  Req,
   UseGuards,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { AuthService } from './auth.service';
 import { ChallengeRequestDto, VerifyRequestDto } from './auth.dto';
 import { WalletAuthGuard } from '@/common/guards/wallet-auth.guard';
@@ -41,7 +43,12 @@ export class AuthController {
   @Post('auth/logout')
   @HttpCode(HttpStatus.OK)
   @UseGuards(WalletAuthGuard)
-  async logout() {
+  async logout(@Req() req: Request) {
+    const authHeader = req.headers['authorization'];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7).trim();
+      this.authService.revokeToken(token);
+    }
     return { success: true };
   }
 }

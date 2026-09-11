@@ -2,7 +2,7 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
-  ForbiddenException,
+  ConflictException,
   Logger,
 } from '@nestjs/common';
 import { PublicKey, Connection, Transaction, sendAndConfirmTransaction } from '@solana/web3.js';
@@ -14,11 +14,33 @@ import { CreateArchiveDto, UpdateArchiveDto } from './archives.dto';
 @Injectable()
 export class ArchivesService {
   private readonly logger = new Logger(ArchivesService.name);
+  private readonly ataStatusCache = new Map<string, { ready: boolean; timestamp: number }>();
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly env: EnvService,
   ) {}
+
+  async isAtaReady(ataAddress?: string | null): Promise<boolean> {
+    if (!ataAddress) return false;
+    if (this.env.skipAtaVerification) return true;
+
+    const cached = this.ataStatusCache.get(ataAddress);
+    if (cached && Date.now() - cached.timestamp < 30_000) {
+      return cached.ready;
+    }
+
+    try {
+      const connection = new Connection(this.env.solanaRpcUrl, 'confirmed');
+      const ataPubKey = new PublicKey(ataAddress);
+      await getAccount(connection, ataPubKey);
+      this.ataStatusCache.set(ataAddress, { ready: true, timestamp: Date.now() });
+      return true;
+    } catch {
+      this.ataStatusCache.set(ataAddress, { ready: false, timestamp: Date.now() });
+      return false;
+    }
+  }
 
   calculateEconomics(amountStr: string) {
     const amountNum = parseFloat(amountStr);
@@ -37,7 +59,7 @@ export class ArchivesService {
     };
   }
 
-  formatCreatorArchive(arc: any) {
+  formatCreatorArchive(arc: any, isAtaReadyOverride?: boolean) {
     const economics = this.calculateEconomics(arc.priceAmount);
     const views = arc.events?.filter((e: any) => e.eventType === 'archive_view').length || 0;
     const downloads = arc.events?.filter((e: any) => e.eventType === 'archive_download').length || 0;
@@ -65,7 +87,7 @@ export class ArchivesService {
         watermark_enabled: arc.watermarkEnabled,
       },
       creator_payout_wallet: arc.creatorPayoutWallet,
-      payout_account_ready: Boolean(arc.creatorUsdcAta),
+      payout_account_ready: isAtaReadyOverride !== undefined ? isAtaReadyOverride : Boolean(arc.creatorUsdcAta),
       file_count: arc.publicFiles?.length || 0,
       size_bytes: sizeBytes,
       metrics: {
@@ -148,6 +170,7 @@ export class ArchivesService {
       include: { listing: true, publicFiles: true, events: true, payments: true },
     });
 
+    const isReady = await this.isAtaReady(archive.creatorUsdcAta);
     return {
       archive_id: archive.id,
       technical_status: archive.technicalStatus,
@@ -157,7 +180,7 @@ export class ArchivesService {
         amount: archive.priceAmount,
       },
       economics,
-      ...this.formatCreatorArchive(archive),
+      ...this.formatCreatorArchive(archive, isReady),
     };
   }
 
@@ -173,7 +196,12 @@ export class ArchivesService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return archives.map((arc) => this.formatCreatorArchive(arc));
+    return Promise.all(
+      archives.map(async (arc) => {
+        const isReady = await this.isAtaReady(arc.creatorUsdcAta);
+        return this.formatCreatorArchive(arc, isReady);
+      }),
+    );
   }
 
   async findOne(archiveId: string, userId: string) {
@@ -187,10 +215,11 @@ export class ArchivesService {
     }
 
     if (archive.creatorUserId !== userId) {
-      throw new ForbiddenException('You do not own this archive');
+      throw new NotFoundException('Archive not found');
     }
 
-    return this.formatCreatorArchive(archive);
+    const isReady = await this.isAtaReady(archive.creatorUsdcAta);
+    return this.formatCreatorArchive(archive, isReady);
   }
 
   async getFilesForCreator(archiveId: string, userId: string) {
@@ -208,7 +237,7 @@ export class ArchivesService {
     }
 
     if (archive.creatorUserId !== userId) {
-      throw new ForbiddenException('You do not own this archive');
+      throw new NotFoundException('Archive not found');
     }
 
     return {
@@ -233,8 +262,10 @@ export class ArchivesService {
     }
 
     if (archive.creatorUserId !== userId) {
-      throw new ForbiddenException('You do not own this archive');
+      throw new NotFoundException('Archive not found');
     }
+
+    const coverKey = dto.cover_url !== undefined ? dto.cover_url : dto.cover_storage_key;
 
     const updated = await this.prisma.archive.update({
       where: { id: archiveId },
@@ -247,7 +278,7 @@ export class ArchivesService {
             title: dto.title ?? archive.title,
             shortDescription: dto.short_description ?? archive.shortDescription,
             description: dto.description ?? archive.description,
-            coverStorageKey: dto.cover_storage_key,
+            coverStorageKey: coverKey !== undefined ? coverKey : archive.listing?.coverStorageKey,
             category: dto.category,
             tags: dto.tags,
           },
@@ -270,7 +301,7 @@ export class ArchivesService {
     }
 
     if (archive.creatorUserId !== userId) {
-      throw new ForbiddenException('You do not own this archive');
+      throw new NotFoundException('Archive not found');
     }
 
     if (archive.technicalStatus !== 'ready') {
@@ -278,6 +309,7 @@ export class ArchivesService {
     }
 
     // Check or auto-create creator USDC ATA on Solana
+    let ataReady = false;
     try {
       const connection = new Connection(this.env.solanaRpcUrl, 'confirmed');
       const creatorPubKey = new PublicKey(archive.creatorPayoutWallet);
@@ -286,6 +318,7 @@ export class ArchivesService {
       try {
         await getAccount(connection, creatorAta);
         this.logger.log(`Creator USDC ATA ${creatorAta.toBase58()} already exists`);
+        ataReady = true;
       } catch {
         // Account does not exist, auto-create using SolArch fee payer
         this.logger.log(`Creator USDC ATA missing. Creating ATA on-chain sponsored by SolArch...`);
@@ -299,9 +332,21 @@ export class ArchivesService {
         );
         const sig = await sendAndConfirmTransaction(connection, tx, [this.env.feePayerKeypair]);
         this.logger.log(`Creator USDC ATA created. Signature: ${sig}`);
+        ataReady = true;
       }
     } catch (err) {
-      this.logger.warn(`Could not verify/create creator ATA on-chain (continuing for dev/test): ${err.message}`);
+      this.logger.warn(`Could not verify/create creator ATA on-chain: ${err.message}`);
+    }
+
+    if (!ataReady && !this.env.skipAtaVerification) {
+      throw new ConflictException({
+        code: 'PAYOUT_ACCOUNT_NOT_READY',
+        message: 'Creator USDC Associated Token Account is not ready or could not be created',
+      });
+    }
+
+    if (archive.creatorUsdcAta) {
+      this.ataStatusCache.set(archive.creatorUsdcAta, { ready: true, timestamp: Date.now() });
     }
 
     const updated = await this.prisma.archive.update({
@@ -319,7 +364,7 @@ export class ArchivesService {
     });
 
     return {
-      ...this.formatCreatorArchive(updated),
+      ...this.formatCreatorArchive(updated, true),
       published_at: updated.listing?.publishedAt,
     };
   }
@@ -334,7 +379,7 @@ export class ArchivesService {
     }
 
     if (archive.creatorUserId !== userId) {
-      throw new ForbiddenException('You do not own this archive');
+      throw new NotFoundException('Archive not found');
     }
 
     const updated = await this.prisma.archive.update({
@@ -350,8 +395,9 @@ export class ArchivesService {
       include: { listing: true, publicFiles: true, events: true, payments: true },
     });
 
+    const isReady = await this.isAtaReady(archive.creatorUsdcAta);
     return {
-      ...this.formatCreatorArchive(updated),
+      ...this.formatCreatorArchive(updated, isReady),
     };
   }
 
@@ -377,8 +423,9 @@ export class ArchivesService {
       include: { listing: true, publicFiles: true, events: true, payments: true },
     });
 
+    const isReady = await this.isAtaReady(archive.creatorUsdcAta);
     return {
-      ...this.formatCreatorArchive(updated),
+      ...this.formatCreatorArchive(updated, isReady),
     };
   }
 }

@@ -41,6 +41,13 @@ export class EnvService {
     return this.configService.get<string>('SOLANA_NETWORK', 'devnet');
   }
 
+  get skipAtaVerification(): boolean {
+    return (
+      this.configService.get<string>('SOLANA_SKIP_ATA_CHECK') === 'true' ||
+      this.configService.get<string>('NODE_ENV') === 'test'
+    );
+  }
+
   get usdcMint(): PublicKey {
     const mint = this.configService.get<string>(
       'SOLANA_USDC_MINT',
@@ -65,7 +72,6 @@ export class EnvService {
           const arr = JSON.parse(raw);
           return Keypair.fromSecretKey(Uint8Array.from(arr));
         }
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
         const bs58 = require('bs58');
         return Keypair.fromSecretKey(bs58.decode(raw));
       } catch (e) {

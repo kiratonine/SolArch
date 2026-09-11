@@ -22,17 +22,20 @@ export class MarketplaceController {
   @Get('archives')
   async listArchives(
     @Query('sort') sort?: string,
+    @Query('sort_by') sortBy?: string,
     @Query('search') search?: string,
+    @Query('query') queryParam?: string,
     @Query('category') category?: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
+    @Query('per_page') perPage?: number,
   ) {
     return this.marketplaceService.listArchives({
-      sort,
-      search,
+      sort: sort || sortBy,
+      search: search || queryParam,
       category,
       page,
-      limit,
+      limit: limit || perPage,
     });
   }
 

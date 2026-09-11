@@ -15,11 +15,32 @@ interface StoredChallenge {
 @Injectable()
 export class AuthService {
   private readonly challenges = new Map<string, StoredChallenge>();
+  private readonly revokedTokens = new Map<string, number>();
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
   ) {}
+
+  revokeToken(token: string): void {
+    try {
+      const decoded: any = this.jwtService.decode(token);
+      const expMs = decoded?.exp ? decoded.exp * 1000 : Date.now() + 7 * 24 * 60 * 60 * 1000;
+      this.revokedTokens.set(token, expMs);
+    } catch {
+      this.revokedTokens.set(token, Date.now() + 7 * 24 * 60 * 60 * 1000);
+    }
+  }
+
+  isTokenRevoked(token: string): boolean {
+    const exp = this.revokedTokens.get(token);
+    if (!exp) return false;
+    if (Date.now() > exp) {
+      this.revokedTokens.delete(token);
+      return false;
+    }
+    return true;
+  }
 
   async createChallenge(dto: ChallengeRequestDto): Promise<ChallengeResponseDto> {
     try {
