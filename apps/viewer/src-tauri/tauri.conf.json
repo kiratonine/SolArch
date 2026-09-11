@@ -25,6 +25,25 @@
     ]
   },
   "bundle": {
-    "active": false
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "SolArch",
+    "category": "Utility",
+    "shortDescription": "Secure viewer for SolArch archives",
+    "fileAssociations": [
+      {
+        "ext": ["slr"],
+        "name": "SolArch Archive",
+        "description": "SolArch Archive",
+        "role": "Viewer"
+      }
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["Russian", "English"],
+        "displayLanguageSelector": true
+      }
+    }
   }
 }

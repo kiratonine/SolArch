@@ -103,7 +103,7 @@ pub fn parse_exact<T: DeserializeOwned + Serialize>(bytes: &[u8], error: Error) 
 
 /// Strictly parses a bounded transport JSON value without requiring the wire
 /// property order or whitespace to already be RFC 8785 canonical.
-pub(crate) fn parse_bounded<T: DeserializeOwned>(
+pub fn parse_bounded<T: DeserializeOwned>(
     bytes: &[u8],
     max_depth: usize,
     error: Error,

@@ -14,6 +14,26 @@ pub enum ViewerError {
     CorruptSecureStore,
     #[error("local license storage failed")]
     LicenseStorage,
+    #[error("local payment state storage failed")]
+    PaymentStorage,
+    #[error("backend is unavailable")]
+    BackendUnavailable,
+    #[error("backend metadata does not match the archive")]
+    MetadataMismatch,
+    #[error("payment intent credential is unavailable")]
+    MissingIntentCredential,
+    #[error("device refresh credential is unavailable")]
+    MissingRefreshCredential,
+    #[error("payment intent expired")]
+    PaymentExpired,
+    #[error("payment failed")]
+    PaymentFailed,
+    #[error("device limit reached")]
+    DeviceLimitReached,
+    #[error("license revoked")]
+    LicenseRevoked,
+    #[error("archive blocked")]
+    ArchiveBlocked,
     #[error("device license is invalid")]
     InvalidLicense,
     #[error("device license belongs to another device")]
@@ -45,6 +65,24 @@ impl From<ViewerError> for CommandError {
                 ("CORRUPT_SECURE_STORE", "errors.corruptSecureStore")
             }
             ViewerError::LicenseStorage => ("LICENSE_STORAGE", "errors.licenseStorage"),
+            ViewerError::PaymentStorage => ("PAYMENT_STORAGE", "errors.paymentStorage"),
+            ViewerError::BackendUnavailable => ("BACKEND_UNAVAILABLE", "errors.backendUnavailable"),
+            ViewerError::MetadataMismatch => ("METADATA_MISMATCH", "errors.metadataMismatch"),
+            ViewerError::MissingIntentCredential => (
+                "MISSING_INTENT_CREDENTIAL",
+                "errors.missingIntentCredential",
+            ),
+            ViewerError::MissingRefreshCredential => (
+                "MISSING_REFRESH_CREDENTIAL",
+                "errors.missingRefreshCredential",
+            ),
+            ViewerError::PaymentExpired => ("PAYMENT_EXPIRED", "errors.paymentExpired"),
+            ViewerError::PaymentFailed => ("PAYMENT_FAILED", "errors.paymentFailed"),
+            ViewerError::DeviceLimitReached => {
+                ("DEVICE_LIMIT_REACHED", "errors.deviceLimitReached")
+            }
+            ViewerError::LicenseRevoked => ("LICENSE_REVOKED", "errors.licenseRevoked"),
+            ViewerError::ArchiveBlocked => ("ARCHIVE_BLOCKED", "errors.archiveBlocked"),
             ViewerError::InvalidLicense => ("INVALID_LICENSE", "errors.invalidLicense"),
             ViewerError::WrongDevice => ("WRONG_DEVICE", "errors.wrongDevice"),
             ViewerError::Expired => ("LICENSE_EXPIRED", "errors.expired"),

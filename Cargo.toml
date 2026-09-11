@@ -26,3 +26,5 @@ time = "=0.3.47"
 quick-xml = "=0.42.0"
 hpke = { version = "=0.14.1", default-features = false, features = ["alloc", "x25519", "aes"] }
 getrandom = "=0.3.4"
+reqwest = { version = "=0.13.4", default-features = false, features = ["blocking", "rustls"] }
+url = "=2.5.8"

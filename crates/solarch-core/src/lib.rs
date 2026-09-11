@@ -2,7 +2,7 @@
 #![forbid(unsafe_code)]
 
 pub mod archive;
-mod canonical;
+pub mod canonical;
 pub mod device;
 pub mod error;
 pub mod format;

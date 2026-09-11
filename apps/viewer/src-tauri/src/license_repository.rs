@@ -1,3 +1,5 @@
+#[cfg(test)]
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{
     fs::{self, File},
     io::{Read, Write},
@@ -9,8 +11,9 @@ use sha2::{Digest, Sha256};
 use solarch_core::{
     device::DevicePrivateKey,
     license::{
-        validate_cached_grant, LicenseGrant, LicenseTrustStore, LicenseValidationContext,
-        UnwrappedLicense, ValidatedFreshLicenseGrant, MAX_LICENSE_TRANSPORT_BYTES,
+        validate_cached_grant, validate_cached_grant_for_refresh, LicenseGrant, LicenseTrustStore,
+        LicenseValidationContext, UnwrappedLicense, ValidatedFreshLicenseGrant,
+        ValidatedLicenseMetadata, MAX_LICENSE_TRANSPORT_BYTES,
     },
 };
 
@@ -18,6 +21,8 @@ use crate::error::ViewerError;
 
 pub struct LocalLicenseRepository {
     root: PathBuf,
+    #[cfg(test)]
+    fail_next_save: AtomicBool,
 }
 
 impl LocalLicenseRepository {
@@ -27,13 +32,21 @@ impl LocalLicenseRepository {
         if !metadata.is_dir() || metadata.file_type().is_symlink() {
             return Err(ViewerError::LicenseStorage);
         }
-        Ok(Self { root })
+        Ok(Self {
+            root,
+            #[cfg(test)]
+            fail_next_save: AtomicBool::new(false),
+        })
     }
 
     pub fn save_validated(
         &self,
         validated: &ValidatedFreshLicenseGrant<'_>,
     ) -> Result<(), ViewerError> {
+        #[cfg(test)]
+        if self.fail_next_save.swap(false, Ordering::SeqCst) {
+            return Err(ViewerError::LicenseStorage);
+        }
         let grant = validated.signed_grant();
         let bytes = grant
             .to_storage_jcs()
@@ -47,6 +60,11 @@ impl LocalLicenseRepository {
             .write_all(&bytes)
             .map_err(|_| ViewerError::LicenseStorage)?;
         output.commit().map_err(|_| ViewerError::LicenseStorage)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fail_next_save_for_test(&self) {
+        self.fail_next_save.store(true, Ordering::SeqCst);
     }
 
     pub fn has_local_grant(&self, archive_id: &str) -> Result<bool, ViewerError> {
@@ -68,6 +86,21 @@ impl LocalLicenseRepository {
             return Ok(None);
         };
         validate_cached_grant(&grant, trust, device, context)
+            .map(Some)
+            .map_err(ViewerError::from)
+    }
+
+    pub fn load_and_validate_for_refresh(
+        &self,
+        archive_id: &str,
+        trust: &LicenseTrustStore,
+        device: &DevicePrivateKey,
+        context: &LicenseValidationContext<'_>,
+    ) -> Result<Option<ValidatedLicenseMetadata>, ViewerError> {
+        let Some(grant) = self.read(archive_id)? else {
+            return Ok(None);
+        };
+        validate_cached_grant_for_refresh(&grant, trust, device, context)
             .map(Some)
             .map_err(ViewerError::from)
     }

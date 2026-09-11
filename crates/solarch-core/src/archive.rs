@@ -17,8 +17,9 @@ use crate::{
     production_crypto::{
         decode_idx1, decrypt_chunk, decrypt_index, decrypt_manifest, derive_keys, encode_idx1,
         encrypt_chunk, encrypt_index, encrypt_manifest, header_hash, lowercase_hex,
-        signing_message, ArchiveContentKey, IndexRecord, SignatureBlock, SignaturePrefix,
-        MAX_FINALIZED_ARCHIVE_BYTES, SIGNATURE_BLOCK_BYTES, SIGNATURE_PREFIX_BYTES,
+        signing_message, validate_dat1_layout, ArchiveContentKey, DerivedKeys, IndexRecord,
+        SignatureBlock, SignaturePrefix, MAX_FINALIZED_ARCHIVE_BYTES, SIGNATURE_BLOCK_BYTES,
+        SIGNATURE_PREFIX_BYTES,
     },
     source::{SourceFile, SourceInventory},
     Error, Result,
@@ -71,6 +72,38 @@ pub struct VerifiedArchive {
     pub archive_fingerprint: String,
     pub size_bytes: u64,
     pub signing_key_id: String,
+    /// Opaque identity of the exact file object verified while entering Locked.
+    pub file_identity: VerifiedFileIdentity,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VerifiedFileIdentity(FileIdentity);
+
+/// Maximum plaintext returned by one internal protected range request.
+pub const MAX_PROTECTED_READ_BYTES: u64 = 4 * 1024 * 1024;
+
+/// Authenticated, lazy protected-content view over the exact archive verified
+/// while entering Locked. Secret-derived keys never leave this Rust value.
+pub struct ProtectedArchiveReader {
+    path: PathBuf,
+    file: File,
+    identity: FileIdentity,
+    header_hash: [u8; 32],
+    keys: DerivedKeys,
+    manifest: Manifest,
+    records: Vec<IndexRecord>,
+    data_range: std::ops::Range<usize>,
+}
+
+impl std::fmt::Debug for ProtectedArchiveReader {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ProtectedArchiveReader")
+            .field("path", &self.path)
+            .field("file_count", &self.manifest.files.len())
+            .field("keys", &"[REDACTED]")
+            .finish()
+    }
 }
 
 pub struct PendingBuild {
@@ -301,7 +334,145 @@ pub fn verify_archive(
         archive_fingerprint: verification.archive_fingerprint,
         size_bytes: verification.size_bytes,
         signing_key_id: verification.signing_key_id,
+        file_identity: VerifiedFileIdentity(identity),
     })
+}
+
+impl ProtectedArchiveReader {
+    pub fn open(
+        path: &Path,
+        expected_key_id: &str,
+        public_key: [u8; 32],
+        expected_fingerprint: &str,
+        expected_identity: &VerifiedFileIdentity,
+        ack: &ArchiveContentKey,
+    ) -> Result<Self> {
+        let (mut file, ranges, size, identity) = open_layout(path, false)?;
+        if identity != expected_identity.0 {
+            return Err(Error::IntegrityMismatch);
+        }
+        let verification =
+            verify_finalized_open(&mut file, &ranges, size, expected_key_id, public_key)?;
+        if verification.archive_fingerprint != expected_fingerprint {
+            return Err(Error::IntegrityMismatch);
+        }
+
+        let header_bytes = read_range(&mut file, &ranges[0])?;
+        let header = format::parse_header(&header_bytes)?;
+        let digest = header_hash(&header_bytes);
+        let keys = derive_keys(&header_bytes, ack)?;
+        let index_plaintext = decrypt_index(&keys, &digest, &read_range(&mut file, &ranges[2])?)?;
+        let records = decode_idx1(&index_plaintext)?;
+        let manifest_plaintext =
+            decrypt_manifest(&keys, &digest, &read_range(&mut file, &ranges[1])?)?;
+        let manifest = Manifest::parse_exact(
+            &manifest_plaintext,
+            &header.archive_id,
+            records.len() as u64,
+        )?;
+        validate_manifest_record_lengths(&manifest, &records)?;
+        let prefix_end = ranges[3].start.checked_add(8).ok_or(Error::OutOfBounds)?;
+        let prefix = read_range(&mut file, &(ranges[3].start..prefix_end))?;
+        validate_dat1_layout(&prefix, ranges[3].len() as u64, &records)?;
+        identity.verify(path, &file)?;
+
+        Ok(Self {
+            path: path.to_path_buf(),
+            file,
+            identity,
+            header_hash: digest,
+            keys,
+            manifest,
+            records,
+            data_range: ranges[3].clone(),
+        })
+    }
+
+    pub fn files(&self) -> &[ManifestFile] {
+        &self.manifest.files
+    }
+
+    pub fn read_file_range(
+        &mut self,
+        file_id: &str,
+        offset: u64,
+        length: u64,
+    ) -> Result<Zeroizing<Vec<u8>>> {
+        if length > MAX_PROTECTED_READ_BYTES {
+            return Err(Error::LimitExceeded);
+        }
+        let manifest_file = self
+            .manifest
+            .files
+            .iter()
+            .find(|candidate| candidate.file_id == file_id)
+            .ok_or(Error::InvalidManifest)?;
+        let end = offset.checked_add(length).ok_or(Error::OutOfBounds)?;
+        if end > manifest_file.size_bytes {
+            return Err(Error::OutOfBounds);
+        }
+        self.identity.verify(&self.path, &self.file)?;
+        if length == 0 {
+            return Ok(Zeroizing::new(Vec::new()));
+        }
+
+        let output_len = usize::try_from(length).map_err(|_| Error::LimitExceeded)?;
+        let mut output = Zeroizing::new(Vec::with_capacity(output_len));
+        let first = offset / crate::manifest::CHUNK_SIZE;
+        let last = (end - 1) / crate::manifest::CHUNK_SIZE;
+        for file_chunk_index in first..=last {
+            let manifest_index =
+                usize::try_from(file_chunk_index).map_err(|_| Error::InvalidChunkMetadata)?;
+            let chunk_id = *manifest_file
+                .chunks
+                .get(manifest_index)
+                .ok_or(Error::InvalidChunkMetadata)?;
+            let record_index = usize::try_from(chunk_id).map_err(|_| Error::OutOfBounds)?;
+            let record = self
+                .records
+                .get(record_index)
+                .ok_or(Error::InvalidChunkMetadata)?;
+            let ciphertext_start = u64::try_from(self.data_range.start)
+                .map_err(|_| Error::OutOfBounds)?
+                .checked_add(record.offset)
+                .ok_or(Error::OutOfBounds)?;
+            self.file
+                .seek(SeekFrom::Start(ciphertext_start))
+                .map_err(|_| Error::Io)?;
+            let mut ciphertext = vec![0_u8; record.ciphertext_length as usize];
+            self.file.read_exact(&mut ciphertext).map_err(map_read)?;
+            let plaintext = decrypt_chunk(
+                &self.keys,
+                &self.header_hash,
+                chunk_id,
+                record.plaintext_length,
+                &ciphertext,
+            )?;
+
+            let chunk_file_start = file_chunk_index
+                .checked_mul(crate::manifest::CHUNK_SIZE)
+                .ok_or(Error::OutOfBounds)?;
+            let chunk_file_end = chunk_file_start
+                .checked_add(record.plaintext_length as u64)
+                .ok_or(Error::OutOfBounds)?;
+            let copy_start = offset.max(chunk_file_start);
+            let copy_end = end.min(chunk_file_end);
+            let local_start =
+                usize::try_from(copy_start - chunk_file_start).map_err(|_| Error::OutOfBounds)?;
+            let local_end =
+                usize::try_from(copy_end - chunk_file_start).map_err(|_| Error::OutOfBounds)?;
+            output.extend_from_slice(
+                plaintext
+                    .get(local_start..local_end)
+                    .ok_or(Error::OutOfBounds)?,
+            );
+        }
+        if output.len() != output_len {
+            return Err(Error::IntegrityMismatch);
+        }
+        self.identity.verify(&self.path, &self.file)?;
+        Ok(output)
+    }
 }
 
 /// Verifies the finalized signature/fingerprint and, with the caller-owned ACK,
@@ -1252,6 +1423,92 @@ mod tests {
             .protected_content_verified
         );
         drop(root);
+    }
+
+    #[test]
+    fn protected_reader_is_lazy_bounded_authenticated_and_identity_bound() {
+        let (_root, input, metadata, output, ack, signing) = setup();
+        fs::remove_file(input.join("a.png")).unwrap();
+        let mut source = vec![0x5a; crate::manifest::CHUNK_SIZE as usize + 37];
+        source[..9].copy_from_slice(b"%PDF-1.7\n");
+        let source_len = source.len();
+        source[source_len - 6..].copy_from_slice(b"%%EOF\n");
+        fs::write(input.join("a.pdf"), &source).unwrap();
+        let pending = ArchiveBuilder::prepare(BuildRequest {
+            input_dir: &input,
+            metadata_path: &metadata,
+            output_path: &output,
+            signing_key_id: "arc-test-01",
+            signing_public_key: signing.verifying_key().to_bytes(),
+            archive_content_key: &ack,
+        })
+        .unwrap();
+        let signature = signing.sign(&signing_message(&pending.result().signing_digest));
+        pending.accept_signature(signature.to_bytes()).unwrap();
+        let verified =
+            verify_archive(&output, "arc-test-01", signing.verifying_key().to_bytes()).unwrap();
+
+        let mut reader = ProtectedArchiveReader::open(
+            &output,
+            "arc-test-01",
+            signing.verifying_key().to_bytes(),
+            &verified.archive_fingerprint,
+            &verified.file_identity,
+            &ack,
+        )
+        .unwrap();
+        assert_eq!(reader.files().len(), 1);
+        assert_eq!(reader.files()[0].file_id, "file_000000");
+        assert_eq!(
+            &*reader.read_file_range("file_000000", 0, 1).unwrap(),
+            &source[..1]
+        );
+        let cross_offset = crate::manifest::CHUNK_SIZE - 8;
+        assert_eq!(
+            &*reader
+                .read_file_range("file_000000", cross_offset, 24)
+                .unwrap(),
+            &source[cross_offset as usize..cross_offset as usize + 24]
+        );
+        assert_eq!(
+            &*reader
+                .read_file_range("file_000000", source.len() as u64 - 1, 1)
+                .unwrap(),
+            &source[source.len() - 1..]
+        );
+        assert!(reader.read_file_range("missing", 0, 1).is_err());
+        assert!(reader.read_file_range("file_000000", u64::MAX, 2).is_err());
+        assert!(reader
+            .read_file_range("file_000000", 0, MAX_PROTECTED_READ_BYTES + 1)
+            .is_err());
+
+        let wrong_ack = ArchiveContentKey::from_bytes([9; 32]);
+        assert!(ProtectedArchiveReader::open(
+            &output,
+            "arc-test-01",
+            signing.verifying_key().to_bytes(),
+            &verified.archive_fingerprint,
+            &verified.file_identity,
+            &wrong_ack,
+        )
+        .is_err());
+
+        let original = fs::read(&output).unwrap();
+        let replacement = output.with_extension("replacement");
+        fs::write(&replacement, &original).unwrap();
+        let old = output.with_extension("old");
+        fs::rename(&output, &old).unwrap();
+        fs::rename(&replacement, &output).unwrap();
+        assert!(reader.read_file_range("file_000000", 0, 1).is_err());
+        assert!(ProtectedArchiveReader::open(
+            &output,
+            "arc-test-01",
+            signing.verifying_key().to_bytes(),
+            &verified.archive_fingerprint,
+            &verified.file_identity,
+            &ack,
+        )
+        .is_err());
     }
 
     #[test]

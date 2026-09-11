@@ -9,8 +9,13 @@ name = "solarch_viewer"
 
 [features]
 default = []
-development-fixtures = []
-desktop-runtime = ["tauri/wry", "dep:tauri-build", "dep:tauri-plugin-dialog"]
+development-fixtures = ["dep:ed25519-dalek", "dep:hpke"]
+desktop-runtime = [
+    "tauri/wry",
+    "dep:tauri-build",
+    "dep:tauri-plugin-dialog",
+    "dep:tauri-plugin-single-instance",
+]
 custom-protocol = ["tauri/custom-protocol"]
 
 [dependencies]
@@ -23,14 +28,24 @@ time.workspace = true
 zeroize.workspace = true
 thiserror.workspace = true
 atomic-write-file = "=0.3.1"
+getrandom.workspace = true
+bs58.workspace = true
+reqwest.workspace = true
+url.workspace = true
+ed25519-dalek = { workspace = true, optional = true }
+hpke = { workspace = true, optional = true }
 
 [target.'cfg(windows)'.dependencies]
 tauri = { version = "=2.11.5", default-features = false, optional = true }
 tauri-plugin-dialog = { version = "=2.7.3", optional = true }
+tauri-plugin-single-instance = { version = "=2.4.4", optional = true }
 keyring = { version = "=4.2.0", default-features = false, features = ["v1"] }
+winreg = "=0.56.0"
 
 [target.'cfg(windows)'.build-dependencies]
 tauri-build = { version = "=2.6.3", features = [], optional = true }
 
 [dev-dependencies]
 tempfile = "=3.22.0"
+ed25519-dalek.workspace = true
+hpke.workspace = true

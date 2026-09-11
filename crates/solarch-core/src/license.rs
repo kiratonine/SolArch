@@ -226,6 +226,27 @@ pub fn validate_cached_grant(
     validate_and_unwrap(grant, trust, device_private_key, context, None)
 }
 
+/// Revalidates a cached grant before using its license identity for an online
+/// refresh. Signature, bindings, rights and HPKE remain mandatory; only the
+/// caller's current-time check is replaced with the authenticated issuance
+/// instant so an expired 72-hour window can be renewed.
+pub fn validate_cached_grant_for_refresh(
+    grant: &LicenseGrant,
+    trust: &LicenseTrustStore,
+    device_private_key: &DevicePrivateKey,
+    context: &LicenseValidationContext<'_>,
+) -> Result<ValidatedLicenseMetadata> {
+    let issued_at =
+        parse_timestamp(&grant.license.payload.issued_at).ok_or(Error::InvalidLicense)?;
+    let refresh_context = LicenseValidationContext {
+        archive_id: context.archive_id,
+        archive_fingerprint: context.archive_fingerprint,
+        device_public_key: context.device_public_key,
+        now: issued_at,
+    };
+    Ok(validate_and_unwrap(grant, trust, device_private_key, &refresh_context, None)?.metadata)
+}
+
 fn validate_and_unwrap(
     grant: &LicenseGrant,
     trust: &LicenseTrustStore,
@@ -660,6 +681,28 @@ mod tests {
             ),
             Err(Error::InvalidLicense)
         ));
+    }
+
+    #[test]
+    fn expired_cached_grant_can_supply_only_revalidated_refresh_identity() {
+        let key = vector_private_key();
+        let valid = grant();
+        let expired_context = context(at("2026-09-10T00:00:00Z"));
+
+        assert!(matches!(
+            validate_cached_grant(&valid, &trust(), &key, &expired_context),
+            Err(Error::Expired)
+        ));
+        let metadata =
+            validate_cached_grant_for_refresh(&valid, &trust(), &key, &expired_context).unwrap();
+        assert_eq!(metadata.license_id, "lic_test_01");
+        assert_eq!(metadata.offline_valid_until, at("2026-09-10T00:00:00Z"));
+
+        let mut forged = valid;
+        forged.license.payload.license_id = "lic_attacker".into();
+        assert!(
+            validate_cached_grant_for_refresh(&forged, &trust(), &key, &expired_context).is_err()
+        );
     }
 
     #[test]

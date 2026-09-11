@@ -91,7 +91,7 @@ impl PublicHeader {
     }
 }
 
-pub(crate) fn valid_id(value: &str) -> bool {
+pub fn valid_id(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 128
         && value
@@ -99,7 +99,7 @@ pub(crate) fn valid_id(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
 }
 
-pub(crate) fn valid_wallet(value: &str) -> bool {
+pub fn valid_wallet(value: &str) -> bool {
     bs58::decode(value)
         .into_vec()
         .ok()
@@ -107,7 +107,7 @@ pub(crate) fn valid_wallet(value: &str) -> bool {
         .is_some_and(|bytes| bs58::encode(bytes).into_string() == value)
 }
 
-pub(crate) fn parse_timestamp(value: &str) -> Option<time::OffsetDateTime> {
+pub fn parse_timestamp(value: &str) -> Option<time::OffsetDateTime> {
     let bytes = value.as_bytes();
     if bytes.len() != 20
         || bytes[4] != b'-'

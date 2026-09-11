@@ -2,7 +2,7 @@ use std::{path::Path, sync::Mutex};
 
 use serde::Serialize;
 use solarch_core::{
-    archive::{inspect_signing_key_id, verify_archive},
+    archive::{inspect_signing_key_id, verify_archive, ProtectedArchiveReader},
     license::UnwrappedLicense,
 };
 use time::OffsetDateTime;
@@ -25,6 +25,16 @@ pub struct VerifiedArchiveDto {
     pub allow_export: bool,
     pub watermark_enabled: bool,
     pub fingerprint: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProtectedFileDto {
+    pub file_id: String,
+    pub path: String,
+    pub display_name: String,
+    pub mime_type: String,
+    pub size_bytes: u64,
 }
 
 pub struct ArchiveService {
@@ -56,6 +66,11 @@ impl ArchiveService {
         let identity = VerifiedArchiveIdentity {
             archive_id: header.archive_id.clone(),
             fingerprint: verified.archive_fingerprint.clone(),
+            path: path.to_path_buf(),
+            signing_key_id: key_id,
+            signing_public_key: key,
+            file_identity: verified.file_identity,
+            public_header: header.clone(),
         };
         *self.session.lock().map_err(|_| ViewerError::Internal)? = SessionState::Locked(identity);
         Ok(VerifiedArchiveDto {
@@ -82,19 +97,40 @@ impl ArchiveService {
         fingerprint: &str,
         unwrapped: UnwrappedLicense,
     ) -> Result<(), ViewerError> {
-        let mut session = self.session.lock().map_err(|_| ViewerError::Internal)?;
-        let expected = VerifiedArchiveIdentity {
-            archive_id: archive_id.to_owned(),
-            fingerprint: fingerprint.to_owned(),
+        let expected = {
+            let session = self.session.lock().map_err(|_| ViewerError::Internal)?;
+            match &*session {
+                SessionState::Locked(current)
+                | SessionState::Unwrapped {
+                    archive: current, ..
+                } if current.archive_id == archive_id && current.fingerprint == fingerprint => {
+                    current.clone()
+                }
+                _ => return Err(ViewerError::InvalidLicense),
+            }
         };
-        if !matches!(&*session, SessionState::Locked(current) if current == &expected) {
+        let reader = ProtectedArchiveReader::open(
+            &expected.path,
+            &expected.signing_key_id,
+            expected.signing_public_key,
+            &expected.fingerprint,
+            &expected.file_identity,
+            &unwrapped.archive_content_key,
+        )
+        .map_err(ViewerError::from)?;
+        let mut session = self.session.lock().map_err(|_| ViewerError::Internal)?;
+        if !matches!(
+            &*session,
+            SessionState::Locked(current) | SessionState::Unwrapped { archive: current, .. }
+                if current == &expected
+        ) {
             return Err(ViewerError::InvalidLicense);
         }
         let deadline = unwrapped.metadata.offline_valid_until;
         *session = SessionState::Unwrapped {
             archive: expected,
             license: unwrapped.metadata,
-            ack: unwrapped.archive_content_key,
+            reader: Box::new(reader),
             offline_deadline: deadline,
         };
         Ok(())
@@ -111,10 +147,46 @@ impl ArchiveService {
             if now >= *offline_deadline {
                 let locked = archive.clone();
                 *session = SessionState::Locked(locked);
-                return Err(ViewerError::Expired);
+                return Err(ViewerError::RefreshRequired);
             }
         }
         Ok(())
+    }
+
+    pub fn list_files(&self, now: OffsetDateTime) -> Result<Vec<ProtectedFileDto>, ViewerError> {
+        self.enforce_deadline(now)?;
+        let session = self.session.lock().map_err(|_| ViewerError::Internal)?;
+        let SessionState::Unwrapped { reader, .. } = &*session else {
+            return Err(ViewerError::InvalidLicense);
+        };
+        Ok(reader
+            .files()
+            .iter()
+            .map(|file| ProtectedFileDto {
+                file_id: file.file_id.clone(),
+                path: file.path.as_str().to_owned(),
+                display_name: file.display_name.clone(),
+                mime_type: file.mime_type.clone(),
+                size_bytes: file.size_bytes,
+            })
+            .collect())
+    }
+
+    pub fn read_file_range(
+        &self,
+        file_id: &str,
+        offset: u64,
+        length: u64,
+        now: OffsetDateTime,
+    ) -> Result<zeroize::Zeroizing<Vec<u8>>, ViewerError> {
+        self.enforce_deadline(now)?;
+        let mut session = self.session.lock().map_err(|_| ViewerError::Internal)?;
+        let SessionState::Unwrapped { reader, .. } = &mut *session else {
+            return Err(ViewerError::InvalidLicense);
+        };
+        reader
+            .read_file_range(file_id, offset, length)
+            .map_err(ViewerError::from)
     }
 
     pub fn locked_identity(&self) -> Result<VerifiedArchiveIdentity, ViewerError> {
@@ -125,6 +197,25 @@ impl ArchiveService {
                 Err(ViewerError::InvalidLicense)
             }
         }
+    }
+
+    pub fn current_identity(&self) -> Result<VerifiedArchiveIdentity, ViewerError> {
+        let session = self.session.lock().map_err(|_| ViewerError::Internal)?;
+        match &*session {
+            SessionState::Locked(identity)
+            | SessionState::Unwrapped {
+                archive: identity, ..
+            } => Ok(identity.clone()),
+            SessionState::Empty => Err(ViewerError::InvalidLicense),
+        }
+    }
+
+    pub fn relock(&self) -> Result<(), ViewerError> {
+        let mut session = self.session.lock().map_err(|_| ViewerError::Internal)?;
+        if let SessionState::Unwrapped { archive, .. } = &*session {
+            *session = SessionState::Locked(archive.clone());
+        }
+        Ok(())
     }
 
     #[cfg(test)]
