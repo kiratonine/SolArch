@@ -10,6 +10,21 @@
 @import "@fontsource/ibm-plex-mono/400.css";
 @import "@fontsource/ibm-plex-mono/500.css";
 
+/*
+ * Палитра живёт отдельным файлом, и активна ровно одна.
+ *
+ * Тема меняется сменой одной строки ниже: оба файла объявляют один и тот же набор
+ * токенов, поэтому компоненты не знают, какая из них подключена, и правок не требуют.
+ *
+ *   theme-paper.css    S2, «запечатано на виду»: холодная бумага, янтарь для денег
+ *   theme-almond.css   Almond Hearth / Obsidian Ink: тёплая бумага, монохром
+ *
+ * Импорт идёт после `shadcn/tailwind.css`, иначе наши токены достанутся чужим
+ * значениям по умолчанию. Выше него — только Tailwind и шрифты.
+ */
+@import "./styles/theme-almond.css";
+/* @import "./styles/theme-paper.css"; */
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -68,117 +83,15 @@
     --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/*
- * Палитра «запечатано на виду».
- *
- * Холодная синеватая бумага вместо белого листа, чернильный тёмно-синий вместо чёрного
- * и ровно один акцент — латунный янтарь. Янтарь означает ценность и печать: цена,
- * доля автора, число открытий. Больше он не появляется нигде — на этом держится тема.
- *
- * У янтаря два токена, и путать их нельзя:
- *   --seal      заливки и графические метки (контраст к тексту не гарантируется);
- *   --seal-ink  текст янтарём по бумаге, затемнён до контраста ~5:1 (AA).
- *
- * Статусы (draft / uploading / ready / failed) живут в собственной приглушённой шкале,
- * чтобы не конкурировать с акцентом.
- */
+/* То, что переживает смену темы: форма и размеры. Значения одинаковы для обеих
+   палитр, и держать их в теме означало бы дублировать и однажды разойтись. */
 :root {
-    --background: oklch(0.965 0.005 250);
-    --foreground: oklch(0.225 0.033 262);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.225 0.033 262);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.225 0.033 262);
-    --primary: oklch(0.225 0.033 262);
-    --primary-foreground: oklch(0.98 0.004 250);
-    --secondary: oklch(0.928 0.009 252);
-    --secondary-foreground: oklch(0.225 0.033 262);
-    --muted: oklch(0.943 0.007 252);
-    --muted-foreground: oklch(0.515 0.028 260);
-    --accent: oklch(0.928 0.011 254);
-    --accent-foreground: oklch(0.225 0.033 262);
-    --destructive: oklch(0.5 0.19 27);
-    --border: oklch(0.893 0.013 255);
-    --input: oklch(0.878 0.016 255);
-    --ring: oklch(0.7 0.15 72);
-
-    --seal: oklch(0.76 0.155 72);
-    --seal-ink: oklch(0.475 0.125 72);
-    --seal-soft: oklch(0.955 0.04 80);
-    --seal-foreground: oklch(0.22 0.05 70);
-
-    --state-idle: oklch(0.5 0.02 258);
-    --state-progress: oklch(0.5 0.14 250);
-    --state-ok: oklch(0.47 0.11 155);
-    --state-error: oklch(0.5 0.19 27);
-
-    --chart-1: oklch(0.76 0.155 72);
-    --chart-2: oklch(0.5 0.14 250);
-    --chart-3: oklch(0.47 0.11 155);
-    --chart-4: oklch(0.55 0.028 260);
-    --chart-5: oklch(0.3 0.03 262);
-
     --radius: 0.375rem;
 
     /* Высота строки шапки. Меню узкого экрана висит ровно под ней и рисуется
        в портале, то есть достать её через DOM не может: значение обязано быть
        общим, иначе панель однажды наедет на шапку или отойдёт от неё. */
     --header-height: 3.5rem;
-
-    --sidebar: oklch(0.98 0.004 250);
-    --sidebar-foreground: oklch(0.225 0.033 262);
-    --sidebar-primary: oklch(0.225 0.033 262);
-    --sidebar-primary-foreground: oklch(0.98 0.004 250);
-    --sidebar-accent: oklch(0.928 0.011 254);
-    --sidebar-accent-foreground: oklch(0.225 0.033 262);
-    --sidebar-border: oklch(0.893 0.013 255);
-    --sidebar-ring: oklch(0.7 0.15 72);
-}
-
-.dark {
-    --background: oklch(0.185 0.022 262);
-    --foreground: oklch(0.955 0.005 250);
-    --card: oklch(0.228 0.024 262);
-    --card-foreground: oklch(0.955 0.005 250);
-    --popover: oklch(0.228 0.024 262);
-    --popover-foreground: oklch(0.955 0.005 250);
-    --primary: oklch(0.955 0.005 250);
-    --primary-foreground: oklch(0.2 0.025 262);
-    --secondary: oklch(0.285 0.023 262);
-    --secondary-foreground: oklch(0.955 0.005 250);
-    --muted: oklch(0.265 0.022 262);
-    --muted-foreground: oklch(0.71 0.021 258);
-    --accent: oklch(0.3 0.024 262);
-    --accent-foreground: oklch(0.955 0.005 250);
-    --destructive: oklch(0.7 0.17 25);
-    --border: oklch(0.335 0.02 260);
-    --input: oklch(0.36 0.022 260);
-    --ring: oklch(0.8 0.15 72);
-
-    --seal: oklch(0.8 0.15 72);
-    --seal-ink: oklch(0.83 0.13 75);
-    --seal-soft: oklch(0.29 0.06 68);
-    --seal-foreground: oklch(0.2 0.05 70);
-
-    --state-idle: oklch(0.72 0.02 258);
-    --state-progress: oklch(0.72 0.12 248);
-    --state-ok: oklch(0.72 0.13 158);
-    --state-error: oklch(0.7 0.17 25);
-
-    --chart-1: oklch(0.8 0.15 72);
-    --chart-2: oklch(0.72 0.12 248);
-    --chart-3: oklch(0.72 0.13 158);
-    --chart-4: oklch(0.6 0.025 260);
-    --chart-5: oklch(0.85 0.01 258);
-
-    --sidebar: oklch(0.228 0.024 262);
-    --sidebar-foreground: oklch(0.955 0.005 250);
-    --sidebar-primary: oklch(0.8 0.15 72);
-    --sidebar-primary-foreground: oklch(0.2 0.05 70);
-    --sidebar-accent: oklch(0.3 0.024 262);
-    --sidebar-accent-foreground: oklch(0.955 0.005 250);
-    --sidebar-border: oklch(0.335 0.02 260);
-    --sidebar-ring: oklch(0.8 0.15 72);
 }
 
 @layer base {
