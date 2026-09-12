@@ -37,6 +37,33 @@ export function verifySecretToken(token: string, storedHash: string, pepper: str
 }
 
 /**
+ * Validates whether a token string is a valid TOKEN32:
+ * - exactly 43 ASCII characters
+ * - unpadded RFC 4648 base64url
+ * - decodes to exactly 32 bytes
+ */
+export function validateToken32(token: string): boolean {
+  if (!token || typeof token !== 'string' || token.length !== 43) {
+    return false;
+  }
+  try {
+    const buf = Buffer.from(token, 'base64url');
+    return buf.length === 32 && buf.toString('base64url') === token;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Formats a Date object to exact-second UTC format: YYYY-MM-DDTHH:mm:ssZ (20 chars, no milliseconds).
+ */
+export function formatExactSecondUtc(date: Date): string {
+  // Truncate to second
+  const truncated = new Date(Math.floor(date.getTime() / 1000) * 1000);
+  return truncated.toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+/**
  * Computes SHA-256 digest of a request nonce for replay protection.
  * Returns 64-char hex string.
  */

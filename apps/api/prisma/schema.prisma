@@ -193,10 +193,28 @@ model PaymentIntent {
   expiresAt           DateTime            @map("expires_at")
   createdAt           DateTime            @default(now()) @map("created_at")
 
-  archive             Archive             @relation(fields: [archiveId], references: [id], onDelete: Restrict)
+  archive             Archive                      @relation(fields: [archiveId], references: [id], onDelete: Restrict)
   payment             Payment?
+  issuances           PaymentTransactionIssuance[]
 
   @@map("payment_intents")
+}
+
+model PaymentTransactionIssuance {
+  id                     String        @id @default(uuid())
+  paymentIntentId        String        @map("payment_intent_id")
+  constructionAccount    String        @map("construction_account")
+  transactionMessageHash String        @map("transaction_message_hash")
+  recentBlockhash        String        @map("recent_blockhash")
+  lastValidBlockHeight   BigInt        @map("last_valid_block_height")
+  serializedTransaction  String        @map("serialized_transaction")
+  issuedAt               DateTime      @default(now()) @map("issued_at")
+  status                 String        @default("active")
+
+  paymentIntent          PaymentIntent @relation(fields: [paymentIntentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentIntentId, status])
+  @@map("payment_transaction_issuances")
 }
 
 model Payment {

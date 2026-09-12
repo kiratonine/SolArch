@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ForbiddenException, ConflictException, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { LicensingService } from './licensing.service';
 import { PrismaService } from '@/common/prisma.service';
 import { EnvService } from '@/config/env.service';
@@ -13,7 +13,7 @@ describe('LicensingService & Device Enforcement', () => {
   const DEVICE_A = 'aTZYJUYw9zrY2nj7Mxv5ds1C+Q4OnJ6D9AxRBypvdBc=';
   const DEVICE_B = Buffer.alloc(32, 2).toString('base64');
   const PEPPER = 'test-hmac-secret-pepper-minimum-32';
-  const VALID_SECRET = 'abc123def456ghi789jkl012mno345pqr678stu9012';
+  const VALID_SECRET = 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8';
   const VALID_HMAC = hashSecretToken(VALID_SECRET, PEPPER);
   const VALID_AUTH_HEADER = `SolArchIntent ${VALID_SECRET}`;
 
@@ -36,6 +36,7 @@ describe('LicensingService & Device Enforcement', () => {
       },
       deviceLicense: {
         create: jest.fn(),
+        updateMany: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
       },
@@ -51,6 +52,7 @@ describe('LicensingService & Device Enforcement', () => {
             licenseKeyId: 'lic-test-01',
             licenseSigningKeypair: testSigningKeys,
             intentHmacSecret: PEPPER,
+            deviceRefreshHmacSecret: PEPPER,
           },
         },
       ],
@@ -83,6 +85,7 @@ describe('LicensingService & Device Enforcement', () => {
       archiveId: 'arc_001',
       buyerWallet: 'BuyerWallet1111111111111111111111111111111',
       devicePublicKey: DEVICE_A,
+      maxDevices: 1,
       devicesActivated: 0,
       archive: {
         archiveFingerprint: '57ce84068fdd9b23f8860afa27834151f4fefb038d812c2ac77e8a861b1eecdb',
@@ -123,10 +126,12 @@ describe('LicensingService & Device Enforcement', () => {
     expect(Math.round((offlineValidUntil - issuedAt) / 1000)).toBe(259200);
   });
 
-  test('rejects Device B activation with DEVICE_LIMIT_REACHED when entitlement is bound to Device A', async () => {
+  test('rejects Device B activation with DEVICE_BINDING_MISMATCH when entitlement is bound to Device A', async () => {
     const fakeEntitlement = {
       id: 'ent_001',
       devicePublicKey: DEVICE_A,
+      maxDevices: 1,
+      devicesActivated: 0,
       activations: [],
       archive: {},
       payment: { paymentIntent: { clientSecretHmac: VALID_HMAC } },
@@ -139,13 +144,15 @@ describe('LicensingService & Device Enforcement', () => {
         device_public_key: DEVICE_B,
         request_nonce: 'gIGCg4SFhoeIiYqLjI2Oj5CRkpOUlZaXmJmam5ydnp8=',
       }),
-    ).rejects.toThrow(ForbiddenException);
+    ).rejects.toThrow(ConflictException);
   });
 
   test('rejects request nonce replay with REQUEST_NONCE_REPLAY', async () => {
     const fakeEntitlement = {
       id: 'ent_001',
       devicePublicKey: DEVICE_A,
+      maxDevices: 1,
+      devicesActivated: 0,
       activations: [],
       archive: {},
       payment: { paymentIntent: { clientSecretHmac: VALID_HMAC } },

@@ -289,21 +289,52 @@ export class UploadsService {
       throw new BadRequestException('Uploaded archive contains no valid supported files');
     }
 
-    // Build the .slr container
-    const slrOutputDir = path.join(this.env.storageRoot, 'slr');
-    const outputFilePath = path.join(slrOutputDir, `${upload.archiveId}.slr`);
+    // Prepare private temporary directory with clean source files for solarch-cli
+    const stagingSourceDir = path.join(this.env.storageRoot, 'staging', `${upload.archiveId}_${Date.now()}`);
+    fs.mkdirSync(stagingSourceDir, { recursive: true });
 
-    const buildResult = await this.archiveBuilder.build({
-      archiveId: upload.archiveId,
-      title: upload.archive.title,
-      creatorWallet: upload.archive.creatorPayoutWallet,
-      priceAmount: upload.archive.priceAmount,
-      platformFeeBps: upload.archive.platformFeeBps,
-      maxDevices: upload.archive.maxDevices,
-      allowExport: upload.archive.allowExport,
-      watermarkEnabled: upload.archive.watermarkEnabled,
-      outputFilePath,
-    });
+    let buildResult: any;
+    try {
+      for (const entry of entries) {
+        if (entry.isDirectory) continue;
+        const normalized = path.normalize(entry.entryName).replace(/\\/g, '/');
+        if (normalized.startsWith('__MACOSX/') || normalized.endsWith('.DS_Store')) continue;
+        const ext = path.extname(normalized).toLowerCase().replace('.', '');
+        if (!SUPPORTED_EXTENSIONS.has(ext)) continue;
+
+        const targetPath = path.join(stagingSourceDir, normalized);
+        const targetParent = path.dirname(targetPath);
+        if (!fs.existsSync(targetParent)) {
+          fs.mkdirSync(targetParent, { recursive: true });
+        }
+        fs.writeFileSync(targetPath, entry.getData());
+      }
+
+      // Build the .slr container
+      const slrOutputDir = path.join(this.env.storageRoot, 'slr');
+      const outputFilePath = path.join(slrOutputDir, `${upload.archiveId}.slr`);
+
+      buildResult = await this.archiveBuilder.build({
+        archiveId: upload.archiveId,
+        title: upload.archive.title,
+        creatorWallet: upload.archive.creatorPayoutWallet,
+        priceAmount: upload.archive.priceAmount,
+        platformFeeBps: upload.archive.platformFeeBps,
+        maxDevices: upload.archive.maxDevices,
+        allowExport: upload.archive.allowExport,
+        watermarkEnabled: upload.archive.watermarkEnabled,
+        sourceFilesDir: stagingSourceDir,
+        outputFilePath,
+      });
+    } finally {
+      if (fs.existsSync(stagingSourceDir)) {
+        try {
+          fs.rmSync(stagingSourceDir, { recursive: true, force: true });
+        } catch {
+          // best-effort cleanup
+        }
+      }
+    }
 
     // Save files in database
     await this.prisma.archivePublicFile.deleteMany({

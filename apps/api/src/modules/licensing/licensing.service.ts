@@ -4,6 +4,9 @@ import {
   UnauthorizedException,
   ForbiddenException,
   ConflictException,
+  ServiceUnavailableException,
+  HttpException,
+  HttpStatus,
   Logger,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
@@ -15,7 +18,9 @@ import {
   generateToken32,
   hashSecretToken,
   verifySecretToken,
+  validateToken32,
   hashRequestNonce,
+  formatExactSecondUtc,
 } from '@/crypto/token32.util';
 import { ActivateDeviceDto, RefreshLicenseDto, CheckLicenseDto } from './licensing.dto';
 
@@ -33,10 +38,23 @@ export class LicensingService {
     authHeader: string,
     dto: ActivateDeviceDto,
   ) {
-    validateDevicePublicKey(dto.device_public_key);
+    // 1. Mandatory credential authentication precedence
+    if (!authHeader || !authHeader.startsWith('SolArchIntent ')) {
+      throw new UnauthorizedException({
+        code: 'INVALID_INTENT_CREDENTIAL',
+        message: 'Missing or invalid SolArchIntent authorization header',
+      });
+    }
 
-    // Try finding by PaymentIntent first
-    let entitlement = await this.prisma.entitlement.findFirst({
+    const secret = authHeader.replace('SolArchIntent ', '').trim();
+    if (!validateToken32(secret)) {
+      throw new UnauthorizedException({
+        code: 'INVALID_INTENT_CREDENTIAL',
+        message: 'Invalid payment intent client secret format',
+      });
+    }
+
+    const entitlement = await this.prisma.entitlement.findFirst({
       where: {
         OR: [
           { id: intentIdOrEntitlementId },
@@ -46,44 +64,40 @@ export class LicensingService {
       include: {
         archive: true,
         payment: { include: { paymentIntent: true } },
-        activations: true,
+        activations: { include: { licenses: true } },
       },
     });
 
     if (!entitlement) {
-      throw new NotFoundException('Entitlement or PaymentIntent not found');
+      throw new UnauthorizedException({
+        code: 'INVALID_INTENT_CREDENTIAL',
+        message: 'Invalid payment intent credential',
+      });
     }
 
-    // Verify credential (mandatory for initial activation)
-    if (!authHeader || !authHeader.startsWith('SolArchIntent ')) {
-      throw new UnauthorizedException('Missing or invalid SolArchIntent authorization header');
-    }
-
-    const secret = authHeader.replace('SolArchIntent ', '').trim();
     const clientHmac = entitlement.payment?.paymentIntent?.clientSecretHmac;
-    if (clientHmac) {
-      const isValid = verifySecretToken(secret, clientHmac, this.env.intentHmacSecret);
-      if (!isValid) {
-        throw new UnauthorizedException('Invalid payment intent secret credential');
-      }
+    if (!clientHmac || !verifySecretToken(secret, clientHmac, this.env.intentHmacSecret)) {
+      throw new UnauthorizedException({
+        code: 'INVALID_INTENT_CREDENTIAL',
+        message: 'Invalid payment intent secret credential',
+      });
+    }
+
+    // 2. Post-credential validations
+    try {
+      validateDevicePublicKey(dto.device_public_key);
+    } catch {
+      throw new ConflictException({
+        code: 'DEVICE_BINDING_MISMATCH',
+        message: 'Invalid device public key',
+      });
     }
 
     // Enforce pre-payment Device A binding
     if (entitlement.devicePublicKey !== dto.device_public_key) {
-      throw new ForbiddenException({
-        code: 'DEVICE_LIMIT_REACHED',
+      throw new ConflictException({
+        code: 'DEVICE_BINDING_MISMATCH',
         message: 'This entitlement allows only Device A bound during payment intent creation.',
-      });
-    }
-
-    // Enforce max_devices = 1
-    const otherActivation = entitlement.activations.find(
-      (a) => a.devicePublicKey !== dto.device_public_key && a.status === 'active',
-    );
-    if (otherActivation) {
-      throw new ForbiddenException({
-        code: 'DEVICE_LIMIT_REACHED',
-        message: 'This entitlement allows only one device.',
       });
     }
 
@@ -105,6 +119,17 @@ export class LicensingService {
       });
     }
 
+    // Content Key (ACK) - Fail closed if missing or invalid
+    if (!entitlement.archive.contentKeyRef) {
+      this.logger.error(`Archive ${entitlement.archiveId} missing content key ref`);
+      throw new ServiceUnavailableException('Archive content key unavailable');
+    }
+    const rawAck = Buffer.from(entitlement.archive.contentKeyRef, 'hex');
+    if (rawAck.length !== 32) {
+      this.logger.error(`Archive ${entitlement.archiveId} content key is not 32 bytes`);
+      throw new ServiceUnavailableException('Invalid archive content key');
+    }
+
     await this.prisma.requestNonceRecord.create({
       data: {
         credentialRecordId: entitlement.id,
@@ -112,12 +137,43 @@ export class LicensingService {
       },
     });
 
-    // Upsert activation
-    let activation = entitlement.activations.find(
+    // 3. Activation & 10-minute lost-response recovery handling
+    const existingActivation = entitlement.activations.find(
       (a) => a.devicePublicKey === dto.device_public_key,
     );
-    if (!activation) {
-      activation = await this.prisma.deviceActivation.create({
+
+    let licenseId: string;
+    let isRecovery = false;
+    let activationId: string;
+
+    if (existingActivation) {
+      const elapsedMs = Date.now() - existingActivation.activatedAt.getTime();
+      const tenMinutesMs = 10 * 60 * 1000;
+      if (elapsedMs > tenMinutesMs) {
+        throw new HttpException(
+          {
+            code: 'PAYMENT_INTENT_EXPIRED',
+            message: 'Payment intent secret credential has expired after the 10-minute activation window',
+          },
+          HttpStatus.GONE,
+        );
+      }
+
+      isRecovery = true;
+      const existingLicense =
+        existingActivation.licenses.find((l) => l.status === 'active') || existingActivation.licenses[0];
+      licenseId = existingLicense ? existingLicense.id : `lic_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
+      activationId = existingActivation.id;
+    } else {
+      if (entitlement.activations.length >= entitlement.maxDevices) {
+        throw new ConflictException({
+          code: 'DEVICE_LIMIT_REACHED',
+          message: 'This entitlement allows only one device.',
+        });
+      }
+
+      licenseId = `lic_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
+      const newActivation = await this.prisma.deviceActivation.create({
         data: {
           entitlementId: entitlement.id,
           devicePublicKey: dto.device_public_key,
@@ -126,18 +182,16 @@ export class LicensingService {
           status: 'active',
         },
       });
+      activationId = newActivation.id;
       await this.prisma.entitlement.update({
         where: { id: entitlement.id },
         data: { devicesActivated: entitlement.devicesActivated + 1 },
       });
     }
 
-    // Prepare 72-hour offline lease
-    const now = new Date();
-    const issuedAt = now;
-    const offlineValidUntil = new Date(now.getTime() + 259200 * 1000); // exactly 72h
-
-    const licenseId = `lic_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
+    // 4. Issue 72-hour offline lease with exact-second timestamps
+    const issuedAt = new Date(Math.floor(Date.now() / 1000) * 1000);
+    const offlineValidUntil = new Date(issuedAt.getTime() + 259200 * 1000);
 
     const payloadP = {
       version: 1,
@@ -149,24 +203,16 @@ export class LicensingService {
       buyer_wallet: entitlement.buyerWallet,
       device_public_key: dto.device_public_key,
       status: 'active',
-      issued_at: issuedAt.toISOString(),
-      offline_valid_until: offlineValidUntil.toISOString(),
+      issued_at: formatExactSecondUtc(issuedAt),
+      offline_valid_until: formatExactSecondUtc(offlineValidUntil),
       request_nonce: dto.request_nonce,
       rights: {
-        open: true,
         export: entitlement.archive.allowExport,
         max_devices: 1,
+        open: true,
         watermark_enabled: entitlement.archive.watermarkEnabled,
       },
     };
-
-    // Load content key (ACK)
-    let rawAck: Buffer;
-    if (entitlement.archive.contentKeyRef) {
-      rawAck = Buffer.from(entitlement.archive.contentKeyRef, 'hex');
-    } else {
-      rawAck = Buffer.from('12345678901234567890123456789012', 'utf8');
-    }
 
     // HPKE wrap ACK
     const wrappedContentKey = await wrapContentKey(
@@ -184,26 +230,37 @@ export class LicensingService {
       this.env.licenseSigningKeypair.secretKey,
     );
 
-    // Issue device_refresh_token (TOKEN32)
+    // Issue fresh device_refresh_token (TOKEN32) hashed with dedicated deviceRefreshHmacSecret
     const refreshToken = generateToken32();
-    const refreshTokenHmac = hashSecretToken(refreshToken, this.env.intentHmacSecret);
+    const refreshTokenHmac = hashSecretToken(refreshToken, this.env.deviceRefreshHmacSecret);
 
-    // Store license in DB
-    await this.prisma.deviceLicense.create({
-      data: {
-        id: licenseId,
-        entitlementId: entitlement.id,
-        deviceActivationId: activation.id,
-        archiveId: entitlement.archiveId,
-        devicePublicKey: dto.device_public_key,
-        status: 'active',
-        rightsJson: payloadP.rights,
-        serverSignature: signatureBase64,
-        issuedAt,
-        offlineValidUntil,
-        refreshTokenHmac,
-      },
-    });
+    if (isRecovery) {
+      await this.prisma.deviceLicense.updateMany({
+        where: { entitlementId: entitlement.id, devicePublicKey: dto.device_public_key },
+        data: {
+          issuedAt,
+          offlineValidUntil,
+          serverSignature: signatureBase64,
+          refreshTokenHmac,
+        },
+      });
+    } else {
+      await this.prisma.deviceLicense.create({
+        data: {
+          id: licenseId,
+          entitlementId: entitlement.id,
+          deviceActivationId: activationId,
+          archiveId: entitlement.archiveId,
+          devicePublicKey: dto.device_public_key,
+          status: 'active',
+          rightsJson: payloadP.rights,
+          serverSignature: signatureBase64,
+          issuedAt,
+          offlineValidUntil,
+          refreshTokenHmac,
+        },
+      });
+    }
 
     return {
       license: {
@@ -217,10 +274,20 @@ export class LicensingService {
 
   async refreshLicense(licenseId: string, authHeader: string, dto: RefreshLicenseDto) {
     if (!authHeader || !authHeader.startsWith('DeviceRefresh ')) {
-      throw new UnauthorizedException('Missing or invalid DeviceRefresh authorization');
+      throw new UnauthorizedException({
+        code: 'INVALID_REFRESH_CREDENTIAL',
+        message: 'Missing or invalid DeviceRefresh authorization',
+      });
     }
 
     const token = authHeader.replace('DeviceRefresh ', '').trim();
+    if (!validateToken32(token)) {
+      throw new UnauthorizedException({
+        code: 'INVALID_REFRESH_CREDENTIAL',
+        message: 'Invalid device refresh token format',
+      });
+    }
+
     const license = await this.prisma.deviceLicense.findUnique({
       where: { id: licenseId },
       include: {
@@ -229,26 +296,60 @@ export class LicensingService {
     });
 
     if (!license) {
-      throw new NotFoundException('Device license not found');
+      throw new UnauthorizedException({
+        code: 'INVALID_REFRESH_CREDENTIAL',
+        message: 'Invalid device refresh credential',
+      });
     }
 
-    // Verify token HMAC
-    const isValidToken = verifySecretToken(token, license.refreshTokenHmac || '', this.env.intentHmacSecret);
+    // Verify token HMAC using purpose-separated deviceRefreshHmacSecret
+    const isValidToken = verifySecretToken(
+      token,
+      license.refreshTokenHmac || '',
+      this.env.deviceRefreshHmacSecret,
+    );
     if (!isValidToken) {
-      throw new UnauthorizedException('Invalid device refresh token');
+      throw new UnauthorizedException({
+        code: 'INVALID_REFRESH_CREDENTIAL',
+        message: 'Invalid device refresh token',
+      });
     }
 
-    // Verify device
+    // Verify archive binding
+    if (license.archiveId !== dto.archive_id) {
+      throw new ConflictException({
+        code: 'DEVICE_BINDING_MISMATCH',
+        message: 'Archive ID does not match license',
+      });
+    }
+
+    // Verify device binding
     if (license.devicePublicKey !== dto.device_public_key) {
-      throw new ForbiddenException('Device key does not match license');
+      throw new ConflictException({
+        code: 'DEVICE_BINDING_MISMATCH',
+        message: 'Device key does not match license',
+      });
     }
 
-    if (license.status !== 'active' || license.entitlement.status !== 'active') {
-      throw new ForbiddenException('License or Entitlement is revoked or inactive');
+    if (license.status !== 'active') {
+      throw new ForbiddenException({
+        code: 'LICENSE_REVOKED',
+        message: 'License is not active',
+      });
+    }
+
+    if (license.entitlement.status !== 'active') {
+      throw new ForbiddenException({
+        code: 'ENTITLEMENT_REVOKED',
+        message: 'Entitlement is not active',
+      });
     }
 
     if (license.entitlement.archive.marketplaceStatus === 'blocked') {
-      throw new ForbiddenException('Archive is blocked');
+      throw new ForbiddenException({
+        code: 'ARCHIVE_BLOCKED',
+        message: 'Archive is blocked',
+      });
     }
 
     // Nonce replay protection
@@ -276,10 +377,20 @@ export class LicensingService {
       },
     });
 
+    // Content key
+    if (!license.entitlement.archive.contentKeyRef) {
+      this.logger.error(`Archive ${license.archiveId} missing content key ref`);
+      throw new ServiceUnavailableException('Archive content key unavailable');
+    }
+    const rawAck = Buffer.from(license.entitlement.archive.contentKeyRef, 'hex');
+    if (rawAck.length !== 32) {
+      this.logger.error(`Archive ${license.archiveId} content key is not 32 bytes`);
+      throw new ServiceUnavailableException('Invalid archive content key');
+    }
+
     // Issue fresh 72h window
-    const now = new Date();
-    const issuedAt = now;
-    const offlineValidUntil = new Date(now.getTime() + 259200 * 1000);
+    const issuedAt = new Date(Math.floor(Date.now() / 1000) * 1000);
+    const offlineValidUntil = new Date(issuedAt.getTime() + 259200 * 1000);
 
     const freshPayloadP = {
       version: 1,
@@ -291,23 +402,16 @@ export class LicensingService {
       buyer_wallet: license.entitlement.buyerWallet,
       device_public_key: dto.device_public_key,
       status: 'active',
-      issued_at: issuedAt.toISOString(),
-      offline_valid_until: offlineValidUntil.toISOString(),
+      issued_at: formatExactSecondUtc(issuedAt),
+      offline_valid_until: formatExactSecondUtc(offlineValidUntil),
       request_nonce: dto.request_nonce,
       rights: {
-        open: true,
         export: license.entitlement.archive.allowExport,
         max_devices: 1,
+        open: true,
         watermark_enabled: license.entitlement.archive.watermarkEnabled,
       },
     };
-
-    let rawAck: Buffer;
-    if (license.entitlement.archive.contentKeyRef) {
-      rawAck = Buffer.from(license.entitlement.archive.contentKeyRef, 'hex');
-    } else {
-      rawAck = Buffer.from('12345678901234567890123456789012', 'utf8');
-    }
 
     const freshWrapped = await wrapContentKey(
       dto.device_public_key,
@@ -348,14 +452,20 @@ export class LicensingService {
     });
 
     if (!license) {
-      throw new NotFoundException('License not found');
+      throw new NotFoundException({
+        code: 'LICENSE_NOT_FOUND',
+        message: 'License not found',
+      });
     }
 
     if (
       license.archiveId !== dto.archive_id ||
       license.devicePublicKey !== dto.device_public_key
     ) {
-      throw new ForbiddenException('License does not match archive or device');
+      throw new ForbiddenException({
+        code: 'DEVICE_BINDING_MISMATCH',
+        message: 'License does not match archive or device',
+      });
     }
 
     return {
@@ -364,3 +474,4 @@ export class LicensingService {
     };
   }
 }
+

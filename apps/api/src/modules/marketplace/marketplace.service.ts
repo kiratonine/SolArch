@@ -292,6 +292,7 @@ export class MarketplaceService {
     return {
       archive_id: archive.id,
       status: archive.marketplaceStatus,
+      platform_fee_bps: archive.platformFeeBps,
       title: archive.title,
       price: {
         amount: archive.priceAmount,
@@ -305,7 +306,7 @@ export class MarketplaceService {
         allow_export: archive.allowExport,
         watermark_enabled: archive.watermarkEnabled,
       },
-      archive_fingerprint: archive.archiveFingerprint,
+      archive_fingerprint: archive.archiveFingerprint || '',
     };
   }
 }

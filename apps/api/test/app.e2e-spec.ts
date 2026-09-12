@@ -5,8 +5,11 @@ import { AppModule } from '@/app.module';
 import { PrismaService } from '@/common/prisma.service';
 import { EnvService } from '@/config/env.service';
 import { SolArchExceptionFilter } from '@/common/filters/http-exception.filter';
+import { PaymentsService } from '@/modules/payments/payments.service';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import * as nacl from 'tweetnacl';
+
+const VALID_TOKEN32 = 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8';
 
 describe('SolArch Marketplace Backend API (e2e)', () => {
   let app: INestApplication;
@@ -118,7 +121,7 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
         archiveId: 'arc_e2e_001',
         devicePublicKey: DEVICE_A,
         clientSecretHmac: require('@/crypto/token32.util').hashSecretToken(
-          'test_secret_e2e_token32_secret_43_chars_len',
+          VALID_TOKEN32,
           'solarch-intent-hmac-secret-32-chars-minimum',
         ),
         expectedPriceAmount: '10.00',
@@ -155,7 +158,7 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
         payment: {
           paymentIntent: {
             clientSecretHmac: require('@/crypto/token32.util').hashSecretToken(
-              'test_secret_e2e_token32_secret_43_chars_len',
+              VALID_TOKEN32,
               'solarch-intent-hmac-secret-32-chars-minimum',
             ),
           },
@@ -169,6 +172,7 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
     },
     deviceLicense: {
       create: jest.fn().mockResolvedValue({ id: 'lic_e2e_001' }),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       findUnique: jest.fn().mockResolvedValue({
         id: 'lic_e2e_001',
         archiveId: 'arc_e2e_001',
@@ -180,6 +184,12 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
     requestNonceRecord: {
       findUnique: jest.fn().mockResolvedValue(null),
       create: jest.fn().mockResolvedValue({}),
+    },
+    paymentTransactionIssuance: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockResolvedValue({}),
+      update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     marketplaceEvent: {
       create: jest.fn().mockResolvedValue({}),
@@ -211,6 +221,53 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
       }),
     );
     app.useGlobalFilters(new SolArchExceptionFilter());
+
+    const paymentsService = app.get(PaymentsService);
+    jest.spyOn(paymentsService, 'getConnection').mockReturnValue({
+      getLatestBlockhash: jest.fn().mockResolvedValue({
+        blockhash: 'EkSnNWid2cvwEVnVx9aBqawnmiCNiDcg3iAZ2tFhGuqd',
+        lastValidBlockHeight: 123456,
+      }),
+      isBlockhashValid: jest.fn().mockResolvedValue({ value: true }),
+      getSignaturesForAddress: jest.fn().mockResolvedValue([]),
+      getParsedTransaction: jest.fn().mockResolvedValue({
+        slot: 100,
+        blockTime: 123456,
+        confirmationStatus: 'finalized',
+        meta: { err: null },
+        transaction: {
+          message: {
+            accountKeys: [
+              { pubkey: { toBase58: () => validReference }, signer: false },
+              { pubkey: { toBase58: () => 'Buyer111111111111111111111111111111111111' }, signer: true },
+            ],
+            instructions: [
+              {
+                parsed: {
+                  type: 'transferChecked',
+                  info: {
+                    destination: validCreatorAta,
+                    amount: '9500000',
+                    mint: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
+                  },
+                },
+              },
+              {
+                parsed: {
+                  type: 'transferChecked',
+                  info: {
+                    destination: validPlatformAta,
+                    amount: '500000',
+                    mint: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
+                  },
+                },
+              },
+            ],
+          },
+        },
+      }),
+      getTransaction: jest.fn().mockResolvedValue(null),
+    } as any);
 
     await app.init();
   });
@@ -391,7 +448,7 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
   });
 
   describe('Solana Pay & Licensing Lifecycle', () => {
-    const clientSecret = 'test_secret_e2e_token32_secret_43_chars_len';
+    const clientSecret = VALID_TOKEN32;
     const authHeader = `SolArchIntent ${clientSecret}`;
 
     it('/v1/payment-intents (POST) binds Device A and returns TOKEN32 secret', async () => {
@@ -420,13 +477,13 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
       expect(res.body.message).toContain('10.00 USDC');
     });
 
-    it('/v1/payment-intents/:id/verify (POST) verifies simulation payment and creates Entitlement', async () => {
+    it('/v1/payment-intents/:id/verify (POST) verifies payment and creates Entitlement', async () => {
       const res = await request(app.getHttpServer())
         .post('/v1/payment-intents/pi_e2e_001/verify')
         .set('Authorization', authHeader)
         .send({
           device_public_key: DEVICE_A,
-          transaction_signature: 'sim_tx_sig_e2e_successful_purchase_1111111111111',
+          transaction_signature: '5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUc',
         })
         .expect(200);
 
@@ -457,7 +514,7 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
       expect(Math.round((validUntil - issued) / 1000)).toBe(259200); // 72 hours
     });
 
-    it('/v1/payment-intents/:id/activate-device (POST) rejects Device B with DEVICE_LIMIT_REACHED', async () => {
+    it('/v1/payment-intents/:id/activate-device (POST) rejects Device B with DEVICE_BINDING_MISMATCH', async () => {
       const res = await request(app.getHttpServer())
         .post('/v1/payment-intents/pi_e2e_001/activate-device')
         .set('Authorization', authHeader)
@@ -467,9 +524,9 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
           viewer_version: '0.1.0',
           request_nonce: 'hJGCg4SFhoeIiYqLjI2Oj5CRkpOUlZaXmJmam5ydnp8=',
         })
-        .expect(403);
+        .expect(409);
 
-      expect(res.body.code).toBe('DEVICE_LIMIT_REACHED');
+      expect(res.body.code).toBe('DEVICE_BINDING_MISMATCH');
     });
 
     it('/v1/licenses/check (POST) validates active license', async () => {

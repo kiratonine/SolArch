@@ -21,6 +21,10 @@ export class ActivateDeviceDto {
 export class RefreshLicenseDto {
   @IsNotEmpty()
   @IsString()
+  archive_id: string;
+
+  @IsNotEmpty()
+  @IsString()
   device_public_key: string;
 
   @IsNotEmpty()

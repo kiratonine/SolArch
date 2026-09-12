@@ -31,6 +31,12 @@ describe('PaymentsService & Solana Pay', () => {
       entitlement: {
         create: jest.fn(),
       },
+      paymentTransactionIssuance: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({}),
+        update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       marketplaceEvent: {
         create: jest.fn(),
       },
@@ -143,7 +149,7 @@ describe('PaymentsService & Solana Pay', () => {
     const creatorAta = Keypair.generate().publicKey.toBase58();
     const platformAta = Keypair.generate().publicKey.toBase58();
     const reference = Keypair.generate().publicKey.toBase58();
-    const secret = 'test_secret_32_bytes_token32_random_secret_43';
+    const secret = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
     const secretHmac = require('@/crypto/token32.util').hashSecretToken(secret, 'test-hmac-secret-pepper-minimum-32');
 
     prisma.paymentIntent.findUnique.mockResolvedValue({
@@ -220,7 +226,7 @@ describe('PaymentsService & Solana Pay', () => {
     const creatorAta = Keypair.generate().publicKey.toBase58();
     const platformAta = Keypair.generate().publicKey.toBase58();
     const reference = Keypair.generate().publicKey.toBase58();
-    const secret = 'test_secret_32_bytes_token32_random_secret_43';
+    const secret = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
     const secretHmac = require('@/crypto/token32.util').hashSecretToken(secret, 'test-hmac-secret-pepper-minimum-32');
 
     prisma.paymentIntent.findUnique.mockResolvedValue({
