@@ -5,11 +5,10 @@ import {
   Param,
   Body,
   Headers,
-  Req,
+  Header,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { Request } from 'express';
 import { PaymentsService } from './payments.service';
 import {
   CreatePaymentIntentDto,
@@ -22,23 +21,19 @@ export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
   @Post('payment-intents')
-  async createPaymentIntent(
-    @Body() dto: CreatePaymentIntentDto,
-    @Req() req: Request,
-  ) {
-    const protocol = req.protocol;
-    const host = req.get('host');
-    const hostUrl = `${protocol}://${host}`;
-    return this.paymentsService.createPaymentIntent(dto, hostUrl);
+  async createPaymentIntent(@Body() dto: CreatePaymentIntentDto) {
+    return this.paymentsService.createPaymentIntent(dto);
   }
 
   @Get('solana-pay/payment-intents/:id/transaction')
+  @Header('Cache-Control', 'no-store')
   async getSolanaPayMetadata(@Param('id') intentId: string) {
     return this.paymentsService.getSolanaPayMetadata(intentId);
   }
 
   @Post('solana-pay/payment-intents/:id/transaction')
   @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
   async buildTransaction(
     @Param('id') intentId: string,
     @Body() dto: SolanaPayTransactionRequestDto,

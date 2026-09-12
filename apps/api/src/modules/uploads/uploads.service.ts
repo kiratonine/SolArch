@@ -55,6 +55,9 @@ const SUPPORTED_EXTENSIONS = new Set([
 const MAX_FILES_LIMIT = 10_000;
 const MAX_UNCOMPRESSED_TOTAL_BYTES = 512 * 1024 * 1024; // 512 MiB
 
+import { AckCustodyService } from './ack-custody.service';
+import { zeroizeBuffer } from '@/crypto/token32.util';
+
 @Injectable()
 export class UploadsService {
   private readonly logger = new Logger(UploadsService.name);
@@ -63,6 +66,7 @@ export class UploadsService {
     private readonly prisma: PrismaService,
     private readonly env: EnvService,
     private readonly archiveBuilder: ArchiveBuilderAdapter,
+    private readonly ackCustody: AckCustodyService,
   ) {}
 
   async init(userId: string, dto: InitUploadDto) {
@@ -347,6 +351,14 @@ export class UploadsService {
       });
     }
 
+    // Seal ACK in encrypted custody (INTEGRATION.md §5.1)
+    const { contentKeyRef } = await this.ackCustody.seal(
+      upload.archiveId,
+      buildResult.archiveFingerprint,
+      buildResult.contentKey,
+    );
+    zeroizeBuffer(buildResult.contentKey);
+
     // Update archive state
     const updatedArchive = await this.prisma.archive.update({
       where: { id: upload.archiveId },
@@ -354,7 +366,7 @@ export class UploadsService {
         technicalStatus: 'ready',
         archiveFingerprint: buildResult.archiveFingerprint,
         generatedSlrStorageKey: buildResult.outputFilePath,
-        contentKeyRef: buildResult.contentKey.toString('hex'), // Server-side stored ACK
+        contentKeyRef,
       },
     });
 

@@ -6,10 +6,14 @@ import { PrismaService } from '@/common/prisma.service';
 import { EnvService } from '@/config/env.service';
 import { SolArchExceptionFilter } from '@/common/filters/http-exception.filter';
 import { PaymentsService } from '@/modules/payments/payments.service';
+import { AckCustodyService } from '@/modules/uploads/ack-custody.service';
 import { Keypair, PublicKey } from '@solana/web3.js';
+import { createHash } from 'crypto';
 import * as nacl from 'tweetnacl';
 
 const VALID_TOKEN32 = 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8';
+const mockE2eMessageBytes = Buffer.from('e2e_mock_tx_message_bytes_valid');
+const mockE2eMessageHash = createHash('sha256').update(mockE2eMessageBytes).digest('hex').toLowerCase();
 
 describe('SolArch Marketplace Backend API (e2e)', () => {
   let app: INestApplication;
@@ -120,7 +124,7 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
         id: 'pi_e2e_001',
         archiveId: 'arc_e2e_001',
         devicePublicKey: DEVICE_A,
-        clientSecretHmac: require('@/crypto/token32.util').hashSecretToken(
+        clientSecretHmac: require('@/crypto/token32.util').hashIntentClientSecret(
           VALID_TOKEN32,
           'solarch-intent-hmac-secret-32-chars-minimum',
         ),
@@ -156,8 +160,9 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
         archive: mockArchive,
         activations: [],
         payment: {
+          status: 'confirmed',
           paymentIntent: {
-            clientSecretHmac: require('@/crypto/token32.util').hashSecretToken(
+            clientSecretHmac: require('@/crypto/token32.util').hashIntentClientSecret(
               VALID_TOKEN32,
               'solarch-intent-hmac-secret-32-chars-minimum',
             ),
@@ -186,7 +191,12 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
       create: jest.fn().mockResolvedValue({}),
     },
     paymentTransactionIssuance: {
-      findFirst: jest.fn().mockResolvedValue(null),
+      findFirst: jest.fn().mockResolvedValue({
+        paymentIntentId: 'pi_e2e_001',
+        transactionMessageHash: mockE2eMessageHash,
+        lastValidBlockHeight: BigInt(999999),
+      }),
+      findMany: jest.fn().mockResolvedValue([]),
       create: jest.fn().mockResolvedValue({}),
       update: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -210,6 +220,13 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
     })
       .overrideProvider(PrismaService)
       .useValue(mockPrisma)
+      .overrideProvider(AckCustodyService)
+      .useValue({
+        seal: jest.fn().mockResolvedValue({ contentKeyRef: 'ack_ref_e2e' }),
+        unseal: jest.fn().mockResolvedValue(
+          Buffer.from('a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf', 'hex'),
+        ),
+      })
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -230,10 +247,12 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
       }),
       isBlockhashValid: jest.fn().mockResolvedValue({ value: true }),
       getSignaturesForAddress: jest.fn().mockResolvedValue([]),
+      getSignatureStatuses: jest.fn().mockResolvedValue({
+        value: [{ confirmationStatus: 'finalized', err: null }],
+      }),
       getParsedTransaction: jest.fn().mockResolvedValue({
         slot: 100,
         blockTime: 123456,
-        confirmationStatus: 'finalized',
         meta: { err: null },
         transaction: {
           message: {
@@ -266,7 +285,15 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
           },
         },
       }),
-      getTransaction: jest.fn().mockResolvedValue(null),
+      getTransaction: jest.fn().mockResolvedValue({
+        slot: 100,
+        blockHeight: 100,
+        transaction: {
+          message: {
+            serialize: () => mockE2eMessageBytes,
+          },
+        },
+      }),
     } as any);
 
     await app.init();

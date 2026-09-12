@@ -40,6 +40,15 @@ export class EnvService implements OnModuleInit {
     if (!this.configService.get<string>('DEVICE_REFRESH_HMAC_SECRET')) {
       missing.push('DEVICE_REFRESH_HMAC_SECRET');
     }
+    if (!this.configService.get<string>('ACK_KEK_SECRET')) {
+      missing.push('ACK_KEK_SECRET');
+    }
+    const publicOrigin = this.configService.get<string>('PUBLIC_API_ORIGIN');
+    if (!publicOrigin) {
+      missing.push('PUBLIC_API_ORIGIN');
+    } else if (!publicOrigin.startsWith('https://')) {
+      throw new Error('PUBLIC_API_ORIGIN must start with https:// in live environment');
+    }
     if (missing.length > 0) {
       const errorMsg = `Live environment startup failed closed. Missing explicit secrets: ${missing.join(', ')}`;
       this.logger.error(errorMsg);
@@ -55,12 +64,37 @@ export class EnvService implements OnModuleInit {
     return this.configService.get<string>('NODE_ENV') === 'production';
   }
 
+  get publicApiOrigin(): string {
+    const origin = this.configService.get<string>('PUBLIC_API_ORIGIN');
+    if (!origin) {
+      if (this.isLiveEnvironment) {
+        throw new Error('PUBLIC_API_ORIGIN is required in live environment');
+      }
+      return 'http://localhost:3000';
+    }
+    if (this.isLiveEnvironment && !origin.startsWith('https://')) {
+      throw new Error('PUBLIC_API_ORIGIN must start with https:// in live environment');
+    }
+    return origin.replace(/\/+$/, '');
+  }
+
   get jwtSecret(): string {
     return this.configService.get<string>('JWT_SECRET', 'solarch-dev-jwt-super-secret-key-32-chars-minimum');
   }
 
   get jwtExpiresIn(): string {
     return this.configService.get<string>('JWT_EXPIRES_IN', '7d');
+  }
+
+  get ackKekSecret(): string {
+    const secret = this.configService.get<string>('ACK_KEK_SECRET');
+    if (!secret) {
+      if (this.isLiveEnvironment) {
+        throw new Error('ACK_KEK_SECRET is required in live environment');
+      }
+      return 'solarch-ack-kek-super-secret-key-32-chars-dev';
+    }
+    return secret;
   }
 
   get intentHmacSecret(): string {

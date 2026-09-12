@@ -46,6 +46,13 @@ describe('UploadsService Hardening & Validations', () => {
             }),
           },
         },
+        {
+          provide: require('./ack-custody.service').AckCustodyService,
+          useValue: {
+            seal: jest.fn().mockResolvedValue({ contentKeyRef: 'ack_ref_001' }),
+            unseal: jest.fn().mockResolvedValue(Buffer.alloc(32, 1)),
+          },
+        },
       ],
     }).compile();
 

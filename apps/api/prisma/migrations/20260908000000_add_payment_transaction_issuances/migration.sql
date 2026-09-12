@@ -1,4 +1,4 @@
-﻿-- CreateTable
+-- CreateTable
 CREATE TABLE "payment_transaction_issuances" (
     "id" TEXT NOT NULL,
     "payment_intent_id" TEXT NOT NULL,
@@ -15,6 +15,9 @@ CREATE TABLE "payment_transaction_issuances" (
 
 -- CreateIndex
 CREATE INDEX "payment_transaction_issuances_payment_intent_id_status_idx" ON "payment_transaction_issuances"("payment_intent_id", "status");
+
+-- CreatePartialUniqueIndex
+CREATE UNIQUE INDEX "payment_transaction_issuances_unique_active_intent" ON "payment_transaction_issuances"("payment_intent_id") WHERE "status" = 'active';
 
 -- AddForeignKey
 ALTER TABLE "payment_transaction_issuances" ADD CONSTRAINT "payment_transaction_issuances_payment_intent_id_fkey" FOREIGN KEY ("payment_intent_id") REFERENCES "payment_intents"("id") ON DELETE CASCADE ON UPDATE CASCADE;

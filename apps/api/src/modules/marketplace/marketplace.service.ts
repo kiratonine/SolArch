@@ -285,8 +285,12 @@ export class MarketplaceService {
       where: { id: archiveId },
     });
 
-    if (!archive) {
-      throw new NotFoundException('Archive not found');
+    if (
+      !archive ||
+      archive.technicalStatus !== 'ready' ||
+      archive.marketplaceStatus !== 'published'
+    ) {
+      throw new NotFoundException('Archive not found or not ready');
     }
 
     return {

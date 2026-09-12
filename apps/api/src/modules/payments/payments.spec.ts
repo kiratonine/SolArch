@@ -1,9 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { PaymentsService } from './payments.service';
 import { PrismaService } from '@/common/prisma.service';
 import { EnvService } from '@/config/env.service';
 import { Keypair, PublicKey } from '@solana/web3.js';
+import { hashIntentClientSecret } from '@/crypto/token32.util';
 
 describe('PaymentsService & Solana Pay', () => {
   let service: PaymentsService;
@@ -13,6 +15,10 @@ describe('PaymentsService & Solana Pay', () => {
   const feePayer = Keypair.generate();
   const usdcMint = new PublicKey('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU');
   const platformWallet = Keypair.generate().publicKey;
+  const PEPPER = 'test-hmac-secret-pepper-minimum-32';
+
+  const mockMessageBytes = Buffer.from('mock_tx_message_bytes_for_matching');
+  const mockMessageHash = createHash('sha256').update(mockMessageBytes).digest('hex').toLowerCase();
 
   beforeEach(async () => {
     prisma = {
@@ -33,6 +39,7 @@ describe('PaymentsService & Solana Pay', () => {
       },
       paymentTransactionIssuance: {
         findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
         create: jest.fn().mockResolvedValue({}),
         update: jest.fn().mockResolvedValue({}),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -54,7 +61,8 @@ describe('PaymentsService & Solana Pay', () => {
             usdcMint,
             solarchPlatformWallet: platformWallet,
             feePayerKeypair: feePayer,
-            intentHmacSecret: 'test-hmac-secret-pepper-minimum-32',
+            intentHmacSecret: PEPPER,
+            publicApiOrigin: 'https://solarch.app',
             isProduction: false,
           },
         },
@@ -69,7 +77,11 @@ describe('PaymentsService & Solana Pay', () => {
         lastValidBlockHeight: 123456,
       }),
       getSignaturesForAddress: jest.fn().mockResolvedValue([]),
+      getSignatureStatuses: jest.fn().mockResolvedValue({
+        value: [{ confirmationStatus: 'finalized', err: null }],
+      }),
       getParsedTransaction: jest.fn().mockResolvedValue(null),
+      getTransaction: jest.fn().mockResolvedValue(null),
     } as any);
   });
 
@@ -82,6 +94,7 @@ describe('PaymentsService & Solana Pay', () => {
       creatorPayoutWallet: creatorPayout,
       creatorUsdcAta: 'CreatorUsdcAta11111111111111111111111111111',
       marketplaceStatus: 'published',
+      technicalStatus: 'ready',
     });
 
     prisma.paymentIntent.create.mockImplementation(({ data }: any) => ({
@@ -89,13 +102,10 @@ describe('PaymentsService & Solana Pay', () => {
       ...data,
     }));
 
-    const res = await service.createPaymentIntent(
-      {
-        archive_id: 'arc_001',
-        device_public_key: DEVICE_A,
-      },
-      'https://solarch.app',
-    );
+    const res = await service.createPaymentIntent({
+      archive_id: 'arc_001',
+      device_public_key: DEVICE_A,
+    });
 
     expect(res.payment_intent_id).toBe('pi_001');
     expect(res.amount).toBe('10.00');
@@ -135,6 +145,10 @@ describe('PaymentsService & Solana Pay', () => {
       reference,
       status: 'created',
       expiresAt: new Date(Date.now() + 1800 * 1000),
+      archive: {
+        marketplaceStatus: 'published',
+        technicalStatus: 'ready',
+      },
     });
 
     const res = await service.buildTransaction('pi_001', { account: buyerWallet });
@@ -145,12 +159,12 @@ describe('PaymentsService & Solana Pay', () => {
     expect(txBuf.length).toBeGreaterThan(100);
   });
 
-  test('verifies payment when transaction matches 95/5 USDC split and reference', async () => {
+  test('verifies payment when transaction is finalized and matches 95/5 USDC split and reference', async () => {
     const creatorAta = Keypair.generate().publicKey.toBase58();
     const platformAta = Keypair.generate().publicKey.toBase58();
     const reference = Keypair.generate().publicKey.toBase58();
-    const secret = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
-    const secretHmac = require('@/crypto/token32.util').hashSecretToken(secret, 'test-hmac-secret-pepper-minimum-32');
+    const secret = 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8';
+    const secretHmac = hashIntentClientSecret(secret, PEPPER);
 
     prisma.paymentIntent.findUnique.mockResolvedValue({
       id: 'pi_001',
@@ -162,22 +176,33 @@ describe('PaymentsService & Solana Pay', () => {
       platformAta,
       reference,
       status: 'pending',
+      expiresAt: new Date(Date.now() + 1800 * 1000),
       archive: {
+        marketplaceStatus: 'published',
+        technicalStatus: 'ready',
         allowExport: false,
         watermarkEnabled: true,
       },
     });
     prisma.payment.findUnique.mockResolvedValue(null);
+    prisma.paymentTransactionIssuance.findFirst.mockResolvedValue({
+      paymentIntentId: 'pi_001',
+      transactionMessageHash: mockMessageHash,
+      lastValidBlockHeight: BigInt(200_000),
+    });
     prisma.paymentIntent.update.mockResolvedValue({});
     prisma.payment.create.mockResolvedValue({ id: 'pay_001' });
     prisma.entitlement.create.mockResolvedValue({ id: 'ent_001' });
     prisma.marketplaceEvent.create.mockResolvedValue({});
 
+    // Realistic mocks: getSignatureStatuses has finalized, getParsedTransaction does NOT have confirmationStatus
     jest.spyOn(service, 'getConnection').mockReturnValue({
+      getSignatureStatuses: jest.fn().mockResolvedValue({
+        value: [{ confirmationStatus: 'finalized', err: null }],
+      }),
       getParsedTransaction: jest.fn().mockResolvedValue({
         slot: 100,
         blockTime: 123456,
-        confirmationStatus: 'finalized',
         meta: { err: null },
         transaction: {
           message: {
@@ -210,6 +235,15 @@ describe('PaymentsService & Solana Pay', () => {
           },
         },
       }),
+      getTransaction: jest.fn().mockResolvedValue({
+        slot: 100,
+        blockHeight: 100,
+        transaction: {
+          message: {
+            serialize: () => mockMessageBytes,
+          },
+        },
+      }),
     } as any);
 
     const res = await service.verifyPayment('pi_001', `SolArchIntent ${secret}`, {
@@ -226,8 +260,8 @@ describe('PaymentsService & Solana Pay', () => {
     const creatorAta = Keypair.generate().publicKey.toBase58();
     const platformAta = Keypair.generate().publicKey.toBase58();
     const reference = Keypair.generate().publicKey.toBase58();
-    const secret = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
-    const secretHmac = require('@/crypto/token32.util').hashSecretToken(secret, 'test-hmac-secret-pepper-minimum-32');
+    const secret = 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8';
+    const secretHmac = hashIntentClientSecret(secret, PEPPER);
 
     prisma.paymentIntent.findUnique.mockResolvedValue({
       id: 'pi_001',
@@ -239,12 +273,21 @@ describe('PaymentsService & Solana Pay', () => {
       platformAta,
       reference,
       status: 'pending',
+      expiresAt: new Date(Date.now() + 1800 * 1000),
     });
     prisma.payment.findUnique.mockResolvedValue(null);
+    prisma.paymentTransactionIssuance.findFirst.mockResolvedValue({
+      paymentIntentId: 'pi_001',
+      transactionMessageHash: mockMessageHash,
+      lastValidBlockHeight: BigInt(200_000),
+    });
 
     jest.spyOn(service, 'getConnection').mockReturnValue({
+      getSignatureStatuses: jest.fn().mockResolvedValue({
+        value: [{ confirmationStatus: 'finalized', err: null }],
+      }),
       getParsedTransaction: jest.fn().mockResolvedValue({
-        confirmationStatus: 'finalized',
+        slot: 100,
         meta: { err: null },
         transaction: {
           message: {
@@ -253,6 +296,15 @@ describe('PaymentsService & Solana Pay', () => {
               { pubkey: { toBase58: () => 'BuyerWallet' }, signer: true },
             ],
             instructions: [],
+          },
+        },
+      }),
+      getTransaction: jest.fn().mockResolvedValue({
+        slot: 100,
+        blockHeight: 100,
+        transaction: {
+          message: {
+            serialize: () => mockMessageBytes,
           },
         },
       }),
