@@ -1,5 +1,12 @@
 #![deny(unsafe_code)]
 
+#[cfg(all(
+    feature = "live-devnet",
+    feature = "development-fixtures",
+    not(debug_assertions)
+))]
+compile_error!("live Devnet release builds must not include development-fixtures");
+
 pub mod archive_service;
 pub mod backend;
 pub mod clock;
@@ -113,6 +120,12 @@ impl AppState {
     ) -> Result<Self, ViewerError> {
         let trust = TrustConfig::for_current_build()?;
         let configured = configured_backend();
+        #[cfg(all(feature = "live-devnet", not(test)))]
+        let (backend, backend_config) = {
+            let (client, config) = configured.map_err(|_| ViewerError::BackendUnavailable)?;
+            (Some(client), Some(config))
+        };
+        #[cfg(any(not(feature = "live-devnet"), test))]
         let (backend, backend_config) = match configured {
             Ok((client, config)) => (Some(client), Some(config)),
             Err(_) => (None, None),
@@ -330,7 +343,7 @@ impl AppState {
 }
 
 fn configured_backend() -> Result<(Arc<dyn BackendApi>, BackendConfig), backend::BackendError> {
-    #[cfg(feature = "development-fixtures")]
+    #[cfg(all(feature = "development-fixtures", not(feature = "live-devnet")))]
     if let Ok(value) = std::env::var("SOLARCH_DEV_BACKEND_FIXTURE") {
         let mode = backend::dev_fixture::DevFixtureMode::parse(&value)
             .ok_or(backend::BackendError::Configuration)?;
@@ -340,7 +353,7 @@ fn configured_backend() -> Result<(Arc<dyn BackendApi>, BackendConfig), backend:
             config,
         ));
     }
-    #[cfg(feature = "development-fixtures")]
+    #[cfg(all(feature = "development-fixtures", not(feature = "live-devnet")))]
     if let Ok(origin) = std::env::var("SOLARCH_DEV_BACKEND_ORIGIN") {
         let config = BackendConfig::development(&origin)?;
         let client = Arc::new(HttpBackendClient::new(config.clone())?);

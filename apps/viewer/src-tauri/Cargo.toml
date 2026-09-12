@@ -9,7 +9,8 @@ name = "solarch_viewer"
 
 [features]
 default = []
-development-fixtures = ["dep:ed25519-dalek", "dep:hpke"]
+development-fixtures = ["dep:hpke"]
+live-devnet = []
 desktop-runtime = [
     "tauri/wry",
     "dep:tauri-build",
@@ -33,7 +34,7 @@ getrandom.workspace = true
 bs58.workspace = true
 reqwest.workspace = true
 url.workspace = true
-ed25519-dalek = { workspace = true, optional = true }
+ed25519-dalek.workspace = true
 hpke = { workspace = true, optional = true }
 image.workspace = true
 calamine.workspace = true

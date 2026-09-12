@@ -5,6 +5,12 @@
   "scripts": {
     "lint": "pnpm --filter @solarch/viewer lint",
     "test": "pnpm --filter @solarch/viewer test",
-    "build": "pnpm --filter @solarch/viewer build"
+    "build": "pnpm --filter @solarch/viewer build",
+    "viewer:devnet:preflight": "node scripts/viewer-live-devnet-e2e.mjs preflight",
+    "viewer:devnet:build": "node scripts/viewer-live-devnet-e2e.mjs build",
+    "viewer:devnet:evidence": "node scripts/viewer-live-devnet-e2e.mjs evidence",
+    "viewer:devnet:checklist": "node scripts/viewer-live-devnet-e2e.mjs checklist",
+    "viewer:devnet:evidence-template": "node scripts/viewer-live-devnet-e2e.mjs template",
+    "test:live-e2e-harness": "node --test scripts/viewer-live-devnet-e2e.test.mjs"
   }
 }
