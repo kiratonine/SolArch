@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum ViewerError {
     #[error("invalid command input")]
     InvalidInput,
@@ -42,6 +42,14 @@ pub enum ViewerError {
     Expired,
     #[error("online refresh is required")]
     RefreshRequired,
+    #[error("protected file type is not supported by this renderer")]
+    UnsupportedFile,
+    #[error("protected renderer rejected malformed content")]
+    RendererError,
+    #[error("protected renderer resource limit exceeded")]
+    RendererLimit,
+    #[error("protected renderer handle is closed")]
+    RendererClosed,
     #[error("internal viewer state failed")]
     Internal,
 }
@@ -87,6 +95,10 @@ impl From<ViewerError> for CommandError {
             ViewerError::WrongDevice => ("WRONG_DEVICE", "errors.wrongDevice"),
             ViewerError::Expired => ("LICENSE_EXPIRED", "errors.expired"),
             ViewerError::RefreshRequired => ("REFRESH_REQUIRED", "errors.refreshRequired"),
+            ViewerError::UnsupportedFile => ("UNSUPPORTED_FILE", "errors.unsupportedFile"),
+            ViewerError::RendererError => ("RENDERER_ERROR", "errors.rendererError"),
+            ViewerError::RendererLimit => ("RENDERER_LIMIT", "errors.rendererLimit"),
+            ViewerError::RendererClosed => ("RENDERER_CLOSED", "errors.rendererClosed"),
             ViewerError::Internal => ("INTERNAL", "errors.internal"),
         };
         Self { code, message_key }

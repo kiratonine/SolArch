@@ -69,10 +69,11 @@ export default function App() {
             onClose={viewer.clearArchive}
           />
         ) : null}
-        {screen.state === "unlocked" && screen.archive ? (
+        {screen.state === "unlocked" && screen.archive && screen.watermark ? (
           <UnlockedWorkspace
             archive={screen.archive}
             files={screen.files}
+            watermark={screen.watermark}
             onClose={viewer.clearArchive}
           />
         ) : null}

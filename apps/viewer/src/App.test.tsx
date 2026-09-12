@@ -5,7 +5,7 @@ import App from "./App";
 import { I18nProvider, LOCALE_STORAGE_KEY } from "./i18n";
 import type { FileOpenEvent, ViewerSnapshot, ViewerState } from "./ipc";
 
-type EventCallback = (event: { payload: FileOpenEvent }) => void;
+type EventCallback = (event: { payload: unknown }) => void;
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
   open: vi.fn(),
@@ -53,6 +53,11 @@ function snapshot(state: ViewerState): ViewerSnapshot {
     files: state === "unlocked"
       ? [{ fileId: "file_000000", path: "course/a.pdf", displayName: "a.pdf", mimeType: "application/pdf", sizeBytes: 1_200 }]
       : [],
+    watermark: state === "unlocked" ? {
+      buyerWalletShort: "Buyer1…yer1",
+      licenseIdShort: "lic_01…c_01",
+      archiveIdShort: "arc_te…st_01",
+    } : null,
   };
 }
 
@@ -70,6 +75,7 @@ function defaultInvoke(command: string): Promise<unknown> {
   if (command === "take_startup_archive") return Promise.resolve(null);
   if (command === "get_device_public_key") return Promise.resolve("public-device-value-that-must-not-render");
   if (command === "close_archive") return Promise.resolve();
+  if (command === "protected_session_status") return Promise.resolve();
   if (command === "open_archive") return Promise.resolve(snapshot("locked"));
   return Promise.reject(new Error(`unexpected command ${command}`));
 }
@@ -263,7 +269,7 @@ describe("Viewer Part 03 state machine and desktop shell", () => {
   it("reuses the existing window event path for another Explorer archive", async () => {
     renderApp();
     await screen.findByRole("button", { name: "Open archive" });
-    await waitFor(() => expect(mocks.listeners.size).toBe(2));
+    await waitFor(() => expect(mocks.listeners.size).toBe(3));
     act(() => mocks.listeners.get("viewer://archive-open-requested")?.({ payload: {} as FileOpenEvent }));
     expect(screen.getByText("Verifying archive")).toBeInTheDocument();
 
@@ -273,5 +279,24 @@ describe("Viewer Part 03 state machine and desktop shell", () => {
     }));
     expect(screen.getByRole("heading", { name: "Second verified archive" })).toBeInTheDocument();
     expect(mocks.open).not.toHaveBeenCalled();
+  });
+
+  it("removes protected content and watermark immediately on Rust session expiry", async () => {
+    mocks.invoke.mockImplementation((command: string) => {
+      if (["get_installer_locale", "startup_archive_pending", "take_startup_archive", "get_device_public_key", "protected_session_status"].includes(command)) {
+        return defaultInvoke(command);
+      }
+      if (command === "open_archive") return Promise.resolve(snapshot("unlocked"));
+      return Promise.resolve();
+    });
+    renderApp();
+    await openManually();
+    expect(await screen.findByText("Protected archive unlocked")).toBeInTheDocument();
+    expect(await screen.findByText("a.pdf")).toBeInTheDocument();
+    await waitFor(() => expect(mocks.listeners.has("viewer://protected-session-expired")).toBe(true));
+    act(() => mocks.listeners.get("viewer://protected-session-expired")?.({ payload: undefined }));
+    expect(await screen.findByRole("heading", { name: "Refresh required" })).toBeInTheDocument();
+    expect(screen.queryByText("a.pdf")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("watermark-overlay")).not.toBeInTheDocument();
   });
 });

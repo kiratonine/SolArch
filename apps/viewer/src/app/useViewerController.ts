@@ -10,8 +10,10 @@ import {
   isStartupArchivePending,
   onExternalArchiveOpened,
   onExternalArchiveRequested,
+  onProtectedSessionExpired,
   openArchive,
   pollPayment,
+  protectedSessionStatus,
   refreshLicense,
   retryMetadata,
   startPayment,
@@ -28,6 +30,7 @@ const EMPTY_SCREEN: Screen = {
   archive: null,
   payment: null,
   files: [],
+  watermark: null,
   messageKey: null,
 };
 
@@ -61,10 +64,13 @@ export function useViewerController() {
   const applyError = useCallback((error: unknown, clearArchive = false) => {
     const state = stateFromError(error);
     const key = errorMessageKey(error);
+    const relocked = state === "refresh_required";
     setScreen((current) => ({
       ...(clearArchive ? EMPTY_SCREEN : current),
       state,
       payment: state.startsWith("payment_") ? null : clearArchive ? null : current.payment,
+      files: clearArchive || relocked ? [] : current.files,
+      watermark: clearArchive || relocked ? null : current.watermark,
       messageKey: key && key in KNOWN_MESSAGE_KEYS ? key as MessageKey : null,
     }));
   }, []);
@@ -93,6 +99,17 @@ export function useViewerController() {
             if (event.snapshot) applySnapshot(event.snapshot);
             else if (event.error) applyError(event.error, true);
           }),
+          onProtectedSessionExpired(() => {
+            if (!active) return;
+            setScreen((current) => ({
+              ...current,
+              state: "refresh_required",
+              payment: null,
+              files: [],
+              watermark: null,
+              messageKey: "errors.refreshRequired",
+            }));
+          }),
         ]);
         if (!active) {
           listeners.forEach((stop) => stop());
@@ -119,6 +136,25 @@ export function useViewerController() {
       unlisten.forEach((stop) => stop());
     };
   }, [applyError, applySnapshot]);
+
+  useEffect(() => {
+    if (screen.state !== "unlocked") return;
+    let active = true;
+    const check = () => {
+      void protectedSessionStatus().catch((error: unknown) => {
+        if (active) applyError(error);
+      });
+    };
+    const timer = window.setInterval(check, 15_000);
+    window.addEventListener("focus", check);
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", check);
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, [applyError, screen.state]);
 
   useEffect(() => {
     if (!NETWORK_PAYMENT_STATES.includes(screen.state)) return;
@@ -238,6 +274,10 @@ const KNOWN_MESSAGE_KEYS: Record<string, true> = {
   "errors.wrongDevice": true,
   "errors.expired": true,
   "errors.refreshRequired": true,
+  "errors.unsupportedFile": true,
+  "errors.rendererError": true,
+  "errors.rendererLimit": true,
+  "errors.rendererClosed": true,
   "errors.paymentExpired": true,
   "errors.paymentFailed": true,
   "errors.deviceLimitReached": true,

@@ -1,4 +1,4 @@
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 pub mod archive_service;
 pub mod backend;
@@ -9,6 +9,7 @@ pub mod launch;
 pub mod license_repository;
 pub mod payment_repository;
 pub mod payment_service;
+pub mod renderer;
 pub mod rollback;
 pub mod secure_store;
 pub mod session;
@@ -19,7 +20,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use archive_service::{ArchiveService, ProtectedFileDto, VerifiedArchiveDto};
+use archive_service::{ArchiveService, ProtectedFileDto, VerifiedArchiveDto, WatermarkDto};
 use backend::{BackendApi, BackendConfig, HttpBackendClient};
 use device::DeviceManager;
 #[cfg(all(windows, feature = "desktop-runtime"))]
@@ -31,6 +32,28 @@ use payment_service::{PaymentService, PaymentView};
 use rollback::RollbackManager;
 use secure_store::{KeyedSecretStore, SecretStore};
 use trust::TrustConfig;
+
+#[cfg(all(windows, feature = "desktop-runtime"))]
+struct WebviewHardeningState(std::sync::atomic::AtomicBool);
+
+#[cfg(all(windows, feature = "desktop-runtime"))]
+impl WebviewHardeningState {
+    fn pending() -> Self {
+        Self(std::sync::atomic::AtomicBool::new(false))
+    }
+
+    fn mark_ready(&self) {
+        self.0.store(true, std::sync::atomic::Ordering::Release);
+    }
+
+    fn ensure_ready(&self) -> Result<(), ViewerError> {
+        if self.0.load(std::sync::atomic::Ordering::Acquire) {
+            Ok(())
+        } else {
+            Err(ViewerError::RendererClosed)
+        }
+    }
+}
 
 #[cfg(all(windows, feature = "desktop-runtime"))]
 const MAX_IPC_PATH_BYTES: usize = 4096;
@@ -78,6 +101,7 @@ pub struct ViewerSnapshot {
     pub archive: Option<VerifiedArchiveDto>,
     pub payment: Option<PaymentView>,
     pub files: Vec<ProtectedFileDto>,
+    pub watermark: Option<WatermarkDto>,
 }
 
 impl AppState {
@@ -179,12 +203,14 @@ impl AppState {
                     archive: Some(archive),
                     payment: self.payments.current_payment()?,
                     files: Vec::new(),
+                    watermark: None,
                 }),
                 Err(ViewerError::BackendUnavailable) => Ok(ViewerSnapshot {
                     state: ViewerStateKind::BackendUnavailable,
                     archive: Some(archive),
                     payment: None,
                     files: Vec::new(),
+                    watermark: None,
                 }),
                 Err(error) => Err(error),
             },
@@ -203,6 +229,7 @@ impl AppState {
                         archive: Some(archive),
                         payment: None,
                         files: Vec::new(),
+                        watermark: None,
                     }),
                     Err(error) => Err(error),
                 }
@@ -220,6 +247,7 @@ impl AppState {
             archive: None,
             payment: Some(payment),
             files: Vec::new(),
+            watermark: None,
         })
     }
 
@@ -234,6 +262,7 @@ impl AppState {
             archive: None,
             payment,
             files: Vec::new(),
+            watermark: None,
         })
     }
 
@@ -244,6 +273,7 @@ impl AppState {
             archive: None,
             payment: Some(payment),
             files: Vec::new(),
+            watermark: None,
         })
     }
 
@@ -294,6 +324,7 @@ impl AppState {
             archive: Some(archive),
             payment: None,
             files: self.archives.list_files(now)?,
+            watermark: Some(self.archives.watermark(now)?),
         })
     }
 }
@@ -346,6 +377,8 @@ fn archive_dto(identity: &session::VerifiedArchiveIdentity) -> VerifiedArchiveDt
 
 #[cfg(all(windows, feature = "desktop-runtime"))]
 const FILE_OPEN_EVENT: &str = "viewer://archive-opened";
+#[cfg(all(windows, feature = "desktop-runtime"))]
+const PROTECTED_SESSION_EXPIRED_EVENT: &str = "viewer://protected-session-expired";
 
 #[cfg(all(windows, feature = "desktop-runtime"))]
 #[derive(Clone, Debug, serde::Serialize)]
@@ -371,33 +404,42 @@ fn get_installer_locale() -> Option<&'static str> {
 #[tauri::command]
 async fn open_archive(
     path: String,
+    app: tauri::AppHandle,
     state: tauri::State<'_, Arc<AppState>>,
 ) -> Result<ViewerSnapshot, CommandError> {
     if path.is_empty() || path.len() > MAX_IPC_PATH_BYTES || path.contains('\0') {
         return Err(ViewerError::InvalidInput.into());
     }
     let state = Arc::clone(state.inner());
-    tauri::async_runtime::spawn_blocking(move || state.open_archive_flow(&PathBuf::from(path)))
-        .await
-        .map_err(|_| CommandError::from(ViewerError::Internal))?
-        .map_err(Into::into)
+    let worker = Arc::clone(&state);
+    let snapshot = tauri::async_runtime::spawn_blocking(move || {
+        worker.open_archive_flow(&PathBuf::from(path))
+    })
+    .await
+    .map_err(|_| CommandError::from(ViewerError::Internal))?
+    .map_err(CommandError::from)?;
+    arm_protected_deadline(&app, &state, &snapshot);
+    Ok(snapshot)
 }
 
 #[cfg(all(windows, feature = "desktop-runtime"))]
 #[tauri::command]
 async fn take_startup_archive(
     pending: tauri::State<'_, launch::PendingStartupArchive>,
+    app: tauri::AppHandle,
     state: tauri::State<'_, Arc<AppState>>,
 ) -> Result<Option<ViewerSnapshot>, CommandError> {
     let Some(path) = pending.take().map_err(CommandError::from)? else {
         return Ok(None);
     };
     let state = Arc::clone(state.inner());
-    tauri::async_runtime::spawn_blocking(move || state.open_archive_flow(&path))
+    let worker = Arc::clone(&state);
+    let snapshot = tauri::async_runtime::spawn_blocking(move || worker.open_archive_flow(&path))
         .await
         .map_err(|_| CommandError::from(ViewerError::Internal))?
-        .map(Some)
-        .map_err(Into::into)
+        .map_err(CommandError::from)?;
+    arm_protected_deadline(&app, &state, &snapshot);
+    Ok(Some(snapshot))
 }
 
 #[cfg(all(windows, feature = "desktop-runtime"))]
@@ -447,25 +489,307 @@ async fn poll_payment(
 #[cfg(all(windows, feature = "desktop-runtime"))]
 #[tauri::command]
 async fn activate_payment(
+    app: tauri::AppHandle,
     state: tauri::State<'_, Arc<AppState>>,
 ) -> Result<ViewerSnapshot, CommandError> {
     let state = Arc::clone(state.inner());
-    tauri::async_runtime::spawn_blocking(move || state.activate_payment())
+    let worker = Arc::clone(&state);
+    let snapshot = tauri::async_runtime::spawn_blocking(move || worker.activate_payment())
         .await
         .map_err(|_| CommandError::from(ViewerError::Internal))?
-        .map_err(Into::into)
+        .map_err(CommandError::from)?;
+    arm_protected_deadline(&app, &state, &snapshot);
+    Ok(snapshot)
 }
 
 #[cfg(all(windows, feature = "desktop-runtime"))]
 #[tauri::command]
 async fn refresh_license(
+    app: tauri::AppHandle,
     state: tauri::State<'_, Arc<AppState>>,
 ) -> Result<ViewerSnapshot, CommandError> {
     let state = Arc::clone(state.inner());
-    tauri::async_runtime::spawn_blocking(move || state.refresh_license())
+    let worker = Arc::clone(&state);
+    let snapshot = tauri::async_runtime::spawn_blocking(move || worker.refresh_license())
         .await
         .map_err(|_| CommandError::from(ViewerError::Internal))?
+        .map_err(CommandError::from)?;
+    arm_protected_deadline(&app, &state, &snapshot);
+    Ok(snapshot)
+}
+
+#[cfg(all(windows, feature = "desktop-runtime"))]
+#[tauri::command]
+async fn protected_session_status(
+    state: tauri::State<'_, Arc<AppState>>,
+) -> Result<(), CommandError> {
+    let state = Arc::clone(state.inner());
+    tauri::async_runtime::spawn_blocking(move || {
+        let now = renderer_now()?;
+        state.archives.enforce_deadline(now)
+    })
+    .await
+    .map_err(|_| CommandError::from(ViewerError::Internal))?
+    .map_err(Into::into)
+}
+
+#[cfg(all(windows, feature = "desktop-runtime"))]
+#[tauri::command]
+fn renderer_begin_open(
+    file_id: String,
+    kind: renderer::RendererKind,
+    state: tauri::State<'_, Arc<AppState>>,
+    hardening: tauri::State<'_, Arc<WebviewHardeningState>>,
+) -> Result<renderer::RendererOpenRequestDto, CommandError> {
+    validate_file_id_input(&file_id)?;
+    hardening.ensure_ready().map_err(CommandError::from)?;
+    state
+        .archives
+        .begin_renderer_open(&file_id, kind, renderer_now()?)
         .map_err(Into::into)
+}
+
+#[cfg(all(windows, feature = "desktop-runtime"))]
+#[tauri::command]
+fn renderer_cancel_open(
+    request_id: String,
+    state: tauri::State<'_, Arc<AppState>>,
+) -> Result<(), CommandError> {
+    validate_request_input(&request_id)?;
+    state
+        .archives
+        .cancel_renderer_open(&request_id)
+        .map_err(Into::into)
+}
+
+#[cfg(all(windows, feature = "desktop-runtime"))]
+#[tauri::command]
+async fn pdf_open(
+    request_id: String,
+    state: tauri::State<'_, Arc<AppState>>,
+) -> Result<renderer::PdfOpenDto, CommandError> {
+    validate_request_input(&request_id)?;
+    let state = Arc::clone(state.inner());
+    tauri::async_runtime::spawn_blocking(move || {
+        state.archives.pdf_open(&request_id, renderer_now()?)
+    })
+    .await
+    .map_err(|_| CommandError::from(ViewerError::Internal))?
+    .map_err(Into::into)
+}
+
+#[cfg(all(windows, feature = "desktop-runtime"))]
+#[tauri::command]
+async fn pdf_read_range(
+    handle: String,
+    offset: u64,
+    length: u64,
+    state: tauri::State<'_, Arc<AppState>>,
+) -> Result<tauri::ipc::Response, CommandError> {
+    validate_handle_input(&handle)?;
+    let state = Arc::clone(state.inner());
+    let bytes = tauri::async_runtime::spawn_blocking(move || {
+        state
+            .archives
+            .pdf_read_range(&handle, offset, length, renderer_now()?)
+    })
+    .await
+    .map_err(|_| CommandError::from(ViewerError::Internal))?
+    .map_err(CommandError::from)?;
+    Ok(tauri::ipc::Response::new(bytes.to_vec()))
+}
+
+#[cfg(all(windows, feature = "desktop-runtime"))]
+#[tauri::command]
+async fn image_open(
+    request_id: String,
+    state: tauri::State<'_, Arc<AppState>>,
+) -> Result<renderer::ImageOpenDto, CommandError> {
+    validate_request_input(&request_id)?;
+    let state = Arc::clone(state.inner());
+    tauri::async_runtime::spawn_blocking(move || {
+        state.archives.image_open(&request_id, renderer_now()?)
+    })
+    .await
+    .map_err(|_| CommandError::from(ViewerError::Internal))?
+    .map_err(Into::into)
+}
+
+#[cfg(all(windows, feature = "desktop-runtime"))]
+#[tauri::command]
+async fn image_render_data(
+    handle: String,
+    state: tauri::State<'_, Arc<AppState>>,
+) -> Result<tauri::ipc::Response, CommandError> {
+    validate_handle_input(&handle)?;
+    let state = Arc::clone(state.inner());
+    let bytes = tauri::async_runtime::spawn_blocking(move || {
+        state.archives.image_render_data(&handle, renderer_now()?)
+    })
+    .await
+    .map_err(|_| CommandError::from(ViewerError::Internal))?
+    .map_err(CommandError::from)?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
+#[cfg(all(windows, feature = "desktop-runtime"))]
+#[tauri::command]
+async fn docx_open(
+    request_id: String,
+    state: tauri::State<'_, Arc<AppState>>,
+) -> Result<renderer::DocxOpenDto, CommandError> {
+    validate_request_input(&request_id)?;
+    let state = Arc::clone(state.inner());
+    tauri::async_runtime::spawn_blocking(move || {
+        state.archives.docx_open(&request_id, renderer_now()?)
+    })
+    .await
+    .map_err(|_| CommandError::from(ViewerError::Internal))?
+    .map_err(Into::into)
+}
+
+#[cfg(all(windows, feature = "desktop-runtime"))]
+#[tauri::command]
+async fn xlsx_open(
+    request_id: String,
+    state: tauri::State<'_, Arc<AppState>>,
+) -> Result<renderer::XlsxOpenDto, CommandError> {
+    validate_request_input(&request_id)?;
+    let state = Arc::clone(state.inner());
+    tauri::async_runtime::spawn_blocking(move || {
+        state.archives.xlsx_open(&request_id, renderer_now()?)
+    })
+    .await
+    .map_err(|_| CommandError::from(ViewerError::Internal))?
+    .map_err(Into::into)
+}
+
+#[cfg(all(windows, feature = "desktop-runtime"))]
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+async fn xlsx_sheet_window(
+    handle: String,
+    sheet_index: u32,
+    row_offset: u32,
+    row_count: u32,
+    column_offset: u32,
+    column_count: u32,
+    state: tauri::State<'_, Arc<AppState>>,
+) -> Result<renderer::XlsxWindowDto, CommandError> {
+    validate_handle_input(&handle)?;
+    let state = Arc::clone(state.inner());
+    tauri::async_runtime::spawn_blocking(move || {
+        state.archives.xlsx_sheet_window(
+            &handle,
+            sheet_index,
+            row_offset,
+            row_count,
+            column_offset,
+            column_count,
+            renderer_now()?,
+        )
+    })
+    .await
+    .map_err(|_| CommandError::from(ViewerError::Internal))?
+    .map_err(Into::into)
+}
+
+#[cfg(all(windows, feature = "desktop-runtime"))]
+#[tauri::command]
+fn renderer_close(
+    handle: String,
+    state: tauri::State<'_, Arc<AppState>>,
+) -> Result<(), CommandError> {
+    validate_handle_input(&handle)?;
+    state.archives.renderer_close(&handle).map_err(Into::into)
+}
+
+#[cfg(all(windows, feature = "desktop-runtime"))]
+fn renderer_now() -> Result<time::OffsetDateTime, ViewerError> {
+    let sample = clock::process_clock_sample()?;
+    time::OffsetDateTime::from_unix_timestamp(sample.utc_unix_seconds)
+        .map_err(|_| ViewerError::RefreshRequired)
+}
+
+#[cfg(all(windows, feature = "desktop-runtime"))]
+fn validate_file_id_input(file_id: &str) -> Result<(), CommandError> {
+    if file_id.is_empty() || file_id.len() > 128 || !file_id.is_ascii() {
+        return Err(ViewerError::InvalidInput.into());
+    }
+    Ok(())
+}
+
+#[cfg(all(windows, feature = "desktop-runtime"))]
+fn validate_handle_input(handle: &str) -> Result<(), CommandError> {
+    if handle.len() != 38 || !handle.is_ascii() || !handle.starts_with("view_") {
+        return Err(ViewerError::InvalidInput.into());
+    }
+    Ok(())
+}
+
+#[cfg(all(windows, feature = "desktop-runtime"))]
+fn validate_request_input(request_id: &str) -> Result<(), CommandError> {
+    if request_id.len() != 38 || !request_id.is_ascii() || !request_id.starts_with("open_") {
+        return Err(ViewerError::InvalidInput.into());
+    }
+    Ok(())
+}
+
+#[cfg(all(windows, feature = "desktop-runtime"))]
+fn arm_protected_deadline(
+    app: &tauri::AppHandle,
+    state: &Arc<AppState>,
+    snapshot: &ViewerSnapshot,
+) {
+    if snapshot.state != ViewerStateKind::Unlocked {
+        return;
+    }
+    let Ok(token) = state.archives.deadline_token() else {
+        return;
+    };
+    let app = app.clone();
+    let state = Arc::clone(state);
+    tauri::async_runtime::spawn(async move {
+        #[cfg(feature = "development-fixtures")]
+        let development_delay = development_expiry_delay();
+        loop {
+            let now = match renderer_now() {
+                Ok(now) => now,
+                Err(_) => token.deadline,
+            };
+            let delay_ms = (token.deadline - now).whole_milliseconds().max(0);
+            #[cfg(feature = "development-fixtures")]
+            let delay_ms = development_delay.map_or(delay_ms, i128::from);
+            let delay_ms = u64::try_from(delay_ms).unwrap_or(u64::MAX);
+            tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+            #[cfg(feature = "development-fixtures")]
+            let now = if development_delay.is_some() {
+                token.deadline
+            } else {
+                renderer_now().unwrap_or(token.deadline)
+            };
+            #[cfg(not(feature = "development-fixtures"))]
+            let now = renderer_now().unwrap_or(token.deadline);
+            match state.archives.expire_session(token, now) {
+                Ok(true) => {
+                    use tauri::Emitter as _;
+                    let _ = app.emit(PROTECTED_SESSION_EXPIRED_EVENT, ());
+                    return;
+                }
+                Ok(false) if now < token.deadline => continue,
+                Ok(false) | Err(_) => return,
+            }
+        }
+    });
+}
+
+#[cfg(all(windows, feature = "desktop-runtime", feature = "development-fixtures"))]
+fn development_expiry_delay() -> Option<u64> {
+    std::env::var("SOLARCH_DEV_EXPIRY_AFTER_MILLIS")
+        .ok()?
+        .parse::<u64>()
+        .ok()
+        .filter(|value| *value <= 60_000)
 }
 
 #[cfg(all(windows, feature = "desktop-runtime"))]
@@ -497,15 +821,19 @@ fn handle_second_instance(app: &tauri::AppHandle, args: Vec<String>) {
     let app = app.clone();
     let _ = app.emit("viewer://archive-open-requested", ());
     tauri::async_runtime::spawn(async move {
-        let result = tauri::async_runtime::spawn_blocking(move || state.open_archive_flow(&path))
+        let worker = Arc::clone(&state);
+        let result = tauri::async_runtime::spawn_blocking(move || worker.open_archive_flow(&path))
             .await
             .map_err(|_| ViewerError::Internal)
             .and_then(|result| result);
         let payload = match result {
-            Ok(snapshot) => FileOpenEvent {
-                snapshot: Some(snapshot),
-                error: None,
-            },
+            Ok(snapshot) => {
+                arm_protected_deadline(&app, &state, &snapshot);
+                FileOpenEvent {
+                    snapshot: Some(snapshot),
+                    error: None,
+                }
+            }
             Err(error) => FileOpenEvent {
                 snapshot: None,
                 error: Some(error.into()),
@@ -513,6 +841,54 @@ fn handle_second_instance(app: &tauri::AppHandle, args: Vec<String>) {
         };
         let _ = app.emit(FILE_OPEN_EVENT, payload);
     });
+}
+
+#[cfg(all(windows, feature = "desktop-runtime"))]
+fn configure_webview_hardening(
+    app: &tauri::AppHandle,
+    hardening: Arc<WebviewHardeningState>,
+) -> Result<(), String> {
+    use tauri::Manager as _;
+
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "main webview is unavailable".to_owned())?;
+    let app = app.clone();
+    window
+        .with_webview(move |platform| {
+            if windows_webview_hardening::apply(&platform).is_ok() {
+                hardening.mark_ready();
+            } else {
+                // Protected renderer commands remain fail-closed until the native boundary is ready.
+                app.exit(1);
+            }
+        })
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(all(windows, feature = "desktop-runtime"))]
+#[allow(unsafe_code)]
+mod windows_webview_hardening {
+    use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings3;
+    use windows_core::Interface as _;
+
+    pub(super) fn apply(platform: &tauri::webview::PlatformWebview) -> Result<(), ()> {
+        // WebView2 exposes these supported settings through COM. The generated bindings mark
+        // COM calls unsafe; the controller is owned by Tauri for the lifetime of this callback.
+        unsafe {
+            let webview = platform.controller().CoreWebView2().map_err(|_| ())?;
+            let settings = webview.Settings().map_err(|_| ())?;
+            settings
+                .SetAreDefaultContextMenusEnabled(false)
+                .map_err(|_| ())?;
+            settings.SetAreDevToolsEnabled(false).map_err(|_| ())?;
+            let settings3 = settings.cast::<ICoreWebView2Settings3>().map_err(|_| ())?;
+            settings3
+                .SetAreBrowserAcceleratorKeysEnabled(false)
+                .map_err(|_| ())?;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(all(windows, feature = "desktop-runtime"))]
@@ -551,6 +927,9 @@ pub fn run() -> Result<(), String> {
             let state = AppState::new(store, clock_store, keyed_store, app_data)
                 .map_err(|error| error.to_string())?;
             app.manage(Arc::new(state));
+            let hardening = Arc::new(WebviewHardeningState::pending());
+            app.manage(Arc::clone(&hardening));
+            configure_webview_hardening(app.handle(), hardening)?;
             Ok(())
         })
         .manage(launch::PendingStartupArchive::new(startup_archive))
@@ -565,6 +944,17 @@ pub fn run() -> Result<(), String> {
             poll_payment,
             activate_payment,
             refresh_license,
+            protected_session_status,
+            renderer_begin_open,
+            renderer_cancel_open,
+            pdf_open,
+            pdf_read_range,
+            image_open,
+            image_render_data,
+            docx_open,
+            xlsx_open,
+            xlsx_sheet_window,
+            renderer_close,
             close_archive
         ])
         .run(tauri::generate_context!())

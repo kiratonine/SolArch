@@ -29,9 +29,10 @@ const ARCHIVE_ID: &str = "arc_test_01";
 const FINGERPRINT: &str = "57ce84068fdd9b23f8860afa27834151f4fefb038d812c2ac77e8a861b1eecdb";
 const DEVICE: &str = "aTZYJUYw9zrY2nj7Mxv5ds1C+Q4OnJ6D9AxRBypvdBc=";
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DevFixtureMode {
     Payment,
+    Part04Payment,
     Unavailable,
     Refresh,
 }
@@ -40,6 +41,7 @@ impl DevFixtureMode {
     pub fn parse(value: &str) -> Option<Self> {
         Some(match value {
             "part03-payment" => Self::Payment,
+            "part04-payment" => Self::Part04Payment,
             "part03-unavailable" => Self::Unavailable,
             "part03-refresh" => Self::Refresh,
             _ => return None,
@@ -67,6 +69,22 @@ impl DevFixtureBackend {
             Ok(())
         }
     }
+
+    fn fingerprint(&self) -> Result<String, BackendError> {
+        if self.mode != DevFixtureMode::Part04Payment {
+            return Ok(FINGERPRINT.into());
+        }
+        let value = std::env::var("SOLARCH_DEV_ARCHIVE_FINGERPRINT")
+            .map_err(|_| BackendError::InvalidResponse)?;
+        normalize_fingerprint(&value).ok_or(BackendError::InvalidResponse)
+    }
+}
+
+fn normalize_fingerprint(value: &str) -> Option<String> {
+    if value.len() != 64 || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some(value.to_ascii_lowercase())
 }
 
 impl BackendApi for DevFixtureBackend {
@@ -75,6 +93,7 @@ impl BackendApi for DevFixtureBackend {
         if archive_id != ARCHIVE_ID {
             return Err(BackendError::InvalidResponse);
         }
+        let fingerprint = self.fingerprint()?;
         Ok(ArchiveMetadataResponse {
             archive_id: ARCHIVE_ID.into(),
             status: "published".into(),
@@ -92,7 +111,7 @@ impl BackendApi for DevFixtureBackend {
                 allow_export: false,
                 watermark_enabled: true,
             },
-            archive_fingerprint: FINGERPRINT.into(),
+            archive_fingerprint: fingerprint,
         })
     }
 
@@ -104,10 +123,11 @@ impl BackendApi for DevFixtureBackend {
         if request.archive_id != ARCHIVE_ID || request.device_public_key != DEVICE {
             return Err(BackendError::InvalidResponse);
         }
+        let fingerprint = self.fingerprint()?;
         Ok(PaymentIntentResponse {
             payment_intent_id: "pi_test_01".into(),
             archive_id: ARCHIVE_ID.into(),
-            archive_fingerprint: FINGERPRINT.into(),
+            archive_fingerprint: fingerprint,
             device_public_key: DEVICE.into(),
             payment_intent_client_secret: TOKEN.into(),
             amount: "10.000000".into(),
@@ -135,6 +155,7 @@ impl BackendApi for DevFixtureBackend {
         {
             return Err(BackendError::InvalidResponse);
         }
+        let fingerprint = self.fingerprint()?;
         Ok(
             match self.verification_count.fetch_add(1, Ordering::SeqCst) {
                 0 => VerifyTransport::Pending(VerifyPendingResponse {
@@ -151,7 +172,7 @@ impl BackendApi for DevFixtureBackend {
                     payment_id: "pay_test_01".into(),
                     entitlement_id: "ent_test_01".into(),
                     archive_id: ARCHIVE_ID.into(),
-                    archive_fingerprint: FINGERPRINT.into(),
+                    archive_fingerprint: fingerprint,
                     device_public_key: DEVICE.into(),
                     next_step: "activate_device".into(),
                 }),
@@ -176,6 +197,7 @@ impl BackendApi for DevFixtureBackend {
             &request.request_nonce,
             "2026-09-07T00:00:00Z",
             "2026-09-10T00:00:00Z",
+            &self.fingerprint()?,
         )?;
         Ok(ActivationResponse {
             license: grant.license,
@@ -203,6 +225,7 @@ impl BackendApi for DevFixtureBackend {
             &request.request_nonce,
             "2026-09-10T00:00:00Z",
             "2026-09-13T00:00:00Z",
+            FINGERPRINT,
         )
     }
 }
@@ -211,6 +234,7 @@ fn issue_grant(
     nonce: &str,
     issued_at: &str,
     offline_valid_until: &str,
+    archive_fingerprint: &str,
 ) -> Result<LicenseGrant, BackendError> {
     let mut grant = LicenseGrant::parse_transport(include_bytes!(
         "../../../../../tests/fixtures/license_v1_vector.json"
@@ -219,6 +243,7 @@ fn issue_grant(
     grant.license.payload.request_nonce = nonce.to_owned();
     grant.license.payload.issued_at = issued_at.to_owned();
     grant.license.payload.offline_valid_until = offline_valid_until.to_owned();
+    grant.license.payload.archive_fingerprint = archive_fingerprint.to_owned();
 
     let payload = grant
         .payload_jcs()
@@ -290,3 +315,28 @@ impl TryRng for DeterministicFixtureRng {
 }
 
 impl TryCryptoRng for DeterministicFixtureRng {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn part04_mode_requires_an_exact_fingerprint_shape() {
+        assert_eq!(
+            DevFixtureMode::parse("part04-payment"),
+            Some(DevFixtureMode::Part04Payment)
+        );
+        assert_eq!(
+            normalize_fingerprint(
+                "410964651C82DF094A4E2E653E9340816B0C5F0B1908343AB55B493A0C0692C4"
+            )
+            .as_deref(),
+            Some("410964651c82df094a4e2e653e9340816b0c5f0b1908343ab55b493a0c0692c4")
+        );
+        assert!(normalize_fingerprint("too-short").is_none());
+        assert!(normalize_fingerprint(
+            "zz0964651c82df094a4e2e653e9340816b0c5f0b1908343ab55b493a0c0692c4"
+        )
+        .is_none());
+    }
+}

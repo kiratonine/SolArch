@@ -6,11 +6,17 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$ScreenshotsDirectory,
     [switch]$ExpectUntrusted,
-    [switch]$Part03DevIntegration
+    [switch]$Part03DevIntegration,
+    [switch]$Part04DevIntegration,
+    [string]$Part04Fingerprint = "410964651c82df094a4e2e653e9340816b0c5f0b1908343ab55b493a0c0692c4"
 )
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+
+if ($Part03DevIntegration -and $Part04DevIntegration) {
+    throw "Choose only one development integration mode"
+}
 
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Windows.Forms
@@ -133,25 +139,21 @@ function Wait-CdpTarget([int]$Port) {
     throw "WebView2 test target was not available within 20 seconds"
 }
 
-function Invoke-CdpExpression([object]$Target, [string]$Expression) {
+function Invoke-CdpCommand([object]$Target, [string]$Method, [hashtable]$Params) {
     $client = New-Object System.Net.WebSockets.ClientWebSocket
     try {
-        $client.ConnectAsync(
+        $null = $client.ConnectAsync(
             [Uri]$Target.webSocketDebuggerUrl,
             [Threading.CancellationToken]::None
         ).GetAwaiter().GetResult()
         $request = @{
             id = 1
-            method = "Runtime.evaluate"
-            params = @{
-                expression = $Expression
-                returnByValue = $true
-                awaitPromise = $true
-            }
+            method = $Method
+            params = $Params
         } | ConvertTo-Json -Compress -Depth 6
         $bytes = [Text.Encoding]::UTF8.GetBytes($request)
         $segment = New-Object System.ArraySegment[byte] -ArgumentList @(,$bytes)
-        $client.SendAsync(
+        $null = $client.SendAsync(
             $segment,
             [System.Net.WebSockets.WebSocketMessageType]::Text,
             $true,
@@ -170,14 +172,49 @@ function Invoke-CdpExpression([object]$Target, [string]$Expression) {
         } while (-not $received.EndOfMessage)
         $response = [Text.Encoding]::UTF8.GetString($stream.ToArray()) | ConvertFrom-Json
         $protocolError = $response.PSObject.Properties["error"]
-        $exceptionDetails = $response.result.PSObject.Properties["exceptionDetails"]
-        if ($null -ne $protocolError -or $null -ne $exceptionDetails) {
-            throw "WebView2 expression failed: $($response | ConvertTo-Json -Compress -Depth 8)"
+        if ($null -ne $protocolError) {
+            throw "WebView2 command failed: $($response | ConvertTo-Json -Compress -Depth 8)"
         }
-        return $response.result.result.value
+        return $response
     }
     finally {
         $client.Dispose()
+    }
+}
+
+function Invoke-CdpExpression([object]$Target, [string]$Expression) {
+    $response = Invoke-CdpCommand $Target "Runtime.evaluate" @{
+        expression = $Expression
+        returnByValue = $true
+        awaitPromise = $true
+    }
+    $exceptionDetails = $response.result.PSObject.Properties["exceptionDetails"]
+    if ($null -ne $exceptionDetails) {
+        throw "WebView2 expression failed: $($response | ConvertTo-Json -Compress -Depth 8)"
+    }
+    $value = $response.result.result.PSObject.Properties["value"]
+    if ($null -eq $value) {
+        return $null
+    }
+    return $value.Value
+}
+
+function RightClick-Selector([object]$Target, [string]$Selector) {
+    $escaped = $Selector.Replace("\", "\\").Replace("'", "\'")
+    $coordinates = Invoke-CdpExpression $Target "(() => { const item = document.querySelector('$escaped'); if (!item) throw new Error('Selector missing: $escaped'); const rect = item.getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }; })()"
+    $null = Invoke-CdpCommand $Target "Input.dispatchMouseEvent" @{
+        type = "mousePressed"
+        x = [double]$coordinates.x
+        y = [double]$coordinates.y
+        button = "right"
+        clickCount = 1
+    }
+    $null = Invoke-CdpCommand $Target "Input.dispatchMouseEvent" @{
+        type = "mouseReleased"
+        x = [double]$coordinates.x
+        y = [double]$coordinates.y
+        button = "right"
+        clickCount = 1
     }
 }
 
@@ -228,6 +265,42 @@ function Stop-Viewer([System.Diagnostics.Process]$Process) {
 function Click-Selector([object]$Target, [string]$Selector) {
     $escaped = $Selector.Replace("\", "\\").Replace("'", "\'")
     $null = Invoke-CdpExpression $Target "(() => { const item = document.querySelector('$escaped'); if (!item) throw new Error('Selector missing: $escaped'); item.click(); return true; })()"
+}
+
+function Click-ProtectedFile([object]$Target, [string]$Name) {
+    $escaped = $Name.Replace("\", "\\").Replace("'", "\'")
+    $null = Invoke-CdpExpression $Target "(() => { const button = [...document.querySelectorAll('.file-open-button')].find((item) => item.textContent?.trim() === '$escaped'); if (!button) throw new Error('Protected file missing: $escaped'); button.click(); return true; })()"
+}
+
+function Assert-NoViewerBrowserSurface(
+    [System.Diagnostics.Process]$Process,
+    [string]$ForbiddenNames
+) {
+    $handle = [SolArchNativeWindow]::LargestVisibleWindow($Process.Id)
+    if ($handle -eq [IntPtr]::Zero) {
+        throw "Viewer visible window was not found while checking browser UI"
+    }
+    $root = [System.Windows.Automation.AutomationElement]::FromHandle($handle)
+    $elements = $root.FindAll(
+        [System.Windows.Automation.TreeScope]::Descendants,
+        [System.Windows.Automation.Condition]::TrueCondition
+    )
+    foreach ($element in $elements) {
+        try {
+            $name = $element.Current.Name
+            $controlType = $element.Current.ControlType
+            $isBrowserSurface =
+                $controlType -eq [System.Windows.Automation.ControlType]::Menu -or
+                $controlType -eq [System.Windows.Automation.ControlType]::MenuItem -or
+                $controlType -eq [System.Windows.Automation.ControlType]::Window
+            if ($isBrowserSurface -and $name -match $ForbiddenNames) {
+                throw "Unexpected WebView2 command surface remained available: $name"
+            }
+        }
+        catch [System.Windows.Automation.ElementNotAvailableException] {
+            # A transient element closed while the UI Automation tree was read.
+        }
+    }
 }
 
 function Assert-CredentialService([string]$Service) {
@@ -282,8 +355,10 @@ if ([System.IO.Path]::GetExtension($ArchivePath) -ieq ".b64") {
 }
 $originalAppData = $env:APPDATA
 $originalLocalAppData = $env:LOCALAPPDATA
-if ($Part03DevIntegration) {
-    $runId = "part03-$PID-$([DateTime]::UtcNow.Ticks)"
+$devIntegration = $Part03DevIntegration -or $Part04DevIntegration
+if ($devIntegration) {
+    $runPrefix = if ($Part04DevIntegration) { "part04" } else { "part03" }
+    $runId = "$runPrefix-$PID-$([DateTime]::UtcNow.Ticks)"
     $credentialScope = $runId
     $appDataSandbox = Join-Path $ScreenshotsDirectory "$runId-appdata"
     [System.IO.Directory]::CreateDirectory($appDataSandbox) | Out-Null
@@ -293,7 +368,13 @@ if ($Part03DevIntegration) {
     [System.IO.Directory]::CreateDirectory($env:LOCALAPPDATA) | Out-Null
     $env:SOLARCH_DEV_CREDENTIAL_SCOPE = $credentialScope
     $env:SOLARCH_DEV_APP_DATA_DIR = Join-Path $appDataSandbox "viewer"
-    $env:SOLARCH_DEV_BACKEND_FIXTURE = "part03-payment"
+    $env:SOLARCH_DEV_BACKEND_FIXTURE = if ($Part04DevIntegration) { "part04-payment" } else { "part03-payment" }
+    if ($Part04DevIntegration) {
+        if ($Part04Fingerprint.Length -ne 64 -or $Part04Fingerprint -notmatch '^[0-9a-fA-F]{64}$') {
+            throw "Part04Fingerprint must be 64 hexadecimal characters"
+        }
+        $env:SOLARCH_DEV_ARCHIVE_FINGERPRINT = $Part04Fingerprint.ToLowerInvariant()
+    }
     $env:SOLARCH_DEV_CLOCK_UNIX_SECONDS = "1788825600"
 }
 $portProbe = [System.Net.Sockets.TcpListener]::new(
@@ -309,6 +390,8 @@ $second = $null
 $third = $null
 $fourth = $null
 $fifth = $null
+$sixth = $null
+$expectedArchiveTitle = if ($Part04DevIntegration) { "Synthetic renderer archive" } else { "Test archive" }
 try {
     $first = Start-Process -FilePath $ViewerExe -PassThru
     Wait-MainWindow $first
@@ -337,9 +420,9 @@ try {
         Write-Output "WINDOWS_NATIVE_PRODUCTION_FAIL_CLOSED_PASS"
     }
     else {
-        Wait-CdpTrue $target "document.querySelector('.archive-title-block h1')?.textContent === 'Test archive' && document.querySelector('.status-warning') !== null"
+        Wait-CdpTrue $target "document.querySelector('.archive-title-block h1')?.textContent === '$expectedArchiveTitle' && document.querySelector('.status-warning') !== null"
         Save-ViewerScreenshot $second (Join-Path $ScreenshotsDirectory "viewer-native-locked.png")
-        if (-not $Part03DevIntegration) {
+        if (-not $devIntegration) {
             Write-Output "WINDOWS_NATIVE_UI_SMOKE_PASS"
         }
         else {
@@ -357,6 +440,46 @@ try {
             Wait-CdpTrue $target "document.body.innerText.includes('Protected archive unlocked') && document.querySelector('.file-table tbody tr') !== null"
             Assert-CredentialService "app.solarch.viewer.refresh.v1.dev.$credentialScope"
             Save-ViewerScreenshot $second (Join-Path $ScreenshotsDirectory "viewer-native-unlocked.png")
+            if ($Part04DevIntegration) {
+                Wait-CdpTrue $target "document.querySelectorAll('.file-table tbody tr').length === 6"
+                Click-ProtectedFile $target "01-pages.pdf"
+                Wait-CdpTrue $target "document.querySelector('.pdf-viewport canvas')?.width > 0 && /Wallet.+License.+Archive/.test(document.querySelector('.watermark-overlay')?.getAttribute('aria-label') ?? '')"
+                Click-Selector $target "button[aria-label='Next page']"
+                Wait-CdpTrue $target "document.body.innerText.includes('Page 2 of 2')"
+                Save-ViewerScreenshot $second (Join-Path $ScreenshotsDirectory "viewer-native-part04-pdf.png")
+
+                foreach ($imageName in @("02-image.png", "03-image.jpg", "04-image.webp")) {
+                    Click-ProtectedFile $target $imageName
+                    Wait-CdpTrue $target "document.querySelector('.image-viewport img')?.complete === true && document.querySelector('.watermark-overlay') !== null && document.querySelector('.pdf-viewport') === null"
+                }
+                $null = Invoke-CdpExpression $target "(() => { window.__solarchContextPrevented = false; const image = document.querySelector('.image-viewport img'); const surface = document.querySelector('[data-protected-viewer=true]'); if (!image || !surface) throw new Error('Protected image surface missing'); surface.addEventListener('contextmenu', (event) => setTimeout(() => { window.__solarchContextPrevented = event.defaultPrevented; }, 0), { once: true }); image.focus(); return document.activeElement === image; })()"
+                RightClick-Selector $target ".image-viewport img"
+                Wait-CdpTrue $target "window.__solarchContextPrevented === true"
+                Assert-NoViewerBrowserSurface $second "Save image|Save as|Сохранить|Контекст"
+                $null = Invoke-CdpExpression $target "(() => { window.__solarchBlockedKeys = []; const surface = document.querySelector('[data-protected-viewer=true]'); const image = document.querySelector('.image-viewport img'); if (!surface || !image) throw new Error('Protected image surface missing'); surface.addEventListener('keydown', (event) => setTimeout(() => { if (event.defaultPrevented) window.__solarchBlockedKeys.push(event.key.toLowerCase()); }, 0)); image.focus(); return document.activeElement === image; })()"
+                Focus-Viewer $second
+                [System.Windows.Forms.SendKeys]::SendWait("^p")
+                [System.Windows.Forms.SendKeys]::SendWait("^s")
+                Wait-CdpTrue $target "window.__solarchBlockedKeys.includes('p') && window.__solarchBlockedKeys.includes('s')"
+                Assert-NoViewerBrowserSurface $second "Print|Печать|Save|Сохранить"
+                Write-Output "WINDOWS_WEBVIEW2_NO_EXPORT_PASS"
+                Save-ViewerScreenshot $second (Join-Path $ScreenshotsDirectory "viewer-native-part04-image.png")
+
+                Click-ProtectedFile $target "05-document.docx"
+                Wait-CdpTrue $target "document.querySelector('.document-page')?.innerText.includes('Protected heading') && document.querySelector('.docx-table') !== null && document.querySelector('.image-viewport') === null"
+                Save-ViewerScreenshot $second (Join-Path $ScreenshotsDirectory "viewer-native-part04-docx.png")
+
+                Click-ProtectedFile $target "06-workbook.xlsx"
+                Wait-CdpTrue $target "document.querySelectorAll('.xlsx-tabs [role=tab]').length === 2 && document.querySelector('.xlsx-grid')?.innerText.includes('Revenue')"
+                $null = Invoke-CdpExpression $target "(() => { const tab = [...document.querySelectorAll('.xlsx-tabs [role=tab]')].find((item) => item.textContent === 'Overview'); if (!tab) throw new Error('Overview sheet missing'); tab.focus(); return document.activeElement === tab; })()"
+                Focus-Viewer $second
+                [System.Windows.Forms.SendKeys]::SendWait("{RIGHT}")
+                Wait-CdpTrue $target "[...document.querySelectorAll('.xlsx-tabs [role=tab]')].some((item) => item.textContent === 'Details' && item.getAttribute('aria-selected') === 'true')"
+                Wait-CdpTrue $target "document.querySelector('.xlsx-grid')?.innerText.includes('Details') && document.querySelector('.document-page') === null"
+                Write-Output "WINDOWS_PROTECTED_KEYBOARD_NAVIGATION_PASS"
+                Wait-CdpTrue $target "![...document.querySelectorAll('button,a')].some((item) => /^(Save As|Extract All|Open External|Download raw|Print)$/i.test((item.getAttribute('aria-label') ?? item.textContent ?? '').trim()))"
+                Save-ViewerScreenshot $second (Join-Path $ScreenshotsDirectory "viewer-native-part04-xlsx.png")
+            }
             Stop-Viewer $second
             $second = $null
             Assert-NoPlaintextSecrets $appDataSandbox
@@ -371,10 +494,33 @@ try {
             Click-Selector $target ".empty-workspace .primary-button"
             Select-ArchiveInDialog $ArchivePath
             Wait-CdpTrue $target "document.body.innerText.includes('Protected archive unlocked') && document.querySelector('.file-table tbody tr') !== null"
+            if ($Part04DevIntegration) {
+                Click-ProtectedFile $target "04-image.webp"
+                Wait-CdpTrue $target "document.querySelector('.image-viewport img')?.complete === true && document.querySelector('.watermark-overlay') !== null"
+            }
             Save-ViewerScreenshot $third (Join-Path $ScreenshotsDirectory "viewer-native-cached-reopen.png")
             Stop-Viewer $third
             $third = $null
             Start-Sleep -Milliseconds 500
+
+            if ($Part04DevIntegration) {
+                $env:SOLARCH_DEV_EXPIRY_AFTER_MILLIS = "2500"
+                $sixth = Start-Process -FilePath $ViewerExe -PassThru
+                Wait-MainWindow $sixth
+                $target = Wait-CdpTarget $cdpPort
+                Wait-CdpTrue $target "document.querySelector('.empty-workspace .primary-button') !== null"
+                Click-Selector $target ".empty-workspace .primary-button"
+                Select-ArchiveInDialog $ArchivePath
+                Wait-CdpTrue $target "document.body.innerText.includes('Protected archive unlocked')"
+                Click-ProtectedFile $target "05-document.docx"
+                Wait-CdpTrue $target "document.querySelector('.document-page') !== null && document.querySelector('.watermark-overlay') !== null"
+                Wait-CdpTrue $target "document.body.innerText.includes('Refresh required') && document.querySelector('.document-page') === null && document.querySelector('.watermark-overlay') === null"
+                Save-ViewerScreenshot $sixth (Join-Path $ScreenshotsDirectory "viewer-native-part04-deadline-relock.png")
+                Stop-Viewer $sixth
+                $sixth = $null
+                Remove-Item Env:SOLARCH_DEV_EXPIRY_AFTER_MILLIS -ErrorAction SilentlyContinue
+                Start-Sleep -Milliseconds 500
+            }
 
             $env:SOLARCH_DEV_CLOCK_UNIX_SECONDS = "1788998400"
             $fourth = Start-Process -FilePath $ViewerExe -PassThru
@@ -389,18 +535,25 @@ try {
             $fourth = $null
             Start-Sleep -Milliseconds 500
 
-            $env:SOLARCH_DEV_BACKEND_FIXTURE = "part03-refresh"
-            $env:SOLARCH_DEV_CLOCK_UNIX_SECONDS = "1789084800"
-            $fifth = Start-Process -FilePath $ViewerExe -PassThru
-            Wait-MainWindow $fifth
-            $target = Wait-CdpTarget $cdpPort
-            Wait-CdpTrue $target "document.querySelector('.empty-workspace .primary-button') !== null"
-            Click-Selector $target ".empty-workspace .primary-button"
-            Select-ArchiveInDialog $ArchivePath
-            Wait-CdpTrue $target "document.body.innerText.includes('Protected archive unlocked') && document.querySelector('.file-table tbody tr') !== null"
-            Save-ViewerScreenshot $fifth (Join-Path $ScreenshotsDirectory "viewer-native-refresh-success.png")
+            if (-not $Part04DevIntegration) {
+                $env:SOLARCH_DEV_BACKEND_FIXTURE = "part03-refresh"
+                $env:SOLARCH_DEV_CLOCK_UNIX_SECONDS = "1789084800"
+                $fifth = Start-Process -FilePath $ViewerExe -PassThru
+                Wait-MainWindow $fifth
+                $target = Wait-CdpTarget $cdpPort
+                Wait-CdpTrue $target "document.querySelector('.empty-workspace .primary-button') !== null"
+                Click-Selector $target ".empty-workspace .primary-button"
+                Select-ArchiveInDialog $ArchivePath
+                Wait-CdpTrue $target "document.body.innerText.includes('Protected archive unlocked') && document.querySelector('.file-table tbody tr') !== null"
+                Save-ViewerScreenshot $fifth (Join-Path $ScreenshotsDirectory "viewer-native-refresh-success.png")
+            }
             Assert-NoPlaintextSecrets $appDataSandbox
-            Write-Output "WINDOWS_NATIVE_PART03_DEV_INTEGRATION_PASS"
+            if ($Part04DevIntegration) {
+                Write-Output "WINDOWS_NATIVE_PART04_DEV_INTEGRATION_PASS"
+            }
+            else {
+                Write-Output "WINDOWS_NATIVE_PART03_DEV_INTEGRATION_PASS"
+            }
         }
     }
 }
@@ -420,7 +573,10 @@ finally {
     if ($null -ne $fifth) {
         Stop-Viewer $fifth
     }
-    if ($Part03DevIntegration -and $null -ne $credentialScope) {
+    if ($null -ne $sixth) {
+        Stop-Viewer $sixth
+    }
+    if ($devIntegration -and $null -ne $credentialScope) {
         Remove-FixtureCredentials $credentialScope
     }
     Remove-Item Env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS -ErrorAction SilentlyContinue
@@ -428,6 +584,8 @@ finally {
     Remove-Item Env:SOLARCH_DEV_CLOCK_UNIX_SECONDS -ErrorAction SilentlyContinue
     Remove-Item Env:SOLARCH_DEV_CREDENTIAL_SCOPE -ErrorAction SilentlyContinue
     Remove-Item Env:SOLARCH_DEV_APP_DATA_DIR -ErrorAction SilentlyContinue
+    Remove-Item Env:SOLARCH_DEV_ARCHIVE_FINGERPRINT -ErrorAction SilentlyContinue
+    Remove-Item Env:SOLARCH_DEV_EXPIRY_AFTER_MILLIS -ErrorAction SilentlyContinue
     $env:APPDATA = $originalAppData
     $env:LOCALAPPDATA = $originalLocalAppData
 }

@@ -28,3 +28,5 @@ hpke = { version = "=0.14.1", default-features = false, features = ["alloc", "x2
 getrandom = "=0.3.4"
 reqwest = { version = "=0.13.4", default-features = false, features = ["blocking", "rustls"] }
 url = "=2.5.8"
+image = { version = "=0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
+calamine = { version = "=0.36.1", default-features = false }

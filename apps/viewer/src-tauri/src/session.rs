@@ -6,6 +6,8 @@ use solarch_core::{
 };
 use time::OffsetDateTime;
 
+use crate::renderer::RendererRegistry;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VerifiedArchiveIdentity {
     pub archive_id: String,
@@ -25,6 +27,8 @@ pub enum SessionState {
         license: ValidatedLicenseMetadata,
         reader: Box<ProtectedArchiveReader>,
         offline_deadline: OffsetDateTime,
+        session_serial: u64,
+        renderers: Box<RendererRegistry>,
     },
 }
 

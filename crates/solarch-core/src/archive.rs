@@ -473,6 +473,41 @@ impl ProtectedArchiveReader {
         self.identity.verify(&self.path, &self.file)?;
         Ok(output)
     }
+
+    /// Reassembles one authenticated file for a format-specific parser. This is
+    /// intentionally an internal Core API, not a generic Viewer IPC command.
+    /// Every chunk is AEAD-authenticated and the complete Manifest hash is
+    /// checked before the plaintext is returned.
+    pub fn read_complete_file_bounded(
+        &mut self,
+        file_id: &str,
+        maximum: u64,
+    ) -> Result<Zeroizing<Vec<u8>>> {
+        let manifest_file = self
+            .manifest
+            .files
+            .iter()
+            .find(|candidate| candidate.file_id == file_id)
+            .ok_or(Error::InvalidManifest)?;
+        if manifest_file.size_bytes > maximum {
+            return Err(Error::LimitExceeded);
+        }
+        let size_bytes = manifest_file.size_bytes;
+        let expected_hash = manifest_file.hash.clone();
+        let capacity = usize::try_from(size_bytes).map_err(|_| Error::LimitExceeded)?;
+        let mut output = Zeroizing::new(Vec::with_capacity(capacity));
+        let mut offset = 0_u64;
+        while offset < size_bytes {
+            let length = (size_bytes - offset).min(MAX_PROTECTED_READ_BYTES);
+            let range = self.read_file_range(file_id, offset, length)?;
+            output.extend_from_slice(&range);
+            offset = offset.checked_add(length).ok_or(Error::OutOfBounds)?;
+        }
+        if output.len() != capacity || lowercase_hex(&Sha256::digest(&*output)) != expected_hash {
+            return Err(Error::IntegrityMismatch);
+        }
+        Ok(output)
+    }
 }
 
 /// Verifies the finalized signature/fingerprint and, with the caller-owned ACK,
