@@ -89,10 +89,6 @@ export class AckCustodyService {
 
     const filePath = this.getCustodyFilePath(archiveId);
     if (!fs.existsSync(filePath)) {
-      // Backward compatibility fallback for test fixtures storing raw 32-byte hex if file does not exist
-      if (/^[0-9a-fA-F]{64}$/.test(contentKeyRef)) {
-        return Buffer.from(contentKeyRef, 'hex');
-      }
       this.logger.error(`Archive ${archiveId} custody file not found at ${filePath}`);
       throw new ServiceUnavailableException('Archive content key custody unavailable');
     }

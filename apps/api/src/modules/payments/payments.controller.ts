@@ -12,9 +12,20 @@ import {
 import { PaymentsService } from './payments.service';
 import {
   CreatePaymentIntentDto,
-  SolanaPayTransactionRequestDto,
   VerifyPaymentDto,
 } from './payments.dto';
+
+const SOLARCH_PAY_ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SolArch"><rect width="64" height="64" rx="12" fill="#101318"/><path d="M17 20h30v8H25v8h22v8H17z" fill="#7185F5"/><path d="M25 28h22v8H25z" fill="#F2F4F7"/></svg>`;
+
+@Controller()
+export class SolanaPayAssetsController {
+  @Get('assets/solarch-pay-icon.svg')
+  @Header('Content-Type', 'image/svg+xml; charset=utf-8')
+  @Header('Cache-Control', 'public, max-age=86400, immutable')
+  getSolanaPayIcon() {
+    return SOLARCH_PAY_ICON;
+  }
+}
 
 @Controller('v1')
 export class PaymentsController {
@@ -36,9 +47,12 @@ export class PaymentsController {
   @Header('Cache-Control', 'no-store')
   async buildTransaction(
     @Param('id') intentId: string,
-    @Body() dto: SolanaPayTransactionRequestDto,
+    @Body() body: Record<string, unknown>,
   ) {
-    return this.paymentsService.buildTransaction(intentId, dto);
+    const account = body && typeof body === 'object' ? body.account : undefined;
+    return this.paymentsService.buildTransaction(intentId, {
+      account: typeof account === 'string' ? account : '',
+    });
   }
 
   @Post('payment-intents/:id/verify')

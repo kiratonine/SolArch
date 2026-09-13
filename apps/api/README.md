@@ -117,7 +117,6 @@ npm run test:cov --workspace apps/api
 | `POST` | `/v1/payment-intents/:id/verify` | Authoritative on-chain verify & Entitlement| `SolArchIntent` |
 | `POST` | `/v1/payment-intents/:id/activate-device` | 72h offline lease, HPKE wrap & Ed25519 sign | `SolArchIntent` |
 | `POST` | `/v1/device-licenses/:id/refresh` | Renew 72h lease with refresh token | `DeviceRefresh` |
-| `POST` | `/v1/licenses/check` | Check license status & rights | Public |
 | `GET` | `/v1/archives/:id/analytics` | Creator revenue and conversion metrics | Bearer JWT (Owner) |
 
 ---

@@ -1,17 +1,18 @@
-import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsString, Matches } from 'class-validator';
 
 export class ActivateDeviceDto {
   @IsNotEmpty()
   @IsString()
   device_public_key: string;
 
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  device_name?: string = 'Windows PC';
+  device_name: string;
 
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  viewer_version?: string = '0.1.0';
+  @Matches(/^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$/)
+  viewer_version: string;
 
   @IsNotEmpty()
   @IsString()
@@ -30,18 +31,4 @@ export class RefreshLicenseDto {
   @IsNotEmpty()
   @IsString()
   request_nonce: string;
-}
-
-export class CheckLicenseDto {
-  @IsNotEmpty()
-  @IsString()
-  license_id: string;
-
-  @IsNotEmpty()
-  @IsString()
-  archive_id: string;
-
-  @IsNotEmpty()
-  @IsString()
-  device_public_key: string;
 }

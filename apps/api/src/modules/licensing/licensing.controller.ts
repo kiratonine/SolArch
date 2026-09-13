@@ -8,7 +8,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { LicensingService } from './licensing.service';
-import { ActivateDeviceDto, RefreshLicenseDto, CheckLicenseDto } from './licensing.dto';
+import { ActivateDeviceDto, RefreshLicenseDto } from './licensing.dto';
 
 @Controller('v1')
 export class LicensingController {
@@ -24,16 +24,6 @@ export class LicensingController {
     return this.licensingService.activateDevice(intentId, authHeader, dto);
   }
 
-  @Post('entitlements/:id/activate-device')
-  @HttpCode(HttpStatus.OK)
-  async activateDeviceViaEntitlement(
-    @Param('id') entitlementId: string,
-    @Headers('authorization') authHeader: string,
-    @Body() dto: ActivateDeviceDto,
-  ) {
-    return this.licensingService.activateDevice(entitlementId, authHeader, dto);
-  }
-
   @Post('device-licenses/:id/refresh')
   @HttpCode(HttpStatus.OK)
   async refreshLicense(
@@ -42,11 +32,5 @@ export class LicensingController {
     @Body() dto: RefreshLicenseDto,
   ) {
     return this.licensingService.refreshLicense(licenseId, authHeader, dto);
-  }
-
-  @Post('licenses/check')
-  @HttpCode(HttpStatus.OK)
-  async checkLicense(@Body() dto: CheckLicenseDto) {
-    return this.licensingService.checkLicense(dto);
   }
 }

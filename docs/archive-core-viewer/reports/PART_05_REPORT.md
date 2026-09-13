@@ -1,9 +1,9 @@
 # SolArch Archive Core & Viewer — Part 05 Report
 
-**Part:** `PART_05`  
-**Branch:** `feat/archive-core-viewer`  
-**Status:** `PARTIAL`  
-**Updated:** `2026-09-12`  
+**Part:** `PART_05`
+**Branch:** `integrate/marketplace-backend`
+**Status:** `PARTIAL`
+**Updated:** `2026-09-14`
 **Execution:** strict single-agent
 
 ## 1. Scope and outcome
@@ -13,17 +13,15 @@ Backend, a Backend/Core-generated `.slr`, external-wallet test-USDC payment,
 finalized verification, Entitlement, real Device License/HPKE, cached Device A
 reopen and live Backend rejection on an independent Device B.
 
-The Viewer-side live build/configuration boundary, strict preflight, public
-on-chain evidence verifier and deterministic presenter checklist are implemented.
-All existing Rust/frontend/security/Windows regressions pass. The Part is
-correctly **PARTIAL**, not COMPLETE: no live Backend origin, public production/demo
-anchors, Backend-generated archive, demo wallets or independent Device B were
-provided, and read-only inspection of the current teammate Backend branch found
-multiple frozen-contract incompatibilities that prevent the real flow.
+The Marketplace Backend is already present in this local working tree. This
+follow-up hardened its real ArchiveBuilder, payment issuance/finality,
+Entitlement/Device License authority, ACK custody and live configuration paths
+without changing the reviewed Viewer/Core crypto or renderer boundaries.
 
-No Marketplace Backend code was copied or implemented here. Parts 01–04 crypto,
-payment, license and renderer boundaries were not rewritten. No commit, push,
-merge, rebase or PR was performed.
+The Part remains correctly **PARTIAL**, not COMPLETE: no deployed HTTPS Backend,
+real Backend-generated demo archive, live role public keys, demo wallets, real
+external-wallet Devnet test-USDC payment or independent Device B run was
+available. No commit, push, merge, rebase or PR was performed.
 
 ### Shared-document conflicts and updates
 
@@ -31,8 +29,9 @@ No frozen shared document was changed. The Viewer-side implementation conforms
 to the current `.slr`, API, payment, license and crypto contracts. The unresolved
 general 95/5 integer-rounding policy remains an explicit integration blocker;
 Part 05 uses only an exactly divisible demo price and does not redefine that
-contract. The concrete Backend deviations found during read-only inspection are
-listed in sections 9–13.
+contract. The earlier static Backend blockers are superseded by the locally
+integrated implementation in sections 9–13; those fixes have deterministic test
+coverage but are not represented as live Devnet evidence.
 
 ## 2. Viewer-side implementation
 
@@ -70,20 +69,43 @@ listed in sections 9–13.
 
 ## 3. Files changed
 
+Current Backend hardening changes are in:
+
 ```text
-apps/viewer/src-tauri/Cargo.toml
-apps/viewer/src-tauri/build.rs
-apps/viewer/src-tauri/src/lib.rs
-apps/viewer/src-tauri/src/trust.rs
-package.json
-scripts/viewer-live-devnet-e2e.mjs
-scripts/viewer-live-devnet-e2e.test.mjs
+apps/api/.env.example
+apps/api/README.md
+apps/api/prisma/schema.prisma
+apps/api/prisma/migrations/20260913000000_harden_payment_issuance_identity/migration.sql
+apps/api/prisma/migrations/20260913170000_complete_static_backend_gate/migration.sql
+apps/api/src/common/viewer-request-limits.ts
+apps/api/src/config/env.service.ts
+apps/api/src/config/env.service.spec.ts
+apps/api/src/main.ts
+apps/api/src/crypto/crypto.spec.ts
+apps/api/src/crypto/hpke.util.ts
+apps/api/src/modules/archives/archives.service.ts
+apps/api/src/modules/archives/archives.spec.ts
+apps/api/src/modules/licensing/licensing.controller.ts
+apps/api/src/modules/licensing/licensing.dto.ts
+apps/api/src/modules/licensing/licensing.service.ts
+apps/api/src/modules/licensing/licensing.spec.ts
+apps/api/src/modules/payments/payments.controller.ts
+apps/api/src/modules/payments/payments.module.ts
+apps/api/src/modules/payments/payments.service.ts
+apps/api/src/modules/payments/payments.spec.ts
+apps/api/src/modules/uploads/ack-custody.service.ts
+apps/api/src/modules/uploads/ack-custody.spec.ts
+apps/api/src/modules/uploads/archive-builder.adapter.ts
+apps/api/src/modules/uploads/archive-builder.adapter.spec.ts
+apps/api/src/modules/uploads/uploads.service.ts
+apps/api/src/modules/uploads/uploads.spec.ts
+apps/api/test/app.e2e-spec.ts
+docs/FRONTEND_BACKEND_INTEGRATION_GUIDE.md
 docs/archive-core-viewer/reports/PART_05_REPORT.md
 ```
 
-`Cargo.lock` and `pnpm-lock.yaml` did not change. Making the already-resolved
-`ed25519-dalek` dependency direct/non-optional lets production live configuration
-reject malformed public anchors before use; no new package was introduced.
+The existing `uuid@8.3.2` test dependency and both Jest `moduleNameMapper`
+compatibility mappings were retained unchanged. No package lockfile changed.
 
 ## 4. Devnet decision and official inputs
 
@@ -187,44 +209,69 @@ a positive six-decimal price with `total_micro_usdc % 20 == 0`, then calculates
 creator `95%` and platform `5%` exactly with integers. `10.000000 USDC` remains a
 valid suggested demo price, producing `9,500,000` and `500,000` base units.
 
-The current Backend branch stores prices and returned shares to two decimal
-places and uses floating-point/`Math.round`. That happens to agree for the
-suggested exact demo value but does not resolve the general shared-contract
-blocker.
+The current Marketplace creation path stores prices at two decimal places. Such
+stored values are multiples of 10,000 micro-USDC and therefore always split
+exactly at 5%; this is a concrete implementation constraint, not a newly frozen
+shared rule. The input path still rounds a wider decimal string rather than
+defining the general six-decimal rounding contract, so the shared ambiguity
+remains open. The live demo stays restricted to an explicitly exact price.
 
 ## 9. Real archive builder integration
 
-**Not verified; current Backend is incompatible.** Read-only inspection used
-remote commit `84c681318b014641981440ef8f573dab50a7f1f3`.
+**Implemented locally; not verified live.** `ArchiveBuilderAdapter` invokes the
+reviewed `solarch` CLI duplex create/pending-verifier/signing protocol, performs
+independent final verification and compares the complete-file fingerprint. It
+uses a fresh 32-byte ACK subsequently sealed by encrypted custody. Live startup
+requires an explicit existing absolute `SOLARCH_CLI_PATH`.
 
-Its `ArchiveBuilderAdapter.build()` does not invoke the frozen Rust
-`ArchiveBuilder`/CLI duplex protocol. It writes a custom big-endian
-`SOLARCH\0` layout, declares `AES-256-GCM`, inserts random mock payload bytes,
-and appends no frozen SIG1 signature. Such output cannot pass Core `.slr v1`
-verification and cannot contain the required protected formats/renderers.
-
-This must be fixed on the Backend branch by invoking the reviewed builder and
-pending verifier/signing flow. No Viewer compatibility bypass was added.
+Archive creation, upload completion, builder input, Payment Intent creation and
+license issuance all enforce the frozen MVP policy: USDC, 500 bps, one device,
+no export and watermark enabled. A real Backend-generated multi-format file has
+not yet been produced in the absent live environment.
 
 ## 10. Real Payment Intent and Backend API compatibility
 
-**Not run.** Static comparison found these blocking wire mismatches:
+**Implemented locally; not run live.** Viewer metadata includes
+`platform_fee_bps`; Payment Intent and confirmed verification responses contain
+the frozen closed fields; typed Viewer error codes are preserved by the global
+filter.
 
-- `GET /v1/viewer/archives/:id` omits frozen `platform_fee_bps`; the Viewer
-  correctly rejects the closed response.
-- `POST /v1/payment-intents` omits `archive_fingerprint`,
-  `device_public_key`, `payment_reference`, `created_at` and `status`; it cannot
-  pass the existing strict intent validator.
-- confirmed verification responses omit frozen `status`, `archive_id`,
-  `archive_fingerprint` and `device_public_key`; some idempotent paths also omit
-  `entitlement_id`.
-- the Backend exception filter emits generic codes such as `BAD_REQUEST`,
-  `UNAUTHORIZED` and `FORBIDDEN`, which are outside the frozen Viewer error enum.
-  In particular `DEVICE_LIMIT_REACHED` is returned with HTTP 403 while the
-  frozen API/Viewer mapping requires HTTP 409.
+Transaction issuance is serialized with a PaymentIntent row lock. Concurrent
+requests from the same construction account receive the byte-identical stored
+transaction; a different account receives HTTP 409
+`PAYMENT_TRANSACTION_IN_FLIGHT`. The Backend stores the exact fee-payer partial
+signature/txid plus message hash and validity height. The buyer must be the sole
+other signer and cannot equal the SolArch fee payer. Reference remains an
+additional invariant, never transaction identity.
 
-These are Backend bugs/cross-branch contract mismatches, not reasons to loosen
-the Viewer closed schemas.
+At/after intent TTL, both Solana Pay GET metadata and POST transaction endpoints
+return exact HTTP 410 `PAYMENT_INTENT_EXPIRED` and never return a stored
+serialized transaction. A transaction issued before TTL remains tracked only by
+the authenticated internal verify/finality path and may still confirm after TTL
+when it landed within its own block-height window. Reissue occurs only after the
+exact txid is authoritatively finalized-failed or an unseen issuance is beyond
+its block-height validity window. A processed/confirmed failure remains
+reorgable and cannot retire the issuance, authorize replacement, or terminally
+fail the intent. An unrelated submitted signature cannot mutate any issuance.
+
+### Database migration
+
+Migration history is append-only. The previously existing
+`20260913000000_harden_payment_issuance_identity` was restored to its original
+scope: only `expected_transaction_signature` and its unique index. All later
+snapshot/audit columns, credential indexes, composite Device A keys/FK and
+immutability triggers are in the new
+`20260913170000_complete_static_backend_gate` migration.
+
+The upgrade was executed against a disposable PostgreSQL 16 container, without
+touching a working/user database. First, the three old migrations were applied,
+linked pre-upgrade PaymentIntent/Payment/Entitlement/Activation/License/issuance
+rows were inserted, and the new migration applied successfully with the expected
+fingerprint, confirmed-buyer and Payment Device A backfills. The composite FK
+and all four immutability triggers were queried from PostgreSQL. A second empty
+database then passed `prisma migrate deploy`, applying all four migrations in
+timestamp order. The dedicated container and both disposable databases were
+removed after the check.
 
 ## 11. Real Solana transaction, 95/5, fee payer and creator ATA
 
@@ -251,27 +298,44 @@ exists.
 
 ## 12. Finalized verification and Payment vs Entitlement
 
-**Not verified live.** The current Backend verifier calls `getParsedTransaction`
-at `confirmed` and attempts to read `confirmationStatus` from that transaction
-object instead of establishing finalized status via a status/finalized query.
-Its non-production simulation path is forbidden by Part 05. The real demo must
-remove that ambiguity and must never confirm at weaker commitment.
+**Implemented locally; not verified live.** Verification accepts only the exact
+canonical 64-byte Base58 txid stored for an issuance. It requires a finalized
+signature status, resolves its authoritative landing height through
+`getBlock(status.slot, finalized)`, and requires transaction/parsed slots to
+match. Missing or unavailable status/block/transaction data is retryable and
+fails closed; `getTransaction().blockHeight` is not used.
 
-The Backend source does create Payment and Entitlement rows in one database
-transaction, so the intended separation is visible statically. No deployed
-Payment ID or distinct Entitlement ID was observed, and activation was not run.
+Exact message, reference, fee payer, buyer signer, mint, destinations and 95/5
+`transferChecked` amounts are checked before a row-locked atomic Payment plus
+Entitlement commit. That transaction atomically stores PaymentIntent
+`confirmed_buyer_wallet`, Payment `device_public_key`, and matching buyer/archive/
+device bindings. Idempotent verification rechecks those persisted audit bindings.
+No simulation signature path can authorize payment. No live Payment/Entitlement
+IDs exist yet.
 
 ## 13. Device A activation, real P/W/SIG and HPKE
 
-**Not run.** No real confirmed intent, license trust anchor or deployed issuer
-was available. Static Backend inspection found another blocking encoding issue:
-license `issued_at`/`offline_valid_until` use JavaScript `toISOString()` with
-fractional milliseconds, while the frozen wire timestamps require exact
-second-form `YYYY-MM-DDTHH:mm:ssZ`; the Viewer correctly rejects these values.
+**Implemented locally; not run live.** Activation and refresh issue exact-second
+timestamps and enforce confirmed Payment, active/non-expired Entitlement, ready
+and allowed archive, exact one-device policy and Device A binding. Recovery also
+requires active DeviceActivation and DeviceLicense records and stays within the
+10-minute window; revoked/expired/inactive records cannot be reactivated.
 
-The existing Viewer still performs strict fresh-nonce, Ed25519, archive,
-fingerprint, device, rights, time and HPKE validation before installing ACK.
-No fixture issuer or fixture private key was used as live authority.
+Nonce reservation, fresh recovery-token rotation and license writes are under
+the same entitlement/license row lock. Concurrent fresh-nonce recovery can
+return more than one HTTPS response, but only the latest returned refresh token
+remains usable. Refresh reloads and validates the exact activation/license/
+entitlement/archive/device binding under lock.
+
+Encrypted ACK custody is mandatory. Missing/tampered custody fails closed and a
+64-hex `contentKeyRef` is never treated as plaintext ACK. The existing Viewer
+still performs strict fresh-nonce, Ed25519, binding, time and HPKE validation.
+
+The activation route resolves Entitlement only through the exact path
+PaymentIntent ID and its authenticated intent secret; an Entitlement ID is not
+an alias. Malformed, noncanonical and low-order X25519 keys are HTTP 400
+`INVALID_REQUEST`; HTTP 409 `DEVICE_BINDING_MISMATCH` is reserved for a valid
+key that differs from authoritative Device A.
 
 ## 14. Protected viewers, watermark, cached restart and refresh
 
@@ -288,8 +352,9 @@ evidence schema requires all of them before `viewer:devnet:evidence` can pass.
 
 An independent Windows machine/VM and live entitlement were unavailable.
 Device A/B public keys do not exist for this Part, and no Backend
-`DEVICE_LIMIT_REACHED` result is claimed. The current 403/409 mismatch would in
-any case be rejected by the Viewer until the Backend conforms to the frozen API.
+`DEVICE_LIMIT_REACHED` result is claimed. The local licensing path now returns
+the frozen HTTP 409 typed denial and never replaces the bound Device A, but that
+is deterministic coverage rather than the required independent-device proof.
 
 The safe live negative cases (wrong fingerprint/device, replayed nonce, invalid
 intent/refresh credentials, not-finalized payment, cross-archive reference,
@@ -345,12 +410,98 @@ LIVE_DEVNET_E2E_BLOCKED: SOLARCH_SOLANA_CLUSTER: required
   `dist`, `node_modules`, screenshots and installer outputs remain ignored and
   are excluded by the clean-archive tool.
 
-The current Backend branch itself still has deterministic signing/fee-payer
-fallbacks when live secrets are absent. A real deployment must require explicit
-secret configuration and must not use those fallback authorities. This is a
-Backend blocker and was not copied into Viewer.
+Backend live/devnet startup now requires explicit canonical mint/platform
+wallet, fee payer, CLI path, role-separated matching signing keys, purpose-
+separated credential/custody secrets and a canonical HTTPS root origin. Synthetic
+fallbacks remain reachable only outside live mode for explicit local tests.
 
-## 18. Tests added
+## 18. Final static Backend gate (A–J)
+
+- **A — fingerprint/audit snapshot:** PaymentIntent persists the exact finalized
+  `archive_fingerprint`; verify, activation, refresh, signed payload and ACK
+  custody compare/use that snapshot. Finalized payment atomically records
+  confirmed buyer and device audit values.
+- **B — archive immutability:** upload init/completion use conditional DB claims
+  and deny ready, published, unpublished, blocked, paid or already-finalized
+  archives. A DB trigger independently prevents replacement of the finalized
+  fingerprint, ACK custody reference or `.slr` storage key for an Archive ID.
+- **C — X25519 validation:** canonical padded Base64 and field-coordinate checks
+  precede an audited RFC 9180 KEM encapsulation; low-order/all-zero-DH recipients
+  fail before archive lookup or PaymentIntent/reference creation.
+- **D/E — Solana failure and TTL:** only a finalized exact issuance failure is
+  terminal; reorgable errors keep the issuance occupied. Public Solana Pay
+  endpoints return 410 at/after TTL while internal finalized tracking of a
+  pre-expiry issuance continues. TTL alone does not persist `expired` while an
+  issuance is payable or landed; `expired` is persisted only after the active
+  issuance window is authoritatively closed. A terminal expired intent is never
+  reconsidered by verify and returns 410.
+- **F — DB Device A invariants:** Prisma and the new migration contain the exact
+  Entitlement target key, both DeviceActivation uniqueness constraints and the
+  composite foreign key with restricted updates. Entitlement and issuance
+  identity fields are DB-immutable. Credential keyed hashes are unique indexed
+  selectors; nonce replay retains its composite unique constraint.
+- **G — routes:** only `payment-intents/:id/activate-device` and
+  `device-licenses/:id/refresh` remain. The undocumented entitlement activation
+  and license-check routes return 404. The activation `:id` is strictly a
+  PaymentIntent ID.
+- **H — final builder verify:** final `solarch verify` uses a sanitized
+  environment, 300-second timeout, 4 KiB stdout cap, drained/capped 16 KiB
+  stderr, forced termination and close-based reap. Full-file SHA-256 is streamed;
+  unverified output and plaintext ACK are cleaned/zeroized fail closed. The
+  duplex create path retains only the exact 40-byte signing frame plus at most
+  4096 bytes of completion JSON; pending-build verify also enforces 4096 bytes
+  while reading. Overflow kills and reaps the child. Pending-file SHA-256 is
+  streamed rather than loading `.pending` into memory.
+- **I — secret separation:** live startup rejects equal intent-HMAC,
+  refresh-HMAC and ACK-KEK values in addition to missing/short values.
+- **J — archive errors:** PaymentIntent creation maps blocked to exact 403
+  `ARCHIVE_BLOCKED`; missing/draft/processing/unpublished map to exact 404
+  `ARCHIVE_NOT_AVAILABLE`, before creating intent credentials or references.
+
+- **Viewer API transport:** payment intent, verification, activation and refresh
+  request bodies are parsed at a narrow pre-controller boundary with an exact
+  4096-byte body cap, compressed bodies disabled, fatal UTF-8 decoding and JSON
+  depth at most 8.
+  Violations return HTTP 400 `INVALID_REQUEST`; no generic plaintext/secret IPC
+  surface was added.
+
+This closes the requested static Backend gate. It does not supply the real
+HTTPS/Devnet evidence required to mark Part 05 complete.
+
+### Residual external-review closure
+
+- Payment verification and activation now authenticate the bounded TOKEN32
+  credential through the unique purpose-domain `clientSecretHmac` selector and
+  constant-time verification before binding the exact PaymentIntent path ID or
+  disclosing payment, Entitlement or archive state. A valid credential for a
+  pending payment returns exact 403 `PAYMENT_NOT_CONFIRMED`; missing, malformed,
+  wrong or wrong-path credentials return a stable 401 response.
+- Device License refresh follows the same authority ordering through the unique
+  purpose-domain `refreshTokenHmac` selector, constant-time verification and
+  only then exact license path/device/state binding. Guessed license IDs do not
+  become credential authority.
+- Activation recovery now requires exactly one existing active DeviceLicense
+  bound to the existing active DeviceActivation. An activation with no license,
+  or with multiple license records, fails closed as generic 503
+  `BACKEND_UNAVAILABLE` before nonce reservation, ACK custody access, HPKE,
+  signing or license/token persistence. Initial Device A activation still
+  atomically creates its activation and sole license; the existing 10-minute
+  recovery path for one valid active license is unchanged. The separate Device B
+  error-contract question was intentionally not reinterpreted in this follow-up.
+- Live/devnet startup now requires a nonblank `JWT_SECRET` of at least 32 UTF-8
+  bytes. The known development fallback remains available only outside live
+  mode, and the example environment contains only an empty placeholder.
+- The Solana Pay transaction POST narrowly ignores unknown request fields for
+  forward compatibility while still requiring and canonically validating
+  `account`; every closed Viewer DTO remains under the strict global validation
+  policy. E2E coverage proves a future field produces the same semantic
+  transaction.
+- Verify uses the exact `now >= expires_at` boundary. Stale references to the
+  removed `/v1/licenses/check` route were removed from the API README and the
+  non-authoritative frontend/backend integration guide; frozen API documents
+  were not edited.
+
+## 19. Tests added
 
 - Rust: valid live role-separated public anchors; missing anchor, invalid key
   ID, malformed Base64/public key and same key pair fail closed.
@@ -359,10 +510,65 @@ Backend blocker and was not copied into Viewer.
   integer USDC parsing; evidence-mode public input requirements.
 - Live commands expose the complete manual checkpoint template without storing
   or requesting secret credentials.
+- Backend payment tests cover same/different-wallet concurrent issuance, exact
+  txid persistence, fee-payer/buyer separation, malformed signatures, unrelated
+  failed signatures, non-final failure retention, finalized-failure authority,
+  strict endpoint TTL, retention of a still-payable issuance after TTL,
+  authoritative terminal expiry, terminal-expired verify denial, internal
+  post-TTL continuation, immutable fingerprint
+  comparison, finalized slot-to-block-height validation, missing block data,
+  HMAC-keyed PaymentIntent lookup, stable pre-auth 401 behavior, exact path
+  binding, pending-payment 403 behavior and the inclusive TTL boundary.
+- Licensing tests cover malformed/replayed nonce, exact device presentation
+  fields, malformed/noncanonical/low-order device keys as 400, exact
+  PaymentIntent-only activation lookup, revoked recovery denial, inactive
+  activation refresh denial and
+  serialized recovery where only the latest refresh token remains usable, plus
+  purchase-snapshot mismatch denial, HMAC-keyed license lookup and wrong-token /
+  wrong-path refresh denial. The missing-license recovery regression requires a
+  typed failure with no response payload and asserts no nonce write, activation
+  or license write, ACK unseal, HPKE wrap or license signature; the ordinary
+  first-activation and active-license recovery controls remain passing.
+- Archive/custody/config tests cover invalid frozen archive policy, denial of
+  plaintext-hex ACK fallback, tampered/missing custody, strict public origin and
+  complete role-separated live startup configuration, purpose-separated live
+  secrets, finalized rebuild denial and fingerprint/ACK immutability guards.
+- Final-builder tests cover sanitized process environment, bounded success
+  output, final/pending/create stdout overflow, streaming pending digest,
+  bounded/drained stderr, timeout and process-error kill/reap behavior. API e2e
+  asserts both removed routes remain absent and rejects oversized/deep Viewer
+  requests before controller dispatch. Solana Pay E2E additionally proves that
+  an unknown future POST field is ignored without changing transaction
+  semantics. Env tests cover missing, blank, whitespace-only and short live JWT
+  secrets while retaining the explicitly non-live test fallback.
 
-## 19. Commands and results
+## 20. Commands and results
 
-Final source-state checks:
+Backend-integration follow-up checks on 2026-09-14:
+
+| Command | Result |
+| --- | --- |
+| `rtk pnpm --filter @solarch/api lint` | PASS |
+| `rtk pnpm --filter @solarch/api test` | PASS, 11 suites / 111 tests |
+| `rtk pnpm --filter @solarch/api test:e2e` | PASS, 1 suite / 23 tests |
+| `rtk pnpm --filter @solarch/api build` | PASS |
+| `rtk pnpm --filter @solarch/viewer lint` | PASS |
+| `rtk pnpm --filter @solarch/viewer test` | PASS, 3 files / 34 tests |
+| `rtk pnpm --filter @solarch/viewer build` | PASS, 1,873 modules and local PDF worker |
+| `rtk cargo test --workspace` | PASS, 128 tests across seven suites |
+| disposable PostgreSQL 16: old migrations + linked fixture rows + new migration | PASS; required audit fields backfilled, composite FK/triggers present |
+| disposable PostgreSQL 16: `prisma migrate deploy` on empty database | PASS; all four migrations applied in timestamp order |
+| `node --test scripts/create-clean-archive.test.mjs` | PASS, 11/11 |
+| `node --test scripts/viewer-live-devnet-e2e.test.mjs` | PASS, 4/4 |
+| `rtk git diff --check` | PASS |
+
+An early supplemental `prisma validate` invocation had no `DATABASE_URL` and
+returned Prisma P1012 before schema validation. It is not counted as the gate;
+the real disposable PostgreSQL upgrade and `prisma migrate deploy` checks above
+subsequently passed.
+
+The complete Viewer/Core Part 05 baseline previously passed these additional
+source-state checks before the Backend-only follow-up:
 
 | Command | Result |
 | --- | --- |
@@ -396,7 +602,7 @@ slr_v1_multiformat.b64: 7655 bytes
 410964651c82df094a4e2e653e9340816b0c5f0b1908343ab55b493a0c0692c4
 ```
 
-## 20. Windows-native results
+## 21. Windows-native results
 
 Actually run through native Windows tools:
 
@@ -411,7 +617,8 @@ Actually run through native Windows tools:
   `WINDOWS_WEBVIEW2_NO_EXPORT_PASS`,
   `WINDOWS_PROTECTED_KEYBOARD_NAVIGATION_PASS`, and
   `WINDOWS_NATIVE_PART04_DEV_INTEGRATION_PASS`.
-- Pinned Tauri 2.11.4 built the x64 NSIS bundle — PASS. Frontend production build
+- Direct `tauri=2.11.5` with `tauri-runtime-wry=2.11.4` built the x64 NSIS bundle
+  — PASS. Frontend production build
   had already passed under pnpm; the native Tauri call skipped only its duplicate
   `beforeBuildCommand` because WSL-created `.bin` symlinks are not executable by
   Windows Node.
@@ -427,25 +634,25 @@ The production-style installer remained intentionally untrusted toward synthetic
 archives. No native `live-devnet` installer was built because embedding synthetic
 anchors/origin and calling it a real demo would violate Part 05.
 
-## 21. Cross-branch handoff required
+## 22. Deployment/E2E handoff required
 
-Backend teammate/deployment must provide and verify, without Viewer workarounds:
+The remaining handoff is operational evidence, not a Viewer contract workaround:
 
-1. real Rust ArchiveBuilder/pending verifier/SIG1 integration;
-2. exact closed metadata, intent, verify and error DTOs/status codes;
-3. strict second-form license timestamps;
-4. authoritative finalized querying before Payment/Entitlement commit;
-5. explicit live secret configuration with no synthetic fallback;
-6. deployed HTTPS root origin, public archive/license anchors and sanitized
-   Devnet RPC/mint/platform/fee-payer/creator public configuration;
-7. one exact-split multi-format archive and public creator-ATA transaction proof;
-8. an independent Device B path returning HTTP 409 `DEVICE_LIMIT_REACHED`.
+1. deploy this Backend at a real HTTPS root origin with secret-manager-provided
+   fee-payer/custody/HMAC/private-signing configuration;
+2. provide the matching public archive/license anchors and sanitized Devnet
+   RPC/mint/platform/fee-payer/creator public configuration;
+3. produce one exact-split multi-format archive through the real CLI adapter;
+4. fund disposable Devnet wallets with clearly identified test assets and run
+   the external-wallet purchase through finalized;
+5. record the creator-ATA creation transaction and independent Device B HTTP 409
+   `DEVICE_LIMIT_REACHED` result.
 
 Once those inputs exist, the implemented harness can run the non-wallet checks;
 external wallet approval and the two-machine UI checkpoints remain explicit
 manual steps as allowed by the Part instruction.
 
-## 22. Known limitations and not verified
+## 23. Known limitations and not verified
 
 - No live HTTPS Backend was contacted.
 - No real Backend/Core `.slr` was produced or opened.
@@ -469,7 +676,7 @@ general six-decimal fee-rounding rule also requires an explicit shared-contract
 decision before prices that are not exactly divisible into 95/5 base-unit shares
 can be integrated.
 
-## 23. Clean review archive
+## 24. Clean review archive
 
 The clean archive is generated after this report is saved and final checks pass.
 Its path and validated content result are recorded in the delivery response to

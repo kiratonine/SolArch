@@ -42,13 +42,33 @@ describe('SolArch Cryptographic Profile & Gate 01 Interoperability', () => {
 
   const expectedSignature = 'wLcOtVg7S0qywsufOSmRTPHACKPxVTO5qYivffQ5Xk0ylSvAjIV7b5u4LlnEycUM++zQ/5d5nMr4tTUaiWg1BA==';
 
-  test('validates device public key correctly', () => {
-    const raw = validateDevicePublicKey(VECTOR_DEVICE_PUB_B64);
+  test('validates device public key correctly', async () => {
+    const raw = await validateDevicePublicKey(VECTOR_DEVICE_PUB_B64);
     expect(raw.length).toBe(32);
     expect(raw.toString('base64')).toBe(VECTOR_DEVICE_PUB_B64);
 
-    expect(() => validateDevicePublicKey('invalid-key')).toThrow();
-    expect(() => validateDevicePublicKey(VECTOR_DEVICE_PUB_B64.slice(0, -1))).toThrow();
+    await expect(validateDevicePublicKey('invalid-key')).rejects.toThrow();
+    await expect(validateDevicePublicKey(VECTOR_DEVICE_PUB_B64.slice(0, -1))).rejects.toThrow();
+
+    const fieldPrime = Buffer.from([0xed, ...new Array(30).fill(0xff), 0x7f]);
+    const topBitSet = Buffer.alloc(32, 2);
+    topBitSet[31] |= 0x80;
+    for (const nonCanonical of [fieldPrime, topBitSet]) {
+      await expect(validateDevicePublicKey(nonCanonical.toString('base64'))).rejects.toThrow(
+        /canonical X25519/,
+      );
+    }
+
+    const lowOrderKeys = [
+      Buffer.alloc(32),
+      Buffer.from([1, ...new Array(31).fill(0)]),
+      Buffer.from([0xec, ...new Array(30).fill(0xff), 0x7f]),
+    ];
+    for (const lowOrder of lowOrderKeys) {
+      await expect(validateDevicePublicKey(lowOrder.toString('base64'))).rejects.toThrow(
+        /low-order|invalid/,
+      );
+    }
   });
 
   test('canonicalizes JSON according to RFC 8785 (JCS)', () => {

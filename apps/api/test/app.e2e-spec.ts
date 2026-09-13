@@ -7,11 +7,14 @@ import { EnvService } from '@/config/env.service';
 import { SolArchExceptionFilter } from '@/common/filters/http-exception.filter';
 import { PaymentsService } from '@/modules/payments/payments.service';
 import { AckCustodyService } from '@/modules/uploads/ack-custody.service';
+import { configureRequestBodyParsers } from '@/common/viewer-request-limits';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import { createHash } from 'crypto';
 import * as nacl from 'tweetnacl';
 
 const VALID_TOKEN32 = 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8';
+const VALID_TRANSACTION_SIGNATURE =
+  '5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUc';
 const mockE2eMessageBytes = Buffer.from('e2e_mock_tx_message_bytes_valid');
 const mockE2eMessageHash = createHash('sha256').update(mockE2eMessageBytes).digest('hex').toLowerCase();
 
@@ -38,6 +41,7 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
   const validCreatorAta = Keypair.generate().publicKey.toBase58();
   const validPlatformAta = Keypair.generate().publicKey.toBase58();
   const validReference = Keypair.generate().publicKey.toBase58();
+  const validBuyerWallet = Keypair.generate().publicKey.toBase58();
 
   const mockArchive = {
     id: 'arc_e2e_001',
@@ -123,7 +127,9 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
       findUnique: jest.fn().mockImplementation(() => ({
         id: 'pi_e2e_001',
         archiveId: 'arc_e2e_001',
+        archiveFingerprint: mockArchive.archiveFingerprint,
         devicePublicKey: DEVICE_A,
+        confirmedBuyerWallet: null,
         clientSecretHmac: require('@/crypto/token32.util').hashIntentClientSecret(
           VALID_TOKEN32,
           'solarch-intent-hmac-secret-32-chars-minimum',
@@ -156,12 +162,21 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
         devicePublicKey: DEVICE_A,
         maxDevices: 1,
         devicesActivated: 0,
-        status: 'active',
-        archive: mockArchive,
+      status: 'active',
+      expiresAt: null,
+      archive: mockArchive,
         activations: [],
         payment: {
           status: 'confirmed',
+          archiveId: 'arc_e2e_001',
+          buyerWallet: 'Buyer111111111111111111111111111111111111',
+          devicePublicKey: DEVICE_A,
           paymentIntent: {
+            id: 'pi_e2e_001',
+            archiveId: 'arc_e2e_001',
+            archiveFingerprint: mockArchive.archiveFingerprint,
+            devicePublicKey: DEVICE_A,
+            confirmedBuyerWallet: 'Buyer111111111111111111111111111111111111',
             clientSecretHmac: require('@/crypto/token32.util').hashIntentClientSecret(
               VALID_TOKEN32,
               'solarch-intent-hmac-secret-32-chars-minimum',
@@ -169,11 +184,13 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
           },
         },
       }),
+      findUnique: jest.fn().mockImplementation(() => mockPrisma.entitlement.findFirst()),
       create: jest.fn().mockResolvedValue({ id: 'ent_e2e_001' }),
       update: jest.fn().mockResolvedValue({}),
     },
     deviceActivation: {
       create: jest.fn().mockResolvedValue({ id: 'act_e2e_001' }),
+      update: jest.fn().mockResolvedValue({}),
     },
     deviceLicense: {
       create: jest.fn().mockResolvedValue({ id: 'lic_e2e_001' }),
@@ -191,11 +208,19 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
       create: jest.fn().mockResolvedValue({}),
     },
     paymentTransactionIssuance: {
-      findFirst: jest.fn().mockResolvedValue({
-        paymentIntentId: 'pi_e2e_001',
-        transactionMessageHash: mockE2eMessageHash,
-        lastValidBlockHeight: BigInt(999999),
-      }),
+      findFirst: jest.fn().mockImplementation(({ where }) =>
+        where.expectedTransactionSignature === VALID_TRANSACTION_SIGNATURE
+          ? {
+              id: 'iss_e2e_001',
+              paymentIntentId: 'pi_e2e_001',
+              constructionAccount: validBuyerWallet,
+              expectedTransactionSignature: VALID_TRANSACTION_SIGNATURE,
+              transactionMessageHash: mockE2eMessageHash,
+              lastValidBlockHeight: BigInt(999999),
+              status: 'active',
+            }
+          : null,
+      ),
       findMany: jest.fn().mockResolvedValue([]),
       create: jest.fn().mockResolvedValue({}),
       update: jest.fn().mockResolvedValue({}),
@@ -229,7 +254,8 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
       })
       .compile();
 
-    app = moduleFixture.createNestApplication();
+    app = moduleFixture.createNestApplication({ bodyParser: false });
+    configureRequestBodyParsers(app);
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -240,16 +266,16 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
     app.useGlobalFilters(new SolArchExceptionFilter());
 
     const paymentsService = app.get(PaymentsService);
+    const e2eFeePayer = app.get(EnvService).feePayerKeypair.publicKey;
     jest.spyOn(paymentsService, 'getConnection').mockReturnValue({
       getLatestBlockhash: jest.fn().mockResolvedValue({
         blockhash: 'EkSnNWid2cvwEVnVx9aBqawnmiCNiDcg3iAZ2tFhGuqd',
         lastValidBlockHeight: 123456,
       }),
-      isBlockhashValid: jest.fn().mockResolvedValue({ value: true }),
-      getSignaturesForAddress: jest.fn().mockResolvedValue([]),
       getSignatureStatuses: jest.fn().mockResolvedValue({
-        value: [{ confirmationStatus: 'finalized', err: null }],
+        value: [{ confirmationStatus: 'finalized', err: null, slot: 100 }],
       }),
+      getBlockHeight: jest.fn().mockResolvedValue(100),
       getParsedTransaction: jest.fn().mockResolvedValue({
         slot: 100,
         blockTime: 123456,
@@ -258,7 +284,8 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
           message: {
             accountKeys: [
               { pubkey: { toBase58: () => validReference }, signer: false },
-              { pubkey: { toBase58: () => 'Buyer111111111111111111111111111111111111' }, signer: true },
+              { pubkey: e2eFeePayer, signer: true },
+              { pubkey: { toBase58: () => validBuyerWallet }, signer: true },
             ],
             instructions: [
               {
@@ -287,13 +314,13 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
       }),
       getTransaction: jest.fn().mockResolvedValue({
         slot: 100,
-        blockHeight: 100,
         transaction: {
           message: {
             serialize: () => mockE2eMessageBytes,
           },
         },
       }),
+      getBlock: jest.fn().mockResolvedValue({ blockHeight: 100 }),
     } as any);
 
     await app.init();
@@ -493,6 +520,47 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
       expect(res.body.solana_pay_url).toContain('solana:');
     });
 
+    it('rejects Viewer payment bodies above the frozen 4096-byte transport cap', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/v1/payment-intents')
+        .set('Content-Type', 'application/json')
+        .send(
+          JSON.stringify({
+            archive_id: 'arc_e2e_001',
+            device_public_key: DEVICE_A,
+            padding: 'x'.repeat(4_096),
+          }),
+        )
+        .expect(400);
+
+      expect(res.body.code).toBe('INVALID_REQUEST');
+    });
+
+    it('rejects Viewer activation/refresh JSON deeper than the frozen depth cap', async () => {
+      let nested: Record<string, unknown> = {};
+      for (let index = 0; index < 9; index += 1) nested = { nested };
+
+      for (const endpoint of [
+        '/v1/payment-intents/pi_e2e_001/activate-device',
+        '/v1/device-licenses/lic_e2e_001/refresh',
+      ]) {
+        const res = await request(app.getHttpServer())
+          .post(endpoint)
+          .set('Content-Type', 'application/json')
+          .send(JSON.stringify(nested))
+          .expect(400);
+        expect(res.body.code).toBe('INVALID_REQUEST');
+      }
+    });
+
+    it('/assets/solarch-pay-icon.svg (GET) serves the metadata icon', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/assets/solarch-pay-icon.svg')
+        .expect(200)
+        .expect('Content-Type', /image\/svg\+xml/);
+      expect(Buffer.from(res.body).toString('utf8')).toContain('<svg');
+    });
+
     it('/v1/solana-pay/payment-intents/:id/transaction (POST) builds transaction request', async () => {
       const buyerPubKey = Keypair.generate().publicKey.toBase58();
       const res = await request(app.getHttpServer())
@@ -502,6 +570,13 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
 
       expect(res.body.transaction).toBeDefined();
       expect(res.body.message).toContain('10.00 USDC');
+
+      const forwardCompatible = await request(app.getHttpServer())
+        .post('/v1/solana-pay/payment-intents/pi_e2e_001/transaction')
+        .send({ account: buyerPubKey, future_field: 'ignored' })
+        .expect(200);
+      expect(forwardCompatible.body.transaction).toBe(res.body.transaction);
+      expect(forwardCompatible.body.message).toBe(res.body.message);
     });
 
     it('/v1/payment-intents/:id/verify (POST) verifies payment and creates Entitlement', async () => {
@@ -510,7 +585,7 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
         .set('Authorization', authHeader)
         .send({
           device_public_key: DEVICE_A,
-          transaction_signature: '5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUc',
+          transaction_signature: VALID_TRANSACTION_SIGNATURE,
         })
         .expect(200);
 
@@ -519,6 +594,18 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
     });
 
     it('/v1/payment-intents/:id/activate-device (POST) activates Device A with 72h window and wrapped key', async () => {
+      mockPrisma.paymentIntent.findUnique.mockResolvedValueOnce({
+        id: 'pi_e2e_001',
+        devicePublicKey: DEVICE_A,
+        clientSecretHmac: require('@/crypto/token32.util').hashIntentClientSecret(
+          VALID_TOKEN32,
+          'solarch-intent-hmac-secret-32-chars-minimum',
+        ),
+        payment: {
+          status: 'confirmed',
+          entitlement: { id: 'ent_e2e_001' },
+        },
+      });
       const res = await request(app.getHttpServer())
         .post('/v1/payment-intents/pi_e2e_001/activate-device')
         .set('Authorization', authHeader)
@@ -542,6 +629,18 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
     });
 
     it('/v1/payment-intents/:id/activate-device (POST) rejects Device B with DEVICE_BINDING_MISMATCH', async () => {
+      mockPrisma.paymentIntent.findUnique.mockResolvedValueOnce({
+        id: 'pi_e2e_001',
+        devicePublicKey: DEVICE_A,
+        clientSecretHmac: require('@/crypto/token32.util').hashIntentClientSecret(
+          VALID_TOKEN32,
+          'solarch-intent-hmac-secret-32-chars-minimum',
+        ),
+        payment: {
+          status: 'confirmed',
+          entitlement: { id: 'ent_e2e_001' },
+        },
+      });
       const res = await request(app.getHttpServer())
         .post('/v1/payment-intents/pi_e2e_001/activate-device')
         .set('Authorization', authHeader)
@@ -556,17 +655,12 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
       expect(res.body.code).toBe('DEVICE_BINDING_MISMATCH');
     });
 
-    it('/v1/licenses/check (POST) validates active license', async () => {
-      const res = await request(app.getHttpServer())
-        .post('/v1/licenses/check')
-        .send({
-          license_id: 'lic_e2e_001',
-          archive_id: 'arc_e2e_001',
-          device_public_key: DEVICE_A,
-        })
-        .expect(200);
-
-      expect(res.body.status).toBe('active');
+    it('does not expose removed out-of-contract licensing routes', async () => {
+      await request(app.getHttpServer()).post('/v1/licenses/check').send({}).expect(404);
+      await request(app.getHttpServer())
+        .post('/v1/entitlements/ent_e2e_001/activate-device')
+        .send({})
+        .expect(404);
     });
   });
 

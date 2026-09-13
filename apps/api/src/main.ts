@@ -5,10 +5,12 @@ import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { SolArchExceptionFilter } from './common/filters/http-exception.filter';
 import { EnvService } from './config/env.service';
+import { configureRequestBodyParsers } from './common/viewer-request-limits';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  configureRequestBodyParsers(app);
 
   const env = app.get(EnvService);
 

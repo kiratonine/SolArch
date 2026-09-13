@@ -127,10 +127,25 @@ export class ArchivesService {
     if (dto.price.currency !== 'USDC') {
       throw new BadRequestException('Only USDC currency is accepted in MVP');
     }
+    if (
+      dto.license_policy &&
+      (dto.license_policy.max_devices !== undefined && dto.license_policy.max_devices !== 1 ||
+        dto.license_policy.allow_export !== undefined && dto.license_policy.allow_export !== false ||
+        dto.license_policy.watermark_enabled !== undefined &&
+          dto.license_policy.watermark_enabled !== true)
+    ) {
+      throw new BadRequestException({
+        code: 'INVALID_REQUEST',
+        message: 'Archive license_policy must be max_devices=1, allow_export=false and watermark_enabled=true',
+      });
+    }
 
     let creatorPubKey: PublicKey;
     try {
       creatorPubKey = new PublicKey(dto.creator_payout_wallet);
+      if (creatorPubKey.toBase58() !== dto.creator_payout_wallet) {
+        throw new Error('Non-canonical Solana public key');
+      }
     } catch {
       throw new BadRequestException('Invalid creator payout wallet Solana public key');
     }

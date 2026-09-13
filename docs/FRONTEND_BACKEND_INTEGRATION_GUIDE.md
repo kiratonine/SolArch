@@ -77,7 +77,6 @@ SolArch — децентрализованная платформа дистри
 | **Payments** | POST | `/v1/payment-intents/:id/verify`| SolArchIntent | Верификация finalized транзакции на блокчейне| **100% готов** |
 | **Licensing** | POST | `/v1/.../activate-device` | SolArchIntent | Выпуск JCS+Ed25519 лицензии и HPKE ACK | **100% готов** |
 | **Licensing** | POST | `/v1/device-licenses/:id/refresh`| DeviceRefresh| Продление 72-часового окна лицензии | **100% готов** |
-| **Licensing** | POST | `/v1/licenses/check` | Public | Проверка валидности лицензии | **100% готов** |
 
 ---
 

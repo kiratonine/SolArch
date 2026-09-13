@@ -15,6 +15,16 @@ export interface WrappedContentKey {
   ciphertext: string;
 }
 
+const X25519_FIELD_PRIME = (1n << 255n) - 19n;
+
+function littleEndianInteger(bytes: Buffer): bigint {
+  let value = 0n;
+  for (let index = bytes.length - 1; index >= 0; index -= 1) {
+    value = (value << 8n) | BigInt(bytes[index]);
+  }
+  return value;
+}
+
 /**
  * Validates that a device public key meets exact SolArch requirements:
  * - 32 raw bytes X25519 little-endian coordinate
@@ -22,7 +32,7 @@ export interface WrappedContentKey {
  * - Ends with '='
  * - Exact canonical re-encoding matches textual input
  */
-export function validateDevicePublicKey(devicePublicKeyB64: string): Buffer {
+export async function validateDevicePublicKey(devicePublicKeyB64: string): Promise<Buffer> {
   if (!devicePublicKeyB64 || typeof devicePublicKeyB64 !== 'string') {
     throw new Error('Device public key must be a non-empty string');
   }
@@ -35,6 +45,21 @@ export function validateDevicePublicKey(devicePublicKeyB64: string): Buffer {
   }
   if (buf.toString('base64') !== devicePublicKeyB64) {
     throw new Error('Device public key is not canonical Base64');
+  }
+  if ((buf[31] & 0x80) !== 0 || littleEndianInteger(buf) >= X25519_FIELD_PRIME) {
+    throw new Error('Device public key is not a canonical X25519 u-coordinate');
+  }
+
+  // The audited RFC 9180 KEM implementation performs an actual X25519
+  // encapsulation. Its noble-curves primitive rejects low-order recipient keys
+  // when the DH result is all zero; import alone is insufficient because RFC
+  // 7748 decoding otherwise accepts/reduces several hostile encodings.
+  try {
+    const kem = new DhkemX25519HkdfSha256();
+    const recipientPublicKey = await kem.importKey('raw', bufferToArrayBuffer(buf), true);
+    await kem.encap({ recipientPublicKey });
+  } catch {
+    throw new Error('Device public key is low-order or invalid for X25519 HPKE');
   }
   return buf;
 }
@@ -58,7 +83,7 @@ export async function wrapContentKey(
   rawContentKeyBytes: Buffer,
   payload: Record<string, any>,
 ): Promise<WrappedContentKey> {
-  const deviceKeyBuf = validateDevicePublicKey(devicePublicKeyB64);
+  const deviceKeyBuf = await validateDevicePublicKey(devicePublicKeyB64);
   const payloadJcs = Buffer.from(canonicalizeJson(payload), 'utf8');
 
   const info = Buffer.concat([

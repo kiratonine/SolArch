@@ -84,4 +84,14 @@ describe('AckCustodyService', () => {
       service.unseal(archiveId, 'wrong_fingerprint_000000000000000000000000000000000000000000000000', contentKeyRef),
     ).rejects.toThrow(ServiceUnavailableException);
   });
+
+  test('fails closed instead of treating a plaintext 64-hex value as live ACK custody', async () => {
+    await expect(
+      service.unseal(
+        'arc_plaintext_fallback',
+        '57ce84068fdd9b23f8860afa27834151f4fefb038d812c2ac77e8a861b1eecdb',
+        'a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf',
+      ),
+    ).rejects.toThrow(ServiceUnavailableException);
+  });
 });

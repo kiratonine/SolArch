@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { UploadsService } from './uploads.service';
 import { PrismaService } from '@/common/prisma.service';
 import { EnvService } from '@/config/env.service';
@@ -8,14 +8,29 @@ import { ArchiveBuilderAdapter } from './archive-builder.adapter';
 describe('UploadsService Hardening & Validations', () => {
   let service: UploadsService;
   let prisma: any;
+  let archiveBuilder: any;
+  let ackCustody: any;
+
+  const mutableArchive = {
+    id: 'arc_001',
+    creatorUserId: 'usr_001',
+    technicalStatus: 'draft',
+    marketplaceStatus: 'draft',
+    archiveFingerprint: null,
+    contentKeyRef: null,
+    generatedSlrStorageKey: null,
+    _count: { payments: 0 },
+  };
 
   beforeEach(async () => {
     prisma = {
       archive: {
         findUnique: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       upload: {
+        create: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
       },
@@ -23,6 +38,18 @@ describe('UploadsService Hardening & Validations', () => {
         deleteMany: jest.fn(),
         createMany: jest.fn(),
       },
+    };
+    archiveBuilder = {
+      build: jest.fn().mockResolvedValue({
+        outputFilePath: './storage_data/slr/arc_001.slr',
+        archiveFingerprint: 'a'.repeat(64),
+        contentKey: Buffer.alloc(32, 1),
+        sizeBytes: 1024,
+      }),
+    };
+    ackCustody = {
+      seal: jest.fn().mockResolvedValue({ contentKeyRef: 'ack_ref_001' }),
+      unseal: jest.fn().mockResolvedValue(Buffer.alloc(32, 1)),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -37,21 +64,11 @@ describe('UploadsService Hardening & Validations', () => {
         },
         {
           provide: ArchiveBuilderAdapter,
-          useValue: {
-            build: jest.fn().mockResolvedValue({
-              outputFilePath: './storage_data/slr/arc_001.slr',
-              archiveFingerprint: 'mock_fingerprint_64_hex_chars_1111111111111111111111111111111111111',
-              contentKey: Buffer.alloc(32, 1),
-              sizeBytes: 1024,
-            }),
-          },
+          useValue: archiveBuilder,
         },
         {
           provide: require('./ack-custody.service').AckCustodyService,
-          useValue: {
-            seal: jest.fn().mockResolvedValue({ contentKeyRef: 'ack_ref_001' }),
-            unseal: jest.fn().mockResolvedValue(Buffer.alloc(32, 1)),
-          },
+          useValue: ackCustody,
         },
       ],
     }).compile();
@@ -60,10 +77,7 @@ describe('UploadsService Hardening & Validations', () => {
   });
 
   test('init checks maximum upload size (512 MiB)', async () => {
-    prisma.archive.findUnique.mockResolvedValue({
-      id: 'arc_001',
-      creatorUserId: 'usr_001',
-    });
+    prisma.archive.findUnique.mockResolvedValue(mutableArchive);
 
     await expect(
       service.init('usr_001', {
@@ -75,10 +89,7 @@ describe('UploadsService Hardening & Validations', () => {
   });
 
   test('init throws NotFoundException on non-owned archive (B8)', async () => {
-    prisma.archive.findUnique.mockResolvedValue({
-      id: 'arc_001',
-      creatorUserId: 'usr_other',
-    });
+    prisma.archive.findUnique.mockResolvedValue({ ...mutableArchive, creatorUserId: 'usr_other' });
 
     await expect(
       service.init('usr_001', {
@@ -90,10 +101,7 @@ describe('UploadsService Hardening & Validations', () => {
   });
 
   test('init supports file_name and file_size aliases', async () => {
-    prisma.archive.findUnique.mockResolvedValue({
-      id: 'arc_001',
-      creatorUserId: 'usr_001',
-    });
+    prisma.archive.findUnique.mockResolvedValue(mutableArchive);
     prisma.upload.create = jest.fn().mockResolvedValue({
       id: 'upl_001',
       status: 'pending',
@@ -114,6 +122,57 @@ describe('UploadsService Hardening & Validations', () => {
         }),
       }),
     );
+    expect(prisma.archive.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          archiveFingerprint: null,
+          contentKeyRef: null,
+          generatedSlrStorageKey: null,
+          marketplaceStatus: 'draft',
+        }),
+      }),
+    );
+  });
+
+  test.each([
+    ['ready', { technicalStatus: 'ready' }],
+    ['published', { marketplaceStatus: 'published' }],
+    ['unpublished', { marketplaceStatus: 'unpublished' }],
+    ['paid', { _count: { payments: 1 } }],
+    ['fingerprinted', { archiveFingerprint: 'a'.repeat(64) }],
+    ['ACK-custodied', { contentKeyRef: 'ack_ref_existing' }],
+  ])('denies upload initialization for immutable %s archive', async (_label, override) => {
+    prisma.archive.findUnique.mockResolvedValue({ ...mutableArchive, ...override });
+
+    await expect(
+      service.init('usr_001', {
+        archive_id: 'arc_001',
+        filename: 'replacement.zip',
+        size_bytes: 1024,
+      }),
+    ).rejects.toThrow(ConflictException);
+    expect(prisma.archive.updateMany).not.toHaveBeenCalled();
+    expect(prisma.upload.create).not.toHaveBeenCalled();
+  });
+
+  test('ready archive completion cannot rebuild bytes or change fingerprint/ACK custody', async () => {
+    prisma.upload.findUnique.mockResolvedValue({
+      id: 'upl_old',
+      archiveId: 'arc_001',
+      storageKey: './stale.zip',
+      archive: {
+        ...mutableArchive,
+        technicalStatus: 'ready',
+        archiveFingerprint: 'a'.repeat(64),
+        contentKeyRef: 'ack_ref_existing',
+        generatedSlrStorageKey: './storage_data/slr/arc_001.slr',
+      },
+    });
+
+    await expect(service.complete('usr_001', 'upl_old')).rejects.toThrow(ConflictException);
+    expect(archiveBuilder.build).not.toHaveBeenCalled();
+    expect(ackCustody.seal).not.toHaveBeenCalled();
+    expect(prisma.archive.update).not.toHaveBeenCalled();
   });
 
   test('assertUploadOwner throws NotFoundException if caller is not owner (B3, B8)', async () => {
@@ -129,7 +188,7 @@ describe('UploadsService Hardening & Validations', () => {
     prisma.upload.findUnique.mockResolvedValue({
       id: 'upl_001',
       archiveId: 'arc_001',
-      archive: { creatorUserId: 'usr_001' },
+      archive: mutableArchive,
     });
     prisma.archivePublicFile.count = jest.fn().mockResolvedValue(0);
 

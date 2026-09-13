@@ -56,6 +56,21 @@ describe('ArchivesService & Economics', () => {
     expect(() => service.calculateEconomics('abc')).toThrow(BadRequestException);
   });
 
+  test.each([
+    { max_devices: 2, allow_export: false, watermark_enabled: true },
+    { max_devices: 1, allow_export: true, watermark_enabled: true },
+    { max_devices: 1, allow_export: false, watermark_enabled: false },
+  ])('rejects archive policy incompatible with the frozen Viewer contract', async (licensePolicy) => {
+    await expect(
+      service.create('usr_001', {
+        title: 'Protected archive',
+        price: { currency: 'USDC', amount: '10.00' },
+        creator_payout_wallet: '11111111111111111111111111111111',
+        license_policy: licensePolicy,
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
   test('formatCreatorArchive produces canonical snake_case DTO with metrics and economics', () => {
     const mockArc = {
       id: 'arc_test_123',

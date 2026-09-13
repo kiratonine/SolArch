@@ -56,8 +56,9 @@ export class ArchiveBuilderAdapter {
   }
 
   getCliPath(): string {
-    if (process.env.SOLARCH_CLI_PATH) {
-      return process.env.SOLARCH_CLI_PATH;
+    const configured = this.env.solarchCliPath;
+    if (configured) {
+      return configured;
     }
     const candidates = [
       'solarch',
@@ -78,6 +79,14 @@ export class ArchiveBuilderAdapter {
   }
 
   async build(input: BuildArchiveInput): Promise<BuildArchiveResult> {
+    if (
+      input.platformFeeBps !== 500 ||
+      input.maxDevices !== 1 ||
+      input.allowExport !== false ||
+      input.watermarkEnabled !== true
+    ) {
+      throw new Error('Archive policy does not match the frozen SolArch MVP policy');
+    }
     const dir = path.dirname(input.outputFilePath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -97,12 +106,12 @@ export class ArchiveBuilderAdapter {
       commercial_snapshot: {
         price_amount: Number(input.priceAmount).toFixed(6),
         price_currency: 'USDC',
-        platform_fee_bps: input.platformFeeBps ?? 500,
+        platform_fee_bps: input.platformFeeBps,
       },
       license_snapshot: {
-        max_devices: input.maxDevices ?? 1,
-        allow_export: Boolean(input.allowExport),
-        watermark_enabled: Boolean(input.watermarkEnabled),
+        max_devices: input.maxDevices,
+        allow_export: input.allowExport,
+        watermark_enabled: input.watermarkEnabled,
       },
       backend: {
         archive_api_id: input.archiveId,
@@ -121,6 +130,7 @@ export class ArchiveBuilderAdapter {
     const signingKeypair = this.env.archiveSigningKeypair;
     const signingPublicKeyB64 = Buffer.from(signingKeypair.publicKey).toString('base64');
     const cliBinary = this.getCliPath();
+    let completed = false;
 
     try {
       const result = await this.executeDuplexCreate(
@@ -135,14 +145,15 @@ export class ArchiveBuilderAdapter {
       );
 
       // Final independent verification of completed file
-      const finalVerified = await this.verify(input.outputFilePath, signingKeyId, signingPublicKeyB64);
-      if (!finalVerified) {
-        throw new Error(`Final independent solarch verify failed for ${input.outputFilePath}`);
-      }
+      await this.executeFinalVerify(
+        cliBinary,
+        input.outputFilePath,
+        signingKeyId,
+        signingPublicKeyB64,
+      );
 
       // Assert independent file fingerprint matches
-      const fileBytes = fs.readFileSync(input.outputFilePath);
-      const computedFinalFingerprint = createHash('sha256').update(fileBytes).digest('hex').toLowerCase();
+      const computedFinalFingerprint = await this.hashFileSha256(input.outputFilePath);
       if (computedFinalFingerprint !== result.archiveFingerprint.toLowerCase()) {
         throw new Error(
           `Final archive fingerprint mismatch: declared ${result.archiveFingerprint}, computed ${computedFinalFingerprint}`,
@@ -153,6 +164,7 @@ export class ArchiveBuilderAdapter {
         `Archive built successfully with solarch-cli: ${input.archiveId} -> ${input.outputFilePath} (${result.sizeBytes} bytes, fingerprint: ${result.archiveFingerprint})`,
       );
 
+      completed = true;
       return {
         outputFilePath: input.outputFilePath,
         archiveFingerprint: result.archiveFingerprint,
@@ -160,6 +172,16 @@ export class ArchiveBuilderAdapter {
         sizeBytes: result.sizeBytes,
       };
     } finally {
+      if (!completed) {
+        zeroizeBuffer(contentKey);
+        if (fs.existsSync(input.outputFilePath)) {
+          try {
+            fs.unlinkSync(input.outputFilePath);
+          } catch {
+            // Unverified output is never persisted as ready; cleanup is best effort.
+          }
+        }
+      }
       if (fs.existsSync(metadataPath)) {
         try {
           fs.unlinkSync(metadataPath);
@@ -168,6 +190,16 @@ export class ArchiveBuilderAdapter {
         }
       }
     }
+  }
+
+  private hashFileSha256(filePath: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const digest = createHash('sha256');
+      const input = fs.createReadStream(filePath);
+      input.on('error', reject);
+      input.on('data', (chunk) => digest.update(chunk));
+      input.on('end', () => resolve(digest.digest('hex').toLowerCase()));
+    });
   }
 
   private executeDuplexCreate(
@@ -182,34 +214,6 @@ export class ArchiveBuilderAdapter {
   ): Promise<{ archiveFingerprint: string; sizeBytes: number }> {
     return new Promise((resolve, reject) => {
       const pendingPath = `${outputPath}.pending`;
-      let resolved = false;
-
-      const finishReject = (err: Error) => {
-        if (!resolved) {
-          resolved = true;
-          if (child && !child.killed) {
-            try {
-              child.kill('SIGKILL');
-            } catch {
-              // ignore
-            }
-          }
-          // Best effort cleanup of unfinished artifacts
-          if (fs.existsSync(pendingPath)) {
-            try {
-              fs.unlinkSync(pendingPath);
-            } catch {
-              // ignore
-            }
-          }
-          reject(err);
-        }
-      };
-
-      const jobTimer = setTimeout(() => {
-        finishReject(new Error(`solarch create exceeded overall timeout of ${JOB_TIMEOUT_MS}ms`));
-      }, JOB_TIMEOUT_MS);
-
       const args = [
         'create',
         '--input-dir',
@@ -230,10 +234,51 @@ export class ArchiveBuilderAdapter {
         shell: false,
       });
 
-      let stdoutChunks: Buffer[] = [];
+      let settled = false;
+      let terminalError: Error | undefined;
+      let signingFrame = Buffer.alloc(0);
+      const completionChunks: Buffer[] = [];
+      let completionBytes = 0;
       let stderrBytes = 0;
       let stderrText = '';
       let signingProcessed = false;
+
+      const cleanupPending = () => {
+        if (fs.existsSync(pendingPath)) {
+          try {
+            fs.unlinkSync(pendingPath);
+          } catch {
+            // Best-effort cleanup of an untrusted incomplete build.
+          }
+        }
+      };
+
+      const requestStop = (error: Error) => {
+        terminalError ??= error;
+        if (!child.killed) {
+          try {
+            child.kill('SIGKILL');
+          } catch {
+            // The close/error handlers still fail closed.
+          }
+        }
+      };
+
+      const appendCompletion = (chunk: Buffer) => {
+        const remaining = JSON_LINE_CAP_BYTES - completionBytes;
+        if (remaining > 0) {
+          const slice = chunk.subarray(0, remaining);
+          completionChunks.push(slice);
+          completionBytes += slice.length;
+        }
+        if (chunk.length > remaining) {
+          requestStop(new Error(`solarch create JSON stdout exceeded ${JSON_LINE_CAP_BYTES} bytes`));
+        }
+      };
+
+      const jobTimer = setTimeout(() => {
+        requestStop(new Error(`solarch create exceeded overall timeout of ${JOB_TIMEOUT_MS}ms`));
+      }, JOB_TIMEOUT_MS);
 
       child.stderr.on('data', (chunk: Buffer) => {
         if (stderrBytes < STDERR_CAP_BYTES) {
@@ -244,36 +289,46 @@ export class ArchiveBuilderAdapter {
       });
 
       child.on('error', (err) => {
-        clearTimeout(jobTimer);
-        finishReject(
+        requestStop(
           new Error(
             `Failed to spawn solarch CLI (${cliBinary}): ${err.message}. Ensure Rust solarch-cli is built.`,
           ),
         );
       });
 
+      child.stdin.on('error', (err) => {
+        requestStop(new Error(`solarch create stdin failed: ${err.message}`));
+      });
+
       // Step 1: Send SLRKEY01 || ACK (40 bytes)
       const ackFrame = Buffer.concat([ACK_FRAME_MAGIC, ack]);
       child.stdin.write(ackFrame);
 
-      child.stdout.on('data', async (chunk: Buffer) => {
-        stdoutChunks.push(chunk);
-        const totalBuffer = Buffer.concat(stdoutChunks);
+      child.stdout.on('data', async (rawChunk: Buffer | string) => {
+        if (terminalError) return;
+        let chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk);
 
-        if (!signingProcessed && totalBuffer.length >= 40) {
-          const frameMagic = totalBuffer.subarray(0, 8);
+        if (!signingProcessed) {
+          const needed = 40 - signingFrame.length;
+          const frameSlice = chunk.subarray(0, needed);
+          signingFrame = Buffer.concat([signingFrame, frameSlice]);
+          chunk = chunk.subarray(frameSlice.length);
+          if (signingFrame.length < 40) return;
+
+          const frameMagic = signingFrame.subarray(0, 8);
           if (!frameMagic.equals(SIGNING_FRAME_MAGIC)) {
-            clearTimeout(jobTimer);
-            return finishReject(
+            requestStop(
               new Error(
                 `Invalid signing frame magic from solarch-cli: expected SLRSIGN1, got ${frameMagic.toString('utf8')}`,
               ),
             );
+            return;
           }
 
-          const signingDigest = totalBuffer.subarray(8, 40);
-          stdoutChunks = [totalBuffer.subarray(40)];
+          const signingDigest = signingFrame.subarray(8, 40);
+          signingFrame = Buffer.alloc(0);
           signingProcessed = true;
+          if (chunk.length > 0) appendCompletion(chunk);
 
           // Step 3: Independent verification of pending build before signing
           try {
@@ -290,8 +345,7 @@ export class ArchiveBuilderAdapter {
             if (!fs.existsSync(pendingPath)) {
               throw new Error(`Pending build file not found at ${pendingPath}`);
             }
-            const pendingBytes = fs.readFileSync(pendingPath);
-            const computedDigestHex = createHash('sha256').update(pendingBytes).digest('hex').toLowerCase();
+            const computedDigestHex = await this.hashFileSha256(pendingPath);
             const childDigestHex = signingDigest.toString('hex').toLowerCase();
 
             if (computedDigestHex !== childDigestHex) {
@@ -316,46 +370,63 @@ export class ArchiveBuilderAdapter {
             child.stdin.write(signature);
             child.stdin.end();
           } catch (verifyErr) {
-            clearTimeout(jobTimer);
-            return finishReject(
-              new Error(`Pending build verification/signing aborted: ${verifyErr.message}`),
+            requestStop(
+              new Error(
+                `Pending build verification/signing aborted: ${verifyErr instanceof Error ? verifyErr.message : 'unknown error'}`,
+              ),
             );
           }
+          return;
         }
+
+        appendCompletion(chunk);
       });
 
-      child.on('close', (code) => {
+      child.on('close', (code, signal) => {
         clearTimeout(jobTimer);
+        if (settled) return;
+        settled = true;
+        if (terminalError) {
+          cleanupPending();
+          reject(terminalError);
+          return;
+        }
         if (code !== 0) {
-          return finishReject(
-            new Error(`solarch-cli create exited with code ${code}: ${stderrText.trim()}`),
+          cleanupPending();
+          reject(
+            new Error(
+              `solarch-cli create exited with code ${String(code)} signal ${String(signal)}: ${stderrText.trim()}`,
+            ),
           );
+          return;
         }
 
         try {
-          const remainingStdout = Buffer.concat(stdoutChunks).toString('utf8').trim();
+          if (!signingProcessed) {
+            throw new Error('solarch-cli did not emit the exact 40-byte signing frame');
+          }
+          const remainingStdout = Buffer.concat(completionChunks).toString('utf8').trim();
           const lastLine = remainingStdout.split('\n').filter(Boolean).pop();
           if (!lastLine) {
-            return finishReject(new Error('solarch-cli did not output JSON completion line'));
-          }
-          if (Buffer.byteLength(lastLine, 'utf8') > JSON_LINE_CAP_BYTES) {
-            return finishReject(new Error('solarch-cli JSON output line exceeded cap of 4096 bytes'));
+            throw new Error('solarch-cli did not output JSON completion line');
           }
 
           const parsed = JSON.parse(lastLine);
           if (!parsed.success || !parsed.archive_fingerprint) {
-            return finishReject(
-              new Error(`solarch-cli did not report success: ${JSON.stringify(parsed)}`),
-            );
+            throw new Error(`solarch-cli did not report success: ${JSON.stringify(parsed)}`);
           }
 
-          resolved = true;
           resolve({
             archiveFingerprint: parsed.archive_fingerprint,
             sizeBytes: parsed.size_bytes ?? fs.statSync(outputPath).size,
           });
         } catch (e) {
-          finishReject(new Error(`Failed to parse solarch-cli response: ${e.message}`));
+          cleanupPending();
+          reject(
+            new Error(
+              `Failed to parse solarch-cli response: ${e instanceof Error ? e.message : 'unknown error'}`,
+            ),
+          );
         }
       });
     });
@@ -371,20 +442,6 @@ export class ArchiveBuilderAdapter {
   ): Promise<{ success: boolean; signing_digest: string; file_count: number; size_bytes: number }> {
     return new Promise((resolve, reject) => {
       let settled = false;
-      const verifyTimer = setTimeout(() => {
-        if (!settled) {
-          settled = true;
-          if (child && !child.killed) {
-            try {
-              child.kill('SIGKILL');
-            } catch {
-              // ignore
-            }
-          }
-          reject(new Error(`solarch verify --pending-build timed out after ${VERIFY_SIGN_TIMEOUT_MS}ms`));
-        }
-      }, VERIFY_SIGN_TIMEOUT_MS);
-
       const args = [
         'verify',
         '--pending-build',
@@ -403,9 +460,28 @@ export class ArchiveBuilderAdapter {
         shell: false,
       });
 
-      let stdoutText = '';
+      const stdoutChunks: Buffer[] = [];
+      let stdoutBytes = 0;
       let stderrBytes = 0;
       let stderrText = '';
+      let terminalError: Error | undefined;
+
+      const requestStop = (error: Error) => {
+        terminalError ??= error;
+        if (!child.killed) {
+          try {
+            child.kill('SIGKILL');
+          } catch {
+            // The close/error handlers still fail closed.
+          }
+        }
+      };
+
+      const verifyTimer = setTimeout(() => {
+        requestStop(
+          new Error(`solarch verify --pending-build timed out after ${VERIFY_SIGN_TIMEOUT_MS}ms`),
+        );
+      }, VERIFY_SIGN_TIMEOUT_MS);
 
       child.stderr.on('data', (chunk: Buffer) => {
         if (stderrBytes < STDERR_CAP_BYTES) {
@@ -415,16 +491,27 @@ export class ArchiveBuilderAdapter {
         }
       });
 
-      child.stdout.on('data', (chunk: Buffer) => {
-        stdoutText += chunk.toString('utf8');
+      child.stdout.on('data', (rawChunk: Buffer | string) => {
+        const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk);
+        const remaining = JSON_LINE_CAP_BYTES - stdoutBytes;
+        if (remaining > 0) {
+          const slice = chunk.subarray(0, remaining);
+          stdoutChunks.push(slice);
+          stdoutBytes += slice.length;
+        }
+        if (chunk.length > remaining) {
+          requestStop(
+            new Error(`solarch verify --pending-build stdout exceeded ${JSON_LINE_CAP_BYTES} bytes`),
+          );
+        }
       });
 
       child.on('error', (err) => {
-        clearTimeout(verifyTimer);
-        if (!settled) {
-          settled = true;
-          reject(new Error(`Failed to spawn pending verifier: ${err.message}`));
-        }
+        requestStop(new Error(`Failed to spawn pending verifier: ${err.message}`));
+      });
+
+      child.stdin.on('error', (err) => {
+        requestStop(new Error(`Pending verifier stdin failed: ${err.message}`));
       });
 
       // Send SLRKEY01 || ACK (40 bytes) then close stdin
@@ -432,26 +519,29 @@ export class ArchiveBuilderAdapter {
       child.stdin.write(ackFrame);
       child.stdin.end();
 
-      child.on('close', (code) => {
+      child.on('close', (code, signal) => {
         clearTimeout(verifyTimer);
         if (settled) return;
         settled = true;
 
+        if (terminalError) {
+          reject(terminalError);
+          return;
+        }
+
         if (code !== 0) {
           return reject(
             new Error(
-              `solarch verify --pending-build failed with exit code ${code}: ${stderrText.trim()}`,
+              `solarch verify --pending-build failed with exit code ${String(code)} signal ${String(signal)}: ${stderrText.trim()}`,
             ),
           );
         }
 
         try {
+          const stdoutText = Buffer.concat(stdoutChunks).toString('utf8');
           const lastLine = stdoutText.trim().split('\n').filter(Boolean).pop();
           if (!lastLine) {
             return reject(new Error('solarch verify --pending-build emitted no JSON output'));
-          }
-          if (Buffer.byteLength(lastLine, 'utf8') > JSON_LINE_CAP_BYTES) {
-            return reject(new Error('solarch verify --pending-build JSON exceeded 4096 bytes'));
           }
 
           const parsed = JSON.parse(lastLine);
@@ -469,9 +559,13 @@ export class ArchiveBuilderAdapter {
     });
   }
 
-  async verify(archivePath: string, keyId: string, publicKeyB64: string): Promise<boolean> {
-    const cliBinary = this.getCliPath();
-    return new Promise((resolve) => {
+  private executeFinalVerify(
+    cliBinary: string,
+    archivePath: string,
+    keyId: string,
+    publicKeyB64: string,
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
       const child = spawn(
         cliBinary,
         [
@@ -490,23 +584,83 @@ export class ArchiveBuilderAdapter {
         },
       );
 
-      let stdoutText = '';
-      child.stdout.on('data', (d) => {
-        stdoutText += d.toString('utf8');
+      const stdoutChunks: Buffer[] = [];
+      let stdoutBytes = 0;
+      let stderrBytes = 0;
+      let stderrText = '';
+      let terminalError: Error | undefined;
+
+      const requestStop = (error: Error) => {
+        terminalError ??= error;
+        if (!child.killed) {
+          try {
+            child.kill('SIGKILL');
+          } catch {
+            // The close/error handlers below still fail closed.
+          }
+        }
+      };
+
+      const verifyTimer = setTimeout(() => {
+        requestStop(new Error(`Final solarch verify timed out after ${VERIFY_SIGN_TIMEOUT_MS}ms`));
+      }, VERIFY_SIGN_TIMEOUT_MS);
+
+      child.stdout.on('data', (rawChunk: Buffer | string) => {
+        const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk);
+        const remaining = JSON_LINE_CAP_BYTES - stdoutBytes;
+        if (remaining > 0) {
+          const slice = chunk.subarray(0, remaining);
+          stdoutChunks.push(slice);
+          stdoutBytes += slice.length;
+        }
+        if (chunk.length > remaining) {
+          requestStop(new Error(`Final solarch verify stdout exceeded ${JSON_LINE_CAP_BYTES} bytes`));
+        }
       });
 
-      child.on('close', (code) => {
+      child.stderr.on('data', (rawChunk: Buffer | string) => {
+        const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk);
+        if (stderrBytes < STDERR_CAP_BYTES) {
+          const slice = chunk.subarray(0, STDERR_CAP_BYTES - stderrBytes);
+          stderrText += slice.toString('utf8');
+          stderrBytes += slice.length;
+        }
+      });
+
+      child.on('error', (error) => {
+        requestStop(new Error(`Failed to spawn final solarch verifier: ${error.message}`));
+      });
+
+      child.on('close', (code, signal) => {
+        clearTimeout(verifyTimer);
+        if (terminalError) {
+          reject(terminalError);
+          return;
+        }
         if (code !== 0) {
-          resolve(false);
+          reject(
+            new Error(
+              `Final solarch verify exited with code ${String(code)} signal ${String(signal)}: ${stderrText.trim()}`,
+            ),
+          );
           return;
         }
         try {
-          const json = JSON.parse(stdoutText.trim().split('\n').pop() || '{}');
+          const stdoutText = Buffer.concat(stdoutChunks).toString('utf8');
+          const json = JSON.parse(stdoutText.trim().split('\n').filter(Boolean).pop() || '{}');
           // Note per prompt: finalized solarch verify authenticates the container structure and signature;
           // protected_content_verified does not need to be true without ACK.
-          resolve(Boolean(json.success));
-        } catch {
-          resolve(false);
+          if (json.success !== true) {
+            reject(new Error('Final solarch verify did not report success'));
+            return;
+          }
+          resolve();
+        } catch (error) {
+          reject(
+            new Error(
+              `Failed to parse bounded final verifier JSON: ${error instanceof Error ? error.message : 'unknown error'}`,
+            ),
+          );
         }
       });
     });
