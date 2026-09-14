@@ -18,10 +18,16 @@ follow-up hardened its real ArchiveBuilder, payment issuance/finality,
 Entitlement/Device License authority, ACK custody and live configuration paths
 without changing the reviewed Viewer/Core crypto or renderer boundaries.
 
-The Part remains correctly **PARTIAL**, not COMPLETE: no deployed HTTPS Backend,
-real Backend-generated demo archive, live role public keys, demo wallets, real
-external-wallet Devnet test-USDC payment or independent Device B run was
-available. No commit, push, merge, rebase or PR was performed.
+The Part remains correctly **PARTIAL**, not COMPLETE. A real Backend instance,
+disposable PostgreSQL 16 database, official Devnet RPC, transient public HTTPS
+origin, real role-separated signing keys, real Backend/Core multi-format archive,
+live public trust anchors, demo wallets and sponsored creator-ATA creation were
+integrated and verified. The external-wallet test-USDC purchase and all dependent
+Device A/B license/UI checkpoints remain blocked because the disposable buyer has
+no Circle Devnet USDC; the later manual faucet operation funded 5 Devnet SOL but
+did not create any SPL token account or fund the official Circle test-USDC mint.
+Circle's public faucet requires a manual reCAPTCHA. No commit, push, merge,
+rebase or PR was performed.
 
 ### Shared-document conflicts and updates
 
@@ -32,6 +38,36 @@ Part 05 uses only an exactly divisible demo price and does not redefine that
 contract. The earlier static Backend blockers are superseded by the locally
 integrated implementation in sections 9–13; those fixes have deterministic test
 coverage but are not represented as live Devnet evidence.
+
+### External-review follow-up: review artifact, Device B evidence and audit
+
+- `scripts/create-clean-archive.mjs` now excludes every directory named
+  `storage_data`, case-insensitively and at any depth, before staging. A dedicated
+  archive-level regression proves that root/nested runtime uploads are absent
+  while source files such as `src/storage_data.ts` remain reviewable. The earlier
+  `20260914T094954Z` and `20260914T095103Z` archives both contained the runtime
+  source ZIP and were moved to a mode-0700 temporary quarantine outside the
+  repository; they are unsafe to distribute and are superseded by the new
+  artifact recorded at delivery.
+- The live evidence schema follows the existing frozen API/Backend behavior
+  instead of forcing one preferred error name. Device B proof requires HTTP 409,
+  exact documented `DEVICE_BINDING_MISMATCH` or `DEVICE_LIMIT_REACHED`, distinct
+  Device A/B keys, and explicit proof that no license, ACK or protected access was
+  produced. The current Backend E2E exercises `DEVICE_BINDING_MISMATCH`.
+- Reachable upload dependencies were minimally patched: both direct and Nest
+  Multer edges resolve to `2.3.0`; `adm-zip` resolves to `0.6.0`. Narrow pnpm
+  overrides patch the affected Nest Swagger/config `lodash`, Swagger `js-yaml`,
+  and the reported Nest CLI `glob`/`picomatch`/`tmp` edges without a dependency
+  family upgrade. A new Multer test executes real multipart parsing and its
+  configured file-size rejection.
+- Both audits still intentionally report failure because
+  `@solana/spl-token -> @solana/buffer-layout-utils -> bigint-buffer@1.1.5`
+  has the unpatched high `GHSA-3gc7-fjrx-p6mg`. The package is loaded by the live
+  Solana paths, but this install cannot load its native binding and demonstrably
+  uses its pure-JS conversion fallback; the vulnerable native
+  `converter.toBigInt()` sink is therefore not active in the tested build. This
+  remains an accepted, visible residual risk: a deployment that enables the
+  native addon must be re-evaluated, and no audit PASS is claimed.
 
 ## 2. Viewer-side implementation
 
@@ -69,7 +105,22 @@ coverage but are not represented as live Devnet evidence.
 
 ## 3. Files changed
 
-Current Backend hardening changes are in:
+The earlier static Backend hardening remains as recorded below. This live step
+additionally changes `TODO/PART_05.md`, `apps/api/package.json`,
+`pnpm-lock.yaml`, `scripts/viewer-live-devnet-e2e.mjs` and this report. The API
+package change pins the already-resolved `express@4.22.1` as a direct runtime
+dependency because the request-limit middleware imports it directly; the lock
+change contains no unrelated upgrade. The live harness now invokes the exact
+pinned Tauri CLI through an isolated native-Windows `pnpm dlx`, with an explicit
+prebuilt-frontend mode for WSL/Windows shared checkouts.
+
+The final external-review follow-up additionally changes root `package.json`,
+`scripts/create-clean-archive.mjs`, `scripts/create-clean-archive.test.mjs`,
+`scripts/viewer-live-devnet-e2e.test.mjs`, and adds
+`apps/api/src/modules/uploads/multer-compatibility.spec.ts`. No migration or
+frozen shared contract changed in this follow-up.
+
+Current combined Backend hardening files are:
 
 ```text
 apps/api/.env.example
@@ -105,7 +156,8 @@ docs/archive-core-viewer/reports/PART_05_REPORT.md
 ```
 
 The existing `uuid@8.3.2` test dependency and both Jest `moduleNameMapper`
-compatibility mappings were retained unchanged. No package lockfile changed.
+compatibility mappings were retained. The lockfile changed only to make the
+existing Express runtime package a direct API dependency.
 
 ## 4. Devnet decision and official inputs
 
@@ -113,7 +165,7 @@ No current shared source-of-truth document hard-codes the hackathon flow to
 Mainnet. Network/mint/RPC remain Backend deployment inputs, so no shared contract
 update was needed.
 
-Immediately before validation on 2026-09-12:
+Immediately before validation on 2026-09-14:
 
 - Solana's official cluster documentation identified Devnet's public endpoint as
   `https://api.devnet.solana.com`, noted its rate limits, and stated that Devnet
@@ -127,7 +179,7 @@ Immediately before validation on 2026-09-12:
   <https://developers.circle.com/stablecoins/quickstart-transfer-10-usdc-on-solana>.
 - A direct query to the official RPC returned current Devnet genesis hash
   `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`; `getTokenSupply` for the Circle
-  mint returned `decimals=6` at slot `497169618`.
+  mint returned `decimals=6` at finalized slot `497929793`.
 
 The harness does not freeze a remembered RPC genesis value. It compares the
 explicit Backend-team RPC against the official Devnet endpoint at run time and
@@ -135,20 +187,24 @@ checks the mint on-chain immediately before E2E.
 
 ## 5. Live Backend origin integration
 
-The build input is:
+A real production-built API process was started against a disposable PostgreSQL
+16 database with all four migrations applied and the official public Devnet RPC.
+It was exposed for this integration checkpoint at the strict HTTPS root origin:
 
 ```text
-SOLARCH_BACKEND_ORIGIN=https://<deployed-root-origin>/
+https://prescription-lodging-chargers-hearing.trycloudflare.com/
 ```
 
-It is embedded at compile time and accepted only by the existing strict
-`BackendConfig`: HTTPS, non-loopback root origin, no credentials, path, query or
-fragment. Credential-bearing requests do not follow redirects. Runtime user
-input cannot replace it.
+Public `/v1/health` and `/v1/health/ready` both passed; readiness reported the
+database and Solana RPC as `ok`. The same origin was compiled into the native
+Windows `live-devnet` Viewer build and used by the successful live preflight.
+Credential-bearing redirects remain disabled.
 
-No deployed HTTPS origin was present in the repository, environment or current
-teammate Backend branch. Therefore no live API request was made and no origin is
-claimed as integrated.
+This is an accountless Cloudflare Quick Tunnel, not a durable production
+deployment: it has no uptime guarantee and the first tunnel expired during the
+session. The Backend and tunnel were restarted with a new mutually consistent
+`PUBLIC_API_ORIGIN`; a durable named deployment is still required for a repeatable
+two-device demonstration.
 
 ## 6. Archive and license trust anchors
 
@@ -169,17 +225,24 @@ nor a Backend response can add/replace a key. The final command is
 exactly `desktop-runtime,custom-protocol,live-devnet`, without
 `development-fixtures`.
 
-Actual public anchor IDs/keys were not supplied. A compile-only check used
-synthetic public test values and is not represented as a real Devnet build.
-No Backend/private signing key entered this branch.
+The real public-only anchors used for this checkpoint are:
+
+```text
+archive key ID: archive-devnet-20260914
+archive public key: v15RH9BIeXS5EFgRAuc3SXRoH6Q3SzA5ghvRcAVR6nU=
+license key ID: license-devnet-20260914
+license public key: DV69rejywU72q6WkQS0sTNlqPF1/NbffB/WORgxuw7A=
+```
+
+The corresponding private signing material stayed in the mode-0600 operational
+workspace outside the repository and is not included in this report/archive.
 
 ### License trust anchor integration
 
 The license-role key is independently configured and stored only in the
-`LicenseTrustStore`; it cannot authenticate an archive signature. The live
-configuration rejects missing, malformed or same-key role inputs. Because the
-Backend team's real public license key was not supplied, no real P/W/SIG is
-claimed as validated.
+`LicenseTrustStore`; it cannot authenticate an archive signature. The native
+live build embedded the real public license anchor above. No P/W/SIG has yet been
+issued because payment cannot begin before the buyer receives test USDC.
 
 ## 7. Devnet RPC, test-USDC and demo wallets
 
@@ -196,10 +259,20 @@ SOLARCH_PLATFORM_WALLET
 SOLARCH_FEE_PAYER_WALLET
 ```
 
-Only public wallet addresses are accepted. Buyer and fee payer must differ;
-creator and platform must differ. No live teammate RPC configuration or public
-demo wallet set was supplied, so balances/funding were not checked and no test
-tokens were requested. Devnet test USDC is not real money.
+Only public wallet addresses are accepted. The disposable role-separated public
+wallets are:
+
+```text
+fee payer: 3nwTpSGRTosed4ZLACkTyE2a5kmvsnaA85e5xbe8hQiM
+platform: 9HvUyMLZPzfr92n5bqosiWF3z42GRUXgc5KPj4A3DQy4
+creator: GXeFmnNdm3CqqsPuhUTYUk2AisrphPrEHZdRDJUowvV7
+buyer: AumZDnQhNj83fFR4rNY4s37BximJbKoJqtMJTK8ZdRNc
+```
+
+The fee payer received only Devnet SOL and funded the real creator/platform ATA
+operations. The buyer currently has no account/balance for the official Circle
+Devnet USDC mint. Circle's public faucet requires a human reCAPTCHA, so it was
+not automated or bypassed. Devnet SOL and test USDC have no monetary value.
 
 ## 8. Fee rounding status
 
@@ -214,11 +287,12 @@ stored values are multiples of 10,000 micro-USDC and therefore always split
 exactly at 5%; this is a concrete implementation constraint, not a newly frozen
 shared rule. The input path still rounds a wider decimal string rather than
 defining the general six-decimal rounding contract, so the shared ambiguity
-remains open. The live demo stays restricted to an explicitly exact price.
+remains open. This live archive uses exactly `1.000000 USDC`, yielding intended
+shares of `950000` and `50000` micro-USDC.
 
 ## 9. Real archive builder integration
 
-**Implemented locally; not verified live.** `ArchiveBuilderAdapter` invokes the
+**Verified through the real live Backend/Core path.** `ArchiveBuilderAdapter` invokes the
 reviewed `solarch` CLI duplex create/pending-verifier/signing protocol, performs
 independent final verification and compares the complete-file fingerprint. It
 uses a fresh 32-byte ACK subsequently sealed by encrypted custody. Live startup
@@ -226,12 +300,33 @@ requires an explicit existing absolute `SOLARCH_CLI_PATH`.
 
 Archive creation, upload completion, builder input, Payment Intent creation and
 license issuance all enforce the frozen MVP policy: USDC, 500 bps, one device,
-no export and watermark enabled. A real Backend-generated multi-format file has
-not yet been produced in the absent live environment.
+no export and watermark enabled. Creator authentication, archive creation,
+multi-format ZIP upload, finalization, Backend signing, encrypted ACK custody,
+download and publish all ran over the real API. The result is:
+
+```text
+archive ID: 60ad6fed-6d73-4a20-af54-71f901da2460
+fingerprint: 885f7dc489d6f5042ba9cd287a5ff13109585a485d0067fd9365d249aa89b3e6
+size: 6815 bytes
+files: 4 (PDF, PNG, DOCX, XLSX)
+price: 1.000000 USDC
+policy: max_devices=1, allow_export=false, watermark_enabled=true
+state: ready + published
+```
+
+Release `solarch verify` returned `AUTHENTICATED_CONTAINER` with archive signing
+key `archive-devnet-20260914` and the exact fingerprint. A copy of the encrypted
+archive is retained only as the ignored local artifact
+`artifacts/live-devnet/solarch-devnet-multiformat.slr`; it contains no plaintext
+protected content or credential.
 
 ## 10. Real Payment Intent and Backend API compatibility
 
-**Implemented locally; not run live.** Viewer metadata includes
+The published archive's authoritative Viewer metadata was fetched from the real
+HTTPS Backend and exactly matched the archive fingerprint, creator, price,
+currency, fee, rights and policy. A Payment Intent was deliberately not created:
+its 30-minute credential/TTL must not be consumed before the external buyer can
+fund and use Device A. Viewer metadata includes
 `platform_fee_bps`; Payment Intent and confirmed verification responses contain
 the frozen closed fields; typed Viewer error codes are preserved by the global
 filter.
@@ -275,15 +370,32 @@ removed after the check.
 
 ## 11. Real Solana transaction, 95/5, fee payer and creator ATA
 
-No external wallet transaction was signed and these fields have no fabricated
-values:
+Archive publication exercised the real SolArch-sponsored creator ATA creation.
+Independent finalized RPC inspection proved:
+
+```text
+creator ATA: 82Cgry3aViHWxpwCCZv3oAgfbfb3uKtMefwVHTx9oCSC
+creation signature: ruipkjeH5asWjKFc6PxNQ56WtgT6PWFEsyN62mkpdVfvijrN54VzhJFZBkGwPYwgxccqkD1JXfNMnSVwRBe2ZuA
+finalized slot: 497936089
+fee payer: 3nwTpSGRTosed4ZLACkTyE2a5kmvsnaA85e5xbe8hQiM
+fee: 5000 lamports
+mint: 4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU
+decimals: 6
+```
+
+The creator token account did not exist in the pre-balances and appeared in the
+finalized post-balances for the configured creator and official mint. This closes
+the creator-ATA checkpoint, but not the payment split checkpoint.
+
+No external wallet payment transaction was signed and these fields have no
+fabricated values:
 
 ```text
 transaction signature: NOT AVAILABLE
 payment reference: NOT AVAILABLE
 creator/platform base-unit deltas: NOT VERIFIED LIVE
 fee payer: NOT VERIFIED LIVE
-creator ATA address/creation signature: NOT AVAILABLE
+creator ATA address/creation signature: VERIFIED ABOVE
 ```
 
 The evidence command will accept completion only after `getSignatureStatuses`
@@ -292,9 +404,8 @@ buyer loses exactly the price, creator gains exactly 95%, platform gains exactly
 5%, the configured SolArch public key is account zero/fee payer, and a separate
 finalized ATA transaction proves creation for the creator/mint by that fee payer.
 
-The Backend branch has a SolArch-sponsored ATA creation path during archive
-publish, but it was not deployed or exercised here and no transaction evidence
-exists.
+The exact 95/5 deltas remain pending until the buyer is funded and signs the real
+test-USDC transaction.
 
 ## 12. Finalized verification and Payment vs Entitlement
 
@@ -311,7 +422,7 @@ Entitlement commit. That transaction atomically stores PaymentIntent
 `confirmed_buyer_wallet`, Payment `device_public_key`, and matching buyer/archive/
 device bindings. Idempotent verification rechecks those persisted audit bindings.
 No simulation signature path can authorize payment. No live Payment/Entitlement
-IDs exist yet.
+IDs exist yet because no Payment Intent or payment has been created.
 
 ## 13. Device A activation, real P/W/SIG and HPKE
 
@@ -350,11 +461,11 @@ evidence schema requires all of them before `viewer:devnet:evidence` can pass.
 
 ## 15. Device B and negative live cases
 
-An independent Windows machine/VM and live entitlement were unavailable.
-Device A/B public keys do not exist for this Part, and no Backend
-`DEVICE_LIMIT_REACHED` result is claimed. The local licensing path now returns
-the frozen HTTP 409 typed denial and never replaces the bound Device A, but that
-is deterministic coverage rather than the required independent-device proof.
+An independent Device B/VM has not yet been exercised because Device A payment
+and entitlement do not exist. No Backend Device B rejection is claimed. The final
+run must preserve the exact frozen/documented typed HTTP 409 returned by the
+current Backend; this Part does not rename that contract merely to prefer
+`DEVICE_LIMIT_REACHED` wording.
 
 The safe live negative cases (wrong fingerprint/device, replayed nonce, invalid
 intent/refresh credentials, not-finalized payment, cross-archive reference,
@@ -382,12 +493,20 @@ real builder origin, Windows association, finalized-before-activation,
 multi-format viewing, watermark, cached restart, refresh and independent Device
 B denial. Secrets are intentionally absent from this interface.
 
-Running preflight in the current environment returned the expected fail-closed
-result:
+Running preflight against the real public inputs passed:
 
 ```text
-LIVE_DEVNET_E2E_BLOCKED: SOLARCH_SOLANA_CLUSTER: required
+cluster: devnet
+archive: 60ad6fed-6d73-4a20-af54-71f901da2460
+fingerprint: 885f7dc489d6f5042ba9cd287a5ff13109585a485d0067fd9365d249aa89b3e6
+files: 4
+price: 1.000000 USDC
+creator share: 950000 micro-USDC
+platform share: 50000 micro-USDC
 ```
+
+The release CLI authenticated the exact local bytes, Backend health/readiness and
+security-critical metadata matched, and the official RPC/mint checks passed.
 
 ## 17. Security review
 
@@ -544,6 +663,54 @@ HTTPS/Devnet evidence required to mark Part 05 complete.
 
 ## 20. Commands and results
 
+Live integration checkpoint on 2026-09-14:
+
+| Command/check | Result |
+| --- | --- |
+| disposable PostgreSQL 16 `prisma migrate deploy` | PASS; all four migrations applied in order |
+| production `@solarch/api start:prod` | PASS after correcting the compiled entrypoint and direct Express runtime dependency |
+| HTTPS `/v1/health` + `/v1/health/ready` | PASS; database and official Devnet RPC ready |
+| real creator auth/create/upload/finalize/download/publish | PASS; four-format 6815-byte authenticated archive |
+| release `solarch verify` on downloaded bytes | PASS; `AUTHENTICATED_CONTAINER`, exact fingerprint |
+| finalized creator ATA on-chain inspection | PASS; new official-mint ATA, SolArch fee payer, slot `497936089` |
+| `node scripts/viewer-live-devnet-e2e.mjs preflight` with real public inputs | PASS; Backend/Core metadata, official RPC/mint and exact 95/5 arithmetic |
+| native Windows `live-devnet` Tauri/NSIS build | PASS; x64 executable and installer built with real public anchors/origin |
+| `rtk pnpm install --frozen-lockfile --force` + Prisma regeneration | PASS; restored generated dependencies after the isolated Windows package-manager attempt |
+| `rtk pnpm --filter @solarch/api lint` | PASS |
+| `rtk pnpm --filter @solarch/api test` | PASS, 12 suites / 113 tests, including Multer 2.3 parsing/boundary coverage |
+| `rtk pnpm --filter @solarch/api test:e2e` | PASS, 1 suite / 23 tests |
+| `rtk pnpm --filter @solarch/api build` | PASS |
+| `rtk pnpm --filter @solarch/viewer lint` | PASS |
+| `rtk pnpm --filter @solarch/viewer test` | PASS, 3 files / 34 tests |
+| `rtk pnpm --filter @solarch/viewer build` | PASS, 1,873 modules and local PDF worker |
+| `rtk cargo fmt --check` | PASS |
+| `rtk cargo clippy --workspace --all-targets --all-features -- -D warnings` | PASS, no issues |
+| `rtk cargo test --workspace` | PASS, 128 tests across seven suites |
+| `node --test scripts/create-clean-archive.test.mjs` | PASS, 12/12 |
+| `node --test scripts/viewer-live-devnet-e2e.test.mjs` | PASS, 5/5 |
+| deterministic `.slr` vectors | PASS; 1166/7655 bytes and both frozen fingerprints unchanged |
+| `rtk git diff --check` | PASS |
+| `rtk pnpm audit --audit-level high` | **FAIL / residual recorded**: 14 advisories (3 low, 10 moderate, 1 high); sole high is unpatched `bigint-buffer` |
+| `rtk pnpm audit` | **FAIL / residual recorded**: same 14 advisories and sole unpatched high; ordinary audit was run and is not represented as PASS |
+| `rtk pnpm audit --prod --audit-level high` | **FAIL / residual recorded**: 11 advisories (1 low, 9 moderate, 1 high); sole high is the same unpatched `bigint-buffer` production path |
+| native Windows `cargo.exe test --workspace` | PASS; 10 CLI + 60 Core + 60 Viewer tests |
+| native Windows Viewer `cargo.exe check --all-features` | PASS |
+| native Windows installer/file-association smoke | PASS; RU/EN selector/persistence, single-instance association, hostile argv fail-closed and uninstall cleanup |
+| live checklist/template commands after Device B schema update | PASS; template requires HTTP 409, documented code, no license and no ACK |
+| official Devnet buyer account recheck | BLOCKED: buyer has 5 Devnet SOL but no SPL token accounts and no official Circle test-USDC ATA/balance; no Payment Intent created |
+
+The previously reported 12 production highs and 15 total-graph highs were
+triaged. All fixable high findings were removed by the minimal pins/overrides
+above; `bigint-buffer` is the one no-patch residual and keeps both audit commands
+nonzero. The Part also remains PARTIAL independently because the real
+payment/Device A/B E2E is incomplete.
+
+One intermediate Backend unit run was stopped after a native-Windows pnpm
+attempt had left the shared generated Prisma client incomplete. The live Backend
+was stopped, dependencies were restored from the frozen lockfile, Prisma was
+regenerated, and the complete final lint/unit/e2e/build sequence above then
+passed. No database or migration was reset.
+
 Backend-integration follow-up checks on 2026-09-14:
 
 | Command | Result |
@@ -579,7 +746,7 @@ source-state checks before the Backend-only follow-up:
 | `rtk pnpm lint` | PASS |
 | `rtk pnpm test` | PASS, 34 tests in three files |
 | `rtk pnpm build` | PASS, 1,873 modules and local PDF worker |
-| `rtk pnpm audit --audit-level high` | PASS, no known vulnerabilities |
+| historical `rtk pnpm audit --audit-level high` | PASS at that earlier checkpoint; superseded by the current live-checkpoint FAIL above as the advisory database changed |
 | `node --test scripts/create-clean-archive.test.mjs` | PASS, 11/11 |
 | `node --test scripts/viewer-live-devnet-e2e.test.mjs` | PASS, 4/4 |
 | compile-only `cargo check -p solarch-viewer --features live-devnet` with synthetic public inputs | PASS |
@@ -630,38 +797,60 @@ Actually run through native Windows tools:
   `WINDOWS_UNTRUSTED_ARGV_FAIL_CLOSED_PASS`, and
   `WINDOWS_UNINSTALL_ASSOCIATION_CLEANUP_PASS`.
 
-The production-style installer remained intentionally untrusted toward synthetic
-archives. No native `live-devnet` installer was built because embedding synthetic
-anchors/origin and calling it a real demo would violate Part 05.
+For the live checkpoint, the production frontend was rebuilt first and native
+Windows then compiled `desktop-runtime,custom-protocol,live-devnet` with the real
+HTTPS origin and public role anchors. Tauri completed the release executable and
+NSIS bundle:
+
+```text
+target/release/solarch-viewer.exe
+target/release/bundle/nsis/SolArch Viewer_0.1.0_x64-setup.exe
+```
+
+The native invocation used the exact pinned `@tauri-apps/cli@2.11.4` through an
+isolated `pnpm dlx`. Its one-time config skipped only duplicate
+`beforeBuildCommand` after the same source frontend build had already passed;
+this is required because WSL-created POSIX `.bin` shims are not executable by
+Windows Node in the shared checkout. The installer was built successfully, but
+install/open/payment UI evidence is not claimed in this checkpoint.
 
 ## 22. Deployment/E2E handoff required
 
-The remaining handoff is operational evidence, not a Viewer contract workaround:
+Backend/Core/archive/public-anchor integration and creator ATA creation are now
+complete for this live checkpoint. The immediate external handoff is:
 
-1. deploy this Backend at a real HTTPS root origin with secret-manager-provided
-   fee-payer/custody/HMAC/private-signing configuration;
-2. provide the matching public archive/license anchors and sanitized Devnet
-   RPC/mint/platform/fee-payer/creator public configuration;
-3. produce one exact-split multi-format archive through the real CLI adapter;
-4. fund disposable Devnet wallets with clearly identified test assets and run
-   the external-wallet purchase through finalized;
-5. record the creator-ATA creation transaction and independent Device B HTTP 409
-   `DEVICE_LIMIT_REACHED` result.
+1. request Circle **Solana Devnet** test USDC for the disposable buyer
+   `AumZDnQhNj83fFR4rNY4s37BximJbKoJqtMJTK8ZdRNc` at
+   <https://faucet.circle.com>; the faucet requires a human reCAPTCHA and the
+   tokens have no monetary value;
+2. replace or keep alive the temporary HTTPS Quick Tunnel for the duration of the
+   two-device run, then rebuild with that exact origin if it changes;
+3. on independent Windows Device A, install the live NSIS build, double-click the
+   retained exact archive and complete the external-wallet Solana Pay approval;
+4. capture only public finalized payment/reference and Backend entity IDs, then
+   execute the harness evidence command for 95/5 and SolArch fee-payer proof;
+5. complete real P/W/SIG/HPKE, four renderers/watermark, restart/cached reopen,
+   mandatory refresh and Backend-unavailable denial;
+6. open the same bytes on independent Device B/VM and record the current
+   frozen/documented typed HTTP 409 without changing the API contract.
 
-Once those inputs exist, the implemented harness can run the non-wallet checks;
-external wallet approval and the two-machine UI checkpoints remain explicit
-manual steps as allowed by the Part instruction.
+No Payment Intent is pre-created for handoff: doing so would start its TTL before
+Device A and the funded external wallet are ready.
 
 ## 23. Known limitations and not verified
 
-- No live HTTPS Backend was contacted.
-- No real Backend/Core `.slr` was produced or opened.
-- No real Devnet Payment Intent, Solana Pay QR or external-wallet transaction
-  occurred.
-- No public Payment/Entitlement/License IDs, transaction/reference, trust-anchor
-  IDs, demo wallets or watermark identity exist to record.
-- No real P/W/SIG/HPKE, cached live reopen or live refresh was observed.
-- No independent Device B/VM test was possible.
+- The HTTPS origin is a transient Quick Tunnel, not a durable deployment with an
+  operational SLA.
+- The native live installer was built, but the real archive has not yet been
+  opened through Explorer on independent Device A.
+- No real Devnet Payment Intent, Solana Pay QR or external-wallet payment
+  transaction occurred. The buyer has 5 Devnet SOL, but an authoritative account
+  query shows no SPL token accounts and therefore no official Circle test-USDC.
+- The payment 95/5 deltas and public Payment/Entitlement/License IDs/reference do
+  not yet exist; no values are fabricated.
+- No real P/W/SIG/HPKE, protected renderer/watermark, cached live reopen or live
+  mandatory refresh was observed.
+- No independent Device B/VM rejection was possible.
 - The general six-decimal 95/5 rounding rule remains post-hackathon work.
 - Mainnet, production RPC SLA, KMS/HSM, code signing, update and monitoring remain
   outside this Part.
@@ -682,4 +871,5 @@ The clean archive is generated after this report is saved and final checks pass.
 Its path and validated content result are recorded in the delivery response to
 avoid a self-referential report/archive filename. It includes current source,
 tests, TODO and reports while excluding `.git`, `.codex`, `target`,
-`node_modules`, `dist`, screenshots, credentials, secrets and prior archives.
+`node_modules`, `dist`, screenshots, credentials, secrets, prior archives and
+every `storage_data` runtime tree (including plaintext upload/source ZIPs).

@@ -3,6 +3,7 @@
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import * as fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -396,11 +397,21 @@ async function validatePublicEvidenceFile(filename, config) {
   }
   canonicalBase64(evidence.device_a_public_key, 32, 'live E2E evidence device_a_public_key');
   canonicalBase64(evidence.device_b_public_key, 32, 'live E2E evidence device_b_public_key');
-  if (evidence.device_a_public_key === evidence.device_b_public_key ||
-      evidence.device_b_rejection_code !== 'DEVICE_LIMIT_REACHED') {
+  if (evidence.device_a_public_key === evidence.device_b_public_key) {
     fail('live E2E evidence Device B', 'independent Device B/backend rejection not proven');
   }
+  validateDeviceBDenialEvidence(evidence);
   return evidence;
+}
+
+export function validateDeviceBDenialEvidence(evidence) {
+  const documentedCodes = new Set(['DEVICE_BINDING_MISMATCH', 'DEVICE_LIMIT_REACHED']);
+  if (evidence?.device_b_rejection_http_status !== 409 ||
+      !documentedCodes.has(evidence?.device_b_rejection_code) ||
+      evidence?.device_b_license_issued !== false || evidence?.device_b_ack_received !== false ||
+      evidence?.device_b_protected_content_denied !== true) {
+    fail('live E2E evidence Device B', 'documented HTTP 409 denial without license, ACK, or protected access not proven');
+  }
 }
 
 export async function runEvidence(env = process.env) {
@@ -446,6 +457,7 @@ export async function runEvidence(env = process.env) {
     license_id: evidence.license_id,
     device_a_public_key: evidence.device_a_public_key,
     device_b_public_key: evidence.device_b_public_key,
+    device_b_rejection_http_status: evidence.device_b_rejection_http_status,
     device_b_rejection_code: evidence.device_b_rejection_code,
     finalized: true,
   };
@@ -454,11 +466,39 @@ export async function runEvidence(env = process.env) {
 async function build(env) {
   await runPreflight(env);
   if (process.platform !== 'win32') fail('live Devnet build', 'must run on native Windows');
-  const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
-  await execute(pnpm, [
-    '--filter', '@solarch/viewer', 'tauri', 'build', '--features',
-    'desktop-runtime,custom-protocol,live-devnet',
-  ], { cwd: ROOT, env, stdio: 'inherit' });
+  const viewerPackage = JSON.parse(await fs.readFile(path.join(ROOT, 'apps', 'viewer', 'package.json'), 'utf8'));
+  const tauriVersion = viewerPackage.devDependencies?.['@tauri-apps/cli'];
+  if (typeof tauriVersion !== 'string' || !/^\d+\.\d+\.\d+$/.test(tauriVersion)) {
+    fail('live Devnet build', 'Viewer must pin an exact Tauri CLI version');
+  }
+  let temporaryConfig;
+  try {
+    const command = [
+      'pnpm.cmd',
+      'dlx',
+      `@tauri-apps/cli@${tauriVersion}`,
+      'build',
+      '--features',
+      'desktop-runtime,custom-protocol,live-devnet',
+    ];
+    if (env.SOLARCH_LIVE_FRONTEND_PREBUILT === '1') {
+      await fs.access(path.join(ROOT, 'apps', 'viewer', 'dist', 'index.html'));
+      temporaryConfig = await fs.mkdtemp(path.join(os.tmpdir(), 'solarch-live-build-'));
+      const configPath = path.join(temporaryConfig, 'tauri.prebuilt.conf.json');
+      await fs.writeFile(configPath, '{"build":{"beforeBuildCommand":""}}\n', { flag: 'wx' });
+      if (/[\s"&|<>^%!()\r\n]/.test(configPath)) {
+        fail('live Devnet build', 'temporary config path is not safe for cmd.exe');
+      }
+      command.push('--config', configPath);
+    }
+    await execute(env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', command.join(' ')], {
+      cwd: path.join(ROOT, 'apps', 'viewer'),
+      env,
+      stdio: 'inherit',
+    });
+  } finally {
+    if (temporaryConfig) await fs.rm(temporaryConfig, { recursive: true, force: true });
+  }
 }
 
 export const LIVE_CHECKLIST = [
@@ -468,7 +508,7 @@ export const LIVE_CHECKLIST = [
   'Observe Locked pending/awaiting-finality until Backend reports finalized, then activate Device A.',
   'Open PDF, image, DOCX, and XLSX internally; verify the real buyer/license/archive watermark and no export path.',
   'Restart by double-click; verify cached reopen, offline Backend reopen, live mandatory refresh, and offline refresh denial.',
-  'On independent Device B/VM, open the same bytes and obtain Backend DEVICE_LIMIT_REACHED; protected content stays denied.',
+  'On independent Device B/VM, open the same bytes and obtain documented Backend HTTP 409 DEVICE_BINDING_MISMATCH or DEVICE_LIMIT_REACHED; no license/ACK is issued and protected content stays denied.',
   'Populate only nonsecret public checkpoint JSON and run the evidence command for on-chain 95/5/fee-payer/ATA proof.',
 ];
 
@@ -481,7 +521,10 @@ export const EVIDENCE_TEMPLATE = {
   license_id: '<public Backend ID>',
   device_a_public_key: '<canonical padded Base64 public key>',
   device_b_public_key: '<different canonical padded Base64 public key>',
-  device_b_rejection_code: 'DEVICE_LIMIT_REACHED',
+  device_b_rejection_http_status: 409,
+  device_b_rejection_code: 'DEVICE_BINDING_MISMATCH',
+  device_b_license_issued: false,
+  device_b_ack_received: false,
   backend_core_generated_archive: false,
   archive_opened_by_windows_association: false,
   payment_and_entitlement_distinct: false,

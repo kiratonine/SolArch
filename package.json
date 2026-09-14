@@ -12,5 +12,16 @@
     "viewer:devnet:checklist": "node scripts/viewer-live-devnet-e2e.mjs checklist",
     "viewer:devnet:evidence-template": "node scripts/viewer-live-devnet-e2e.mjs template",
     "test:live-e2e-harness": "node --test scripts/viewer-live-devnet-e2e.test.mjs"
+  },
+  "pnpm": {
+    "overrides": {
+      "@angular-devkit/core>picomatch": "4.0.4",
+      "@nestjs/cli>glob": "10.5.0",
+      "@nestjs/config>lodash": "4.18.1",
+      "@nestjs/platform-express>multer": "2.3.0",
+      "@nestjs/swagger>js-yaml": "4.3.2",
+      "@nestjs/swagger>lodash": "4.18.1",
+      "external-editor>tmp": "0.2.7"
+    }
   }
 }

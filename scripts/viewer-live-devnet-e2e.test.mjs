@@ -6,6 +6,7 @@ import {
   LIVE_CHECKLIST,
   OFFICIAL_DEVNET_USDC_MINT,
   parseUsdc,
+  validateDeviceBDenialEvidence,
   validateLiveEnvironment,
 } from './viewer-live-devnet-e2e.mjs';
 
@@ -37,6 +38,35 @@ test('live preflight configuration is explicit, exact-split and role-separated',
   assert.equal(config.backendOrigin.origin, 'https://api.demo.solarch.example');
   assert.ok(LIVE_CHECKLIST.some((line) => line.includes('Device B')));
   assert.equal(EVIDENCE_TEMPLATE.development_fixtures, false);
+  assert.equal(EVIDENCE_TEMPLATE.device_b_rejection_http_status, 409);
+  assert.equal(EVIDENCE_TEMPLATE.device_b_rejection_code, 'DEVICE_BINDING_MISMATCH');
+  assert.equal(EVIDENCE_TEMPLATE.device_b_license_issued, false);
+  assert.equal(EVIDENCE_TEMPLATE.device_b_ack_received, false);
+});
+
+test('Device B evidence accepts only documented HTTP 409 denial without protected output', () => {
+  const evidence = {
+    device_b_rejection_http_status: 409,
+    device_b_rejection_code: 'DEVICE_BINDING_MISMATCH',
+    device_b_license_issued: false,
+    device_b_ack_received: false,
+    device_b_protected_content_denied: true,
+  };
+  assert.doesNotThrow(() => validateDeviceBDenialEvidence(evidence));
+  assert.doesNotThrow(() => validateDeviceBDenialEvidence({
+    ...evidence,
+    device_b_rejection_code: 'DEVICE_LIMIT_REACHED',
+  }));
+
+  for (const changed of [
+    { device_b_rejection_http_status: 403 },
+    { device_b_rejection_code: 'INVALID_REQUEST' },
+    { device_b_license_issued: true },
+    { device_b_ack_received: true },
+    { device_b_protected_content_denied: false },
+  ]) {
+    assert.throws(() => validateDeviceBDenialEvidence({ ...evidence, ...changed }), /Device B/);
+  }
 });
 
 test('fixture authority, wrong network/mint and ambiguous split fail closed', () => {

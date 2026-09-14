@@ -88,6 +88,26 @@ test('clean tar excludes local credential files at any depth and preserves sourc
   assert.ok(!entries.some((entry) => entry.toLowerCase().split('/').includes('.direnv')));
 });
 
+test('clean tar excludes runtime storage_data directories at any depth', async (t) => {
+  const root = await fixture(t);
+  const runtimeFiles = [
+    'storage_data/uploads/root-source.zip',
+    'apps/api/storage_data/uploads/protected-source.zip',
+    'nested/STORAGE_DATA/source.pdf',
+  ];
+  const reviewFiles = ['apps/api/src/storage_data.ts', 'docs/storage_data.md'];
+  for (const entry of runtimeFiles) await put(root, entry, 'plaintext protected source sentinel');
+  for (const entry of reviewFiles) await put(root, entry, 'safe review source');
+
+  const output = await createCleanArchive({ root });
+  const entries = execFileSync('tar', ['-tzf', output], { encoding: 'utf8' })
+    .trim().split('\n').map((entry) => entry.replace(/^\.\//, ''));
+
+  assert.ok(!entries.some((entry) => entry.toLowerCase().split('/').includes('storage_data')));
+  for (const entry of runtimeFiles) assert.ok(!entries.includes(entry), `included runtime storage ${entry}`);
+  for (const entry of reviewFiles) assert.ok(entries.includes(entry), `missing safe review file ${entry}`);
+});
+
 test('archive tool failure removes partial output and staging', async (t) => {
   const root = await fixture(t);
   await put(root, 'src/main.rs');

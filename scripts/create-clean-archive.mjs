@@ -13,6 +13,7 @@ const excludedDirectories = new Set([
   'coverage', '.next', 'artifacts', 'tmp', 'temp', 'logs', 'playwright-report',
   'test-results', 'traces', '.cache', 'cache', 'caches', '__pycache__', '.pytest_cache',
   '.turbo', '.parcel-cache', '.pnpm-store', '.svelte-kit', '.nuxt', '.output',
+  'storage_data',
   'secrets', '.secrets', 'keys', '.keys', 'private-keys', 'private_keys',
   'credentials', '.credentials', '.ssh', '.aws', '.azure', '.gnupg', '.direnv',
 ]);
