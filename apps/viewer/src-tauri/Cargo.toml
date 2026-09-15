@@ -11,6 +11,7 @@ name = "solarch_viewer"
 default = []
 development-fixtures = ["dep:hpke"]
 live-devnet = []
+live-e2e-clock = []
 desktop-runtime = [
     "tauri/wry",
     "dep:tauri-build",

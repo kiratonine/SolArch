@@ -32,6 +32,8 @@ export class EnvService implements OnModuleInit {
   constructor(private readonly configService: ConfigService) {}
 
   onModuleInit() {
+    // Validate an explicitly requested deterministic clock even before any issuance path runs.
+    void this.currentTime;
     if (this.isLiveEnvironment) {
       this.validateLiveSecrets();
     }
@@ -39,10 +41,35 @@ export class EnvService implements OnModuleInit {
 
   get isLiveEnvironment(): boolean {
     const env = this.configService.get<string>('NODE_ENV');
-    if (env === 'test') return false;
     const network = this.configService.get<string>('SOLANA_NETWORK', 'devnet');
     const isExplicitLive = this.configService.get<string>('SOLANA_LIVE_DEVNET') === 'true';
+    if (isExplicitLive) return true;
+    if (env === 'test') return false;
     return env === 'production' || isExplicitLive || network === 'devnet' || network === 'mainnet-beta';
+  }
+
+  get currentTime(): Date {
+    const enabled = this.configService.get<string>('SOLARCH_LIVE_E2E_CLOCK_ENABLED');
+    const rawSeconds = this.configService.get<string>('SOLARCH_LIVE_E2E_CLOCK_UNIX_SECONDS');
+    if (enabled === undefined && rawSeconds === undefined) return new Date();
+    if (
+      enabled !== 'true' ||
+      this.configService.get<string>('NODE_ENV') !== 'test' ||
+      this.configService.get<string>('SOLANA_LIVE_DEVNET') !== 'true' ||
+      this.configService.get<string>('SOLANA_NETWORK', 'devnet') !== 'devnet'
+    ) {
+      throw new Error(
+        'The deterministic live E2E clock is allowed only in explicit test-mode Devnet live runs',
+      );
+    }
+    if (
+      !rawSeconds ||
+      !/^(0|[1-9][0-9]{0,9})$/.test(rawSeconds) ||
+      Number(rawSeconds) > 9_999_999_999
+    ) {
+      throw new Error('SOLARCH_LIVE_E2E_CLOCK_UNIX_SECONDS must be canonical bounded Unix seconds');
+    }
+    return new Date(Number(rawSeconds) * 1000);
   }
 
   validateLiveSecrets(): void {

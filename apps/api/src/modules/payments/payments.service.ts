@@ -502,15 +502,22 @@ export class PaymentsService {
           recentBlockhash: latest.blockhash,
           feePayer: feePayer.publicKey,
         });
+        const creatorTransfer = createTransferCheckedInstruction(
+          buyerAta,
+          this.env.usdcMint,
+          creatorAta,
+          buyerPubKey,
+          BigInt(creatorUnits),
+          6,
+        );
+        creatorTransfer.keys.push({
+          pubkey: referencePubKey,
+          isSigner: false,
+          isWritable: false,
+        });
+
         transaction.add(
-          createTransferCheckedInstruction(
-            buyerAta,
-            this.env.usdcMint,
-            creatorAta,
-            buyerPubKey,
-            BigInt(creatorUnits),
-            6,
-          ),
+          creatorTransfer,
           createTransferCheckedInstruction(
             buyerAta,
             this.env.usdcMint,
@@ -520,7 +527,7 @@ export class PaymentsService {
             6,
           ),
           new TransactionInstruction({
-            keys: [{ pubkey: referencePubKey, isSigner: false, isWritable: false }],
+            keys: [],
             programId: new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr'),
             data: Buffer.from(`SolArch:${intent.id}`, 'utf8'),
           }),

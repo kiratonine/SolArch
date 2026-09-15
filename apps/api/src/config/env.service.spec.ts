@@ -114,4 +114,44 @@ describe('EnvService live fail-closed configuration', () => {
       envService({ NODE_ENV: 'test', SOLANA_NETWORK: 'localnet' }).jwtSecret,
     ).toBe('solarch-dev-jwt-super-secret-key-32-chars-minimum');
   });
+
+  test('allows the deterministic clock only for explicit test-mode live Devnet runs', () => {
+    const exact = envService({
+      NODE_ENV: 'test',
+      SOLANA_NETWORK: 'devnet',
+      SOLANA_LIVE_DEVNET: 'true',
+      SOLARCH_LIVE_E2E_CLOCK_ENABLED: 'true',
+      SOLARCH_LIVE_E2E_CLOCK_UNIX_SECONDS: '1789084800',
+    });
+    expect(exact.isLiveEnvironment).toBe(true);
+    expect(exact.currentTime.toISOString()).toBe('2026-09-11T00:00:00.000Z');
+
+    for (const values of [
+      { NODE_ENV: 'production' },
+      { NODE_ENV: 'test', SOLANA_LIVE_DEVNET: 'false' },
+      { NODE_ENV: 'test', SOLANA_LIVE_DEVNET: 'true', SOLANA_NETWORK: 'mainnet-beta' },
+    ]) {
+      expect(
+        () =>
+          envService({
+            ...values,
+            SOLARCH_LIVE_E2E_CLOCK_ENABLED: 'true',
+            SOLARCH_LIVE_E2E_CLOCK_UNIX_SECONDS: '1789084800',
+          }).currentTime,
+      ).toThrow(/deterministic live E2E clock/);
+    }
+  });
+
+  test('rejects missing, noncanonical, and out-of-range deterministic clock values', () => {
+    for (const raw of [undefined, '', '01789084800', '-1', '1.0', '10000000000']) {
+      const values: Record<string, string> = {
+        NODE_ENV: 'test',
+        SOLANA_NETWORK: 'devnet',
+        SOLANA_LIVE_DEVNET: 'true',
+        SOLARCH_LIVE_E2E_CLOCK_ENABLED: 'true',
+      };
+      if (raw !== undefined) values.SOLARCH_LIVE_E2E_CLOCK_UNIX_SECONDS = raw;
+      expect(() => envService(values).currentTime).toThrow(/Unix seconds/);
+    }
+  });
 });

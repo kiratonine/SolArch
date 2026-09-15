@@ -7,6 +7,12 @@
 ))]
 compile_error!("live Devnet release builds must not include development-fixtures");
 
+#[cfg(all(feature = "live-e2e-clock", not(debug_assertions)))]
+compile_error!("the isolated live E2E clock must never be compiled into release builds");
+
+#[cfg(all(feature = "live-e2e-clock", not(feature = "live-devnet")))]
+compile_error!("the isolated live E2E clock requires the real live-devnet Backend path");
+
 pub mod archive_service;
 pub mod backend;
 pub mod clock;
@@ -916,11 +922,27 @@ pub fn run() -> Result<(), String> {
         }))
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            #[cfg(feature = "live-e2e-clock")]
+            let app_data = {
+                let scope = std::env::var("SOLARCH_LIVE_E2E_CREDENTIAL_SCOPE")
+                    .map_err(|_| "isolated E2E credential scope is required")?;
+                if !secure_store::valid_live_e2e_scope(&scope) {
+                    return Err("isolated E2E credential scope is invalid".into());
+                }
+                let override_path = std::env::var("SOLARCH_LIVE_E2E_APP_DATA_DIR")
+                    .map_err(|_| "isolated E2E app-data override is required")?;
+                let candidate = PathBuf::from(override_path);
+                if !candidate.is_absolute() {
+                    return Err("isolated E2E app-data override must be absolute".into());
+                }
+                candidate
+            };
+            #[cfg(not(feature = "live-e2e-clock"))]
             let app_data = app
                 .path()
                 .app_data_dir()
                 .map_err(|error| error.to_string())?;
-            #[cfg(feature = "development-fixtures")]
+            #[cfg(all(feature = "development-fixtures", not(feature = "live-e2e-clock")))]
             let app_data = match std::env::var("SOLARCH_DEV_APP_DATA_DIR") {
                 Ok(override_path) => {
                     let candidate = PathBuf::from(override_path);

@@ -23,5 +23,8 @@
       "@nestjs/swagger>lodash": "4.18.1",
       "external-editor>tmp": "0.2.7"
     }
+  },
+  "dependencies": {
+    "bs58": "^6.0.0"
   }
 }

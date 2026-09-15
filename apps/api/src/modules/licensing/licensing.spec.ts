@@ -102,6 +102,7 @@ describe('LicensingService & Device Enforcement', () => {
         {
           provide: EnvService,
           useValue: {
+            currentTime: new Date('2026-09-14T15:25:51Z'),
             licenseKeyId: 'lic-test-01',
             licenseSigningKeypair: testSigningKeys,
             intentHmacSecret: PEPPER,

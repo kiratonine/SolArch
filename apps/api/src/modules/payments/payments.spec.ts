@@ -4,7 +4,7 @@ import { createHash } from 'crypto';
 import { PaymentsService } from './payments.service';
 import { PrismaService } from '@/common/prisma.service';
 import { EnvService } from '@/config/env.service';
-import { Keypair, PublicKey } from '@solana/web3.js';
+import { Keypair, PublicKey, Transaction } from '@solana/web3.js';
 import bs58 from 'bs58';
 import { hashIntentClientSecret } from '@/crypto/token32.util';
 
@@ -281,6 +281,20 @@ describe('PaymentsService & Solana Pay', () => {
     // Verify transaction can be deserialized and has fee payer
     const txBuf = Buffer.from(res.transaction, 'base64');
     expect(txBuf.length).toBeGreaterThan(100);
+    const transaction = Transaction.from(txBuf);
+    const transferInstructions = transaction.instructions.filter((instruction) =>
+      instruction.programId.equals(new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA')),
+    );
+    expect(transferInstructions).toHaveLength(2);
+    expect(transferInstructions[0].keys).toContainEqual({
+      pubkey: new PublicKey(reference),
+      isSigner: false,
+      isWritable: false,
+    });
+    const memoInstruction = transaction.instructions.find((instruction) =>
+      instruction.programId.equals(new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr')),
+    );
+    expect(memoInstruction?.keys).toHaveLength(0);
     expect(prisma.paymentTransactionIssuance.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({

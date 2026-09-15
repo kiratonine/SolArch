@@ -3,7 +3,7 @@
 **Part:** `PART_05`
 **Branch:** `integrate/marketplace-backend`
 **Status:** `PARTIAL`
-**Updated:** `2026-09-14`
+**Updated:** `2026-09-15`
 **Execution:** strict single-agent
 
 ## 1. Scope and outcome
@@ -22,12 +22,45 @@ The Part remains correctly **PARTIAL**, not COMPLETE. A real Backend instance,
 disposable PostgreSQL 16 database, official Devnet RPC, transient public HTTPS
 origin, real role-separated signing keys, real Backend/Core multi-format archive,
 live public trust anchors, demo wallets and sponsored creator-ATA creation were
-integrated and verified. The external-wallet test-USDC purchase and all dependent
-Device A/B license/UI checkpoints remain blocked because the disposable buyer has
-no Circle Devnet USDC; the later manual faucet operation funded 5 Devnet SOL but
-did not create any SPL token account or fund the official Circle test-USDC mint.
-Circle's public faucet requires a manual reCAPTCHA. No commit, push, merge,
-rebase or PR was performed.
+integrated and verified. After the buyer was manually funded with Circle Devnet
+test USDC, one real external-wallet payment reached `finalized`; Backend committed
+distinct Payment and Entitlement records, Device A received and locally validated
+a real signed P/W/SIG plus HPKE-wrapped ACK, all four protected formats rendered
+with watermark, and cached reopen succeeded both online and with Backend actually
+unavailable. A release-inaccessible deterministic live-E2E clock then closed both
+mandatory-refresh branches without shortening the signed license: online refresh
+produced a fresh Backend signature/HPKE envelope and a new exact 259200-second
+window, while a separate pre-refresh state snapshot stayed locked with Backend
+unavailable. The remaining mandatory Definition-of-Done gap is an independent
+Device B/clean-VM Backend rejection and the live negative cases that require its
+authenticated recovery attempt. No development fixture became authority. No
+commit, push, merge, rebase or PR was performed.
+
+### External-review follow-up: deterministic mandatory refresh
+
+- Viewer adds an opt-in `live-e2e-clock` Cargo feature. It requires `live-devnet`,
+  accepts only canonical bounded Unix seconds, and is a compile-time error in a
+  release build. The native evidence build was debug-only and omitted
+  `development-fixtures`, so it retained the real HTTPS Backend and real public
+  archive/license anchors.
+- Backend issuance obtains time through `EnvService.currentTime`. An override is
+  accepted only for the conjunction `NODE_ENV=test`, `SOLANA_LIVE_DEVNET=true`
+  and `SOLANA_NETWORK=devnet`; explicit live mode still runs the complete live
+  key/secret validation. Missing, malformed, production or non-Devnet override
+  configurations fail startup/issuance closed.
+- Viewer app-data and Windows Credential Manager namespaces are separately
+  scoped only in that debug feature. Both an absolute app-data override and a
+  canonical credential scope are mandatory at startup; missing or malformed
+  isolation inputs fail closed and cannot fall back to the ordinary Viewer
+  profile. Two byte-identical, in-memory credential copies and app-state copies
+  were made before advancing logical time; no private key, refresh credential or
+  ACK was printed or written to evidence/report.
+- The old signed window remained exactly 259200 seconds. At one minute after its
+  deadline, the online snapshot used the real refresh credential and Backend
+  authority to retain `lic_b908b32360074d74` while replacing its signature and
+  HPKE envelope. The new window is also exactly 259200 seconds and protected PDF
+  plus watermark opened. The separate offline snapshot exposed no protected file
+  table. No snapshot clock was moved backwards.
 
 ### Shared-document conflicts and updates
 
@@ -68,6 +101,22 @@ coverage but are not represented as live Devnet evidence.
   `converter.toBigInt()` sink is therefore not active in the tested build. This
   remains an accepted, visible residual risk: a deployment that enables the
   native addon must be re-evaluated, and no audit PASS is claimed.
+- The refreshed advisory database also reports production moderate findings in
+  transitive Nest/Solana packages and a new no-patch `adm-zip@0.6.0` symlink
+  advisory. They remain visible in the exact audit counts in section 20. This
+  continuation did not perform another dependency-family/static-hardening pass
+  because no new live E2E blocker was reproduced; archive extraction retains its
+  existing bounded/path-validation tests. These advisories require separate
+  dependency/vendor review before production deployment.
+- The first live payment submission reproduced a concrete Solana Pay integration
+  defect: the public reference had been attached to the Memo instruction, whose
+  runtime requires every supplied account to sign. The finalized transaction
+  failed atomically with `MissingRequiredSignature` and transferred no USDC.
+  `PaymentsService` now appends the reference as a read-only non-signer to the
+  creator SPL `transferChecked` instruction and keeps the Memo account list empty.
+  A regression deserializes the exact response transaction and checks both
+  invariants. The same Payment Intent was reissued only after the failed issuance
+  was finalized; the replacement transaction then finalized successfully.
 
 ## 2. Viewer-side implementation
 
@@ -119,6 +168,35 @@ The final external-review follow-up additionally changes root `package.json`,
 `scripts/viewer-live-devnet-e2e.test.mjs`, and adds
 `apps/api/src/modules/uploads/multer-compatibility.spec.ts`. No migration or
 frozen shared contract changed in this follow-up.
+
+The retained live-payment blocker fix changes:
+
+```text
+apps/api/src/modules/payments/payments.service.ts
+apps/api/src/modules/payments/payments.spec.ts
+docs/archive-core-viewer/reports/PART_05_REPORT.md
+```
+
+This mandatory-refresh continuation additionally changes:
+
+```text
+apps/api/src/config/env.service.ts
+apps/api/src/config/env.service.spec.ts
+apps/api/src/modules/licensing/licensing.service.ts
+apps/api/src/modules/licensing/licensing.spec.ts
+apps/viewer/src-tauri/Cargo.toml
+apps/viewer/src-tauri/src/clock.rs
+apps/viewer/src-tauri/src/lib.rs
+apps/viewer/src-tauri/src/secure_store.rs
+docs/archive-core-viewer/reports/PART_05_REPORT.md
+```
+
+There is no migration, dependency, wire/crypto contract or frozen-document
+change in this continuation.
+
+Operational live scripts/checkpoints remain under ignored `artifacts/live-devnet/`
+and are excluded from the clean review archive. They contain public evidence only;
+private keys and Backend secrets remain outside the repository.
 
 Current combined Backend hardening files are:
 
@@ -192,7 +270,7 @@ A real production-built API process was started against a disposable PostgreSQL
 It was exposed for this integration checkpoint at the strict HTTPS root origin:
 
 ```text
-https://prescription-lodging-chargers-hearing.trycloudflare.com/
+https://safe-yard-webshots-furnished.trycloudflare.com/
 ```
 
 Public `/v1/health` and `/v1/health/ready` both passed; readiness reported the
@@ -201,9 +279,10 @@ Windows `live-devnet` Viewer build and used by the successful live preflight.
 Credential-bearing redirects remain disabled.
 
 This is an accountless Cloudflare Quick Tunnel, not a durable production
-deployment: it has no uptime guarantee and the first tunnel expired during the
-session. The Backend and tunnel were restarted with a new mutually consistent
-`PUBLIC_API_ORIGIN`; a durable named deployment is still required for a repeatable
+deployment: it has no uptime guarantee and prior tunnel origins expired during
+the session. The Backend and tunnel were restarted with a new mutually
+consistent `PUBLIC_API_ORIGIN`, and the debug live-E2E Viewer was rebuilt with
+that exact origin; a durable named deployment is still required for a repeatable
 two-device demonstration.
 
 ## 6. Archive and license trust anchors
@@ -241,8 +320,11 @@ workspace outside the repository and is not included in this report/archive.
 
 The license-role key is independently configured and stored only in the
 `LicenseTrustStore`; it cannot authenticate an archive signature. The native
-live build embedded the real public license anchor above. No P/W/SIG has yet been
-issued because payment cannot begin before the buyer receives test USDC.
+live build embedded the real public license anchor above. Backend issued a real
+P/W/SIG under `license-devnet-20260914`; Viewer verified its Ed25519 signature,
+fresh request nonce, archive/fingerprint/device/rights/time bindings and HPKE
+envelope before installing protected access. No private license key entered the
+Viewer build or repository.
 
 ## 7. Devnet RPC, test-USDC and demo wallets
 
@@ -270,9 +352,13 @@ buyer: AumZDnQhNj83fFR4rNY4s37BximJbKoJqtMJTK8ZdRNc
 ```
 
 The fee payer received only Devnet SOL and funded the real creator/platform ATA
-operations. The buyer currently has no account/balance for the official Circle
-Devnet USDC mint. Circle's public faucet requires a human reCAPTCHA, so it was
-not automated or bypassed. Devnet SOL and test USDC have no monetary value.
+operations and payment fee. Immediately before purchase, an independent official
+RPC query resolved buyer ATA
+`B8JW3xahkuxN8c2VGNfWwBhyCGDYyuzykew5gwYoZvEj`, confirmed the official Circle
+mint and `decimals=6`, and returned exactly `20.000000` test USDC. After the
+finalized purchase the authoritative balances were buyer `19.000000`, creator
+`0.950000`, platform `0.050000`. Funding was manual; no CAPTCHA was automated or
+bypassed. Devnet SOL and test USDC have no monetary value.
 
 ## 8. Fee rounding status
 
@@ -324,12 +410,14 @@ protected content or credential.
 
 The published archive's authoritative Viewer metadata was fetched from the real
 HTTPS Backend and exactly matched the archive fingerprint, creator, price,
-currency, fee, rights and policy. A Payment Intent was deliberately not created:
-its 30-minute credential/TTL must not be consumed before the external buyer can
-fund and use Device A. Viewer metadata includes
-`platform_fee_bps`; Payment Intent and confirmed verification responses contain
-the frozen closed fields; typed Viewer error codes are preserved by the global
-filter.
+currency, fee, rights and policy. Windows Device A then created real Payment
+Intent `cd90741d-6f5e-4af7-8d8a-8d91665873c8`, bound to its fresh X25519 public
+key. Viewer showed the real Solana Pay QR while protected access remained locked.
+The TOKEN32 credential stayed in Windows secure storage and was never printed,
+logged, placed in the evidence JSON or copied into this report. Viewer metadata
+includes `platform_fee_bps`; Payment Intent and confirmed verification responses
+contain the frozen closed fields; typed Viewer error codes are preserved by the
+global filter.
 
 Transaction issuance is serialized with a PaymentIntent row lock. Concurrent
 requests from the same construction account receive the byte-identical stored
@@ -348,6 +436,13 @@ exact txid is authoritatively finalized-failed or an unseen issuance is beyond
 its block-height validity window. A processed/confirmed failure remains
 reorgable and cannot retire the issuance, authorize replacement, or terminally
 fail the intent. An unrelated submitted signature cannot mutate any issuance.
+
+This authority ordering was exercised live. A first exact issuance finalized
+failed because the reference had incorrectly been supplied to the Memo program.
+No token transfer occurred. After the narrow instruction-layout fix, Backend
+classified that exact txid as failed and reissued under the same Payment Intent;
+it did not create a duplicate intent or treat the unrelated/earlier issuance as
+the successful payment.
 
 ### Database migration
 
@@ -384,32 +479,31 @@ decimals: 6
 ```
 
 The creator token account did not exist in the pre-balances and appeared in the
-finalized post-balances for the configured creator and official mint. This closes
-the creator-ATA checkpoint, but not the payment split checkpoint.
-
-No external wallet payment transaction was signed and these fields have no
-fabricated values:
+finalized post-balances for the configured creator and official mint. The
+external buyer then signed the real test-USDC transaction. Independent official
+RPC inspection and `viewer:devnet:evidence` on-chain validation proved:
 
 ```text
-transaction signature: NOT AVAILABLE
-payment reference: NOT AVAILABLE
-creator/platform base-unit deltas: NOT VERIFIED LIVE
-fee payer: NOT VERIFIED LIVE
-creator ATA address/creation signature: VERIFIED ABOVE
+transaction signature: eSXDoz5tM6BEQSHh5cGHD4hu9NoYrRZQrPUbAgdu7Ux7cMxXKq2MoHki5swjWM4o9hvs7HZJsm4W4XqNDLsHVzt
+finalized slot: 498304223
+payment reference: B55XAeCxidr3nzmAtMVQ6Y8WoZ35eCYjsgQUE7cbDoxX
+buyer signer/debit: AumZDnQhNj83fFR4rNY4s37BximJbKoJqtMJTK8ZdRNc / -1000000
+creator credit: GXeFmnNdm3CqqsPuhUTYUk2AisrphPrEHZdRDJUowvV7 / +950000
+platform credit: 9HvUyMLZPzfr92n5bqosiWF3z42GRUXgc5KPj4A3DQy4 / +50000
+fee payer: 3nwTpSGRTosed4ZLACkTyE2a5kmvsnaA85e5xbe8hQiM
+fee: 10000 lamports
+mint/decimals: 4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU / 6
 ```
 
-The evidence command will accept completion only after `getSignatureStatuses`
-reports `finalized`, `getTransaction` succeeds at finalized commitment, the
-buyer loses exactly the price, creator gains exactly 95%, platform gains exactly
-5%, the configured SolArch public key is account zero/fee payer, and a separate
-finalized ATA transaction proves creation for the creator/mint by that fee payer.
-
-The exact 95/5 deltas remain pending until the buyer is funded and signs the real
-test-USDC transaction.
+The payment used two `transferChecked` instructions in one atomic transaction.
+The reference was a read-only non-signer on the creator transfer, the buyer was
+the other signer, and the configured SolArch wallet was account zero/fee payer.
+Post-transaction balances were independently rechecked as 19.00 buyer, 0.95
+creator and 0.05 platform test USDC.
 
 ## 12. Finalized verification and Payment vs Entitlement
 
-**Implemented locally; not verified live.** Verification accepts only the exact
+**Verified live.** Verification accepts only the exact
 canonical 64-byte Base58 txid stored for an issuance. It requires a finalized
 signature status, resolves its authoritative landing height through
 `getBlock(status.slot, finalized)`, and requires transaction/parsed slots to
@@ -421,12 +515,20 @@ Exact message, reference, fee payer, buyer signer, mint, destinations and 95/5
 Entitlement commit. That transaction atomically stores PaymentIntent
 `confirmed_buyer_wallet`, Payment `device_public_key`, and matching buyer/archive/
 device bindings. Idempotent verification rechecks those persisted audit bindings.
-No simulation signature path can authorize payment. No live Payment/Entitlement
-IDs exist yet because no Payment Intent or payment has been created.
+The real finalized transaction produced distinct public records:
+
+```text
+Payment: 22adc2f5-c19c-41e3-a2c8-40bdd186bcc3 (confirmed)
+Entitlement: fcea37a3-bcc6-4066-9ae2-91f9bc8a6f68 (active)
+```
+
+Database inspection confirmed the authoritative buyer and exact Device A public
+key on the Payment snapshot before activation began.
+No simulation signature path authorized this payment.
 
 ## 13. Device A activation, real P/W/SIG and HPKE
 
-**Implemented locally; not run live.** Activation and refresh issue exact-second
+**Device A activation verified live.** Activation and refresh issue exact-second
 timestamps and enforce confirmed Payment, active/non-expired Entitlement, ready
 and allowed archive, exact one-device policy and Device A binding. Recovery also
 requires active DeviceActivation and DeviceLicense records and stays within the
@@ -448,30 +550,92 @@ an alias. Malformed, noncanonical and low-order X25519 keys are HTTP 400
 `INVALID_REQUEST`; HTTP 409 `DEVICE_BINDING_MISMATCH` is reserved for a valid
 key that differs from authoritative Device A.
 
+After Backend verification returned `confirmed`, native Viewer activation used a
+fresh nonce and the retained intent credential. Backend created exactly one active
+DeviceActivation and exactly one active DeviceLicense:
+
+```text
+Device A public key: Y9W1I6ifJsJWzibkr1zDrh7/LxvTWgMHnj84Rw4uoGI=
+Device License: lic_b908b32360074d74
+issued_at: 2026-09-14T15:25:51Z
+offline_valid_until: 2026-09-17T15:25:51Z
+```
+
+Viewer accepted the response only after fresh-nonce, Ed25519, archive ID,
+fingerprint, Device A, rights, exact time-window and HPKE validation. The returned
+ACK remained inside Rust; only the public unlocked snapshot (four files and a
+watermark descriptor) crossed IPC. The refresh credential was saved in Windows
+secure storage and the completed Payment Intent credential/metadata were cleaned.
+
 ## 14. Protected viewers, watermark, cached restart and refresh
 
-The existing Part 04 native synthetic regression passed for PDF, PNG/JPEG/WebP,
-DOCX and XLSX, watermark, no-export WebView2 hardening, cached reopen and exact
-deadline relock. This proves regression stability only.
+The existing Part 04 native synthetic regression remains passing, and real-license
+native viewing was also exercised through the installed live NSIS build. PDF
+produced a bounded canvas, PNG produced the sanitized internal image, DOCX produced
+the read-only document model, and XLSX produced a grid with two sheets. Every
+viewer had the buyer/license/archive watermark. No Save/Export/Open External link
+was present; the protected surface prevented context menus and no external HTTP
+link existed.
 
-The required real-license protected viewing, full process restart with the live
-Backend unavailable, live mandatory refresh to a new signed 72-hour window, and
-Backend-unavailable mandatory-refresh denial were **not** performed. The public
-evidence schema requires all of them before `viewer:devnet:evidence` can pass.
+A full process exit followed by Explorer `.slr` double-click reopened all four
+files from the cached signed license. Backend was then actually stopped, public
+HTTPS readiness returned 502, and a second full process restart still reopened
+the same archive as unlocked with four files. This closes both cached-restart
+checkpoints inside the valid offline window.
+
+The exact live mandatory-refresh checkpoints are now verified without waiting
+72 real hours or changing the Windows host clock. Before time advancement, the
+validated Device A application state and Windows credential blobs were copied in
+memory into two isolated debug-only namespaces and verified byte-identical. At
+logical time `2026-09-17T15:26:51Z`, one minute after the old deadline:
+
+- the online snapshot made the real HTTPS refresh request, Backend rechecked the
+  active Payment/Entitlement/DeviceActivation/DeviceLicense authority, unsealed
+  real custody, created a fresh HPKE envelope and Ed25519 signature, and returned
+  a grant from `2026-09-17T15:26:51Z` through `2026-09-20T15:26:51Z`;
+- the measured window remained exactly `259200` seconds, the license ID and all
+  bindings remained stable, and the fresh signature plus HPKE envelope differed
+  from the old issuance; Viewer validated/unwrapped it and opened the protected
+  PDF with watermark;
+- the separate pre-refresh offline snapshot exposed no protected file table and
+  remained denied. Its unavailable transient tunnel produced a fail-closed
+  invalid-response surface rather than protected access.
+
+`development-fixtures` was absent from this native build. The release negative
+compile check rejected `live-e2e-clock`, so production/release binaries cannot
+accept this clock source. Both public evidence refresh booleans are now true.
 
 ## 15. Device B and negative live cases
 
-An independent Device B/VM has not yet been exercised because Device A payment
-and entitlement do not exist. No Backend Device B rejection is claimed. The final
-run must preserve the exact frozen/documented typed HTTP 409 returned by the
-current Backend; this Part does not rename that contract merely to prefer
-`DEVICE_LIMIT_REACHED` wording.
+An independent Device B/clean VM is still unavailable. Read-only host checks
+found no Hyper-V management service/module, Windows Sandbox, VirtualBox, VMware,
+QEMU or Windows VM image, and the current user is not an administrator. A clean
+debug-only Windows Credential Manager/application-data namespace was prepared,
+opened the exact `.slr` as Locked and generated a fresh public Device B key
+different from Device A, with no license or protected table. This same-host
+namespace is useful preparation but is **not** represented as an independent VM
+or Backend rejection.
 
-The safe live negative cases (wrong fingerprint/device, replayed nonce, invalid
-intent/refresh credentials, not-finalized payment, cross-archive reference,
-revoked/expired state and Device B) were not sent to any service because no
-dedicated deployed Devnet service was provided. Existing deterministic negative
-tests remain passing but are not substituted for live evidence.
+No live Backend Device B HTTP 409 is claimed. The completed intent credential
+was correctly deleted after durable Device A activation and was not recovered
+from public data. Because an independent Windows VM is absent, no second Devnet
+purchase was created merely to manufacture an activation credential. A future
+coordinated run may use the explicitly permitted security-test purchase, retain
+its credential only in controlled memory/secure storage, and make the Device B
+attempt inside the legitimate 10-minute recovery window. It must preserve the
+exact frozen/documented typed HTTP 409 returned by the current Backend; this
+Part does not rename that contract merely to prefer `DEVICE_LIMIT_REACHED`.
+
+Safe live calls did verify three credential/state negatives against the real
+HTTPS Backend: a wrong intent credential returned HTTP 401
+`INVALID_INTENT_CREDENTIAL`, a wrong refresh credential returned HTTP 401
+`INVALID_REFRESH_CREDENTIAL`, and an unknown archive returned HTTP 404
+`ARCHIVE_NOT_AVAILABLE`; none produced protected access. The remaining cases
+that require a live authenticated intent/license mutation or Device B attempt
+(wrong Device binding, nonce replay, not-finalized activation, cross-archive
+reference and revoked/expired authority) were not fabricated against the retained
+successful purchase. Existing deterministic negative tests remain passing, but
+`negative_cases_verified` stays false until the complete live matrix is run.
 
 ## 16. Live harness usage and required public evidence
 
@@ -508,6 +672,14 @@ platform share: 50000 micro-USDC
 The release CLI authenticated the exact local bytes, Backend health/readiness and
 security-critical metadata matched, and the official RPC/mint checks passed.
 
+`viewer:devnet:evidence` was then run with the public successful payment and ATA
+signatures/reference plus a bounded partial checkpoint. It independently accepted
+both finalized transactions, the exact test-USDC owner deltas, buyer signer,
+reference and SolArch fee payer, then exited nonzero with the expected sanitized
+message `missing or inconsistent mandatory manual/native checkpoint`. This is not
+an evidence PASS: the refresh fields are now true, while independent Device B
+and the complete live negative matrix remain false.
+
 ## 17. Security review
 
 - No private/mnemonic/fee-payer/signing key or live credential was added.
@@ -516,6 +688,10 @@ security-critical metadata matched, and the official RPC/mint checks passed.
   inputs fail closed.
 - `live-devnet` disables fixture Backend selection. The final build command does
   not request `development-fixtures`.
+- The deterministic clock is isolated behind a debug-only Cargo feature and an
+  explicit test-mode live-Devnet Backend conjunction. Native release compilation
+  with that feature was rejected as designed; ordinary live/release behavior has
+  no clock override. Signed windows remain exactly 259200 seconds.
 - The harness uses bounded archive/HTTP/evidence inputs, refuses symlink archive
   and evidence files, follows no HTTP redirects, and reports sanitized public
   facts only.
@@ -663,7 +839,7 @@ HTTPS/Devnet evidence required to mark Part 05 complete.
 
 ## 20. Commands and results
 
-Live integration checkpoint on 2026-09-14:
+Live integration checkpoints on 2026-09-14–15:
 
 | Command/check | Result |
 | --- | --- |
@@ -677,7 +853,7 @@ Live integration checkpoint on 2026-09-14:
 | native Windows `live-devnet` Tauri/NSIS build | PASS; x64 executable and installer built with real public anchors/origin |
 | `rtk pnpm install --frozen-lockfile --force` + Prisma regeneration | PASS; restored generated dependencies after the isolated Windows package-manager attempt |
 | `rtk pnpm --filter @solarch/api lint` | PASS |
-| `rtk pnpm --filter @solarch/api test` | PASS, 12 suites / 113 tests, including Multer 2.3 parsing/boundary coverage |
+| `rtk pnpm --filter @solarch/api test` | PASS, 12 suites / 115 tests, including deterministic-clock and Multer 2.3 parsing/boundary coverage |
 | `rtk pnpm --filter @solarch/api test:e2e` | PASS, 1 suite / 23 tests |
 | `rtk pnpm --filter @solarch/api build` | PASS |
 | `rtk pnpm --filter @solarch/viewer lint` | PASS |
@@ -697,13 +873,34 @@ Live integration checkpoint on 2026-09-14:
 | native Windows Viewer `cargo.exe check --all-features` | PASS |
 | native Windows installer/file-association smoke | PASS; RU/EN selector/persistence, single-instance association, hostile argv fail-closed and uninstall cleanup |
 | live checklist/template commands after Device B schema update | PASS; template requires HTTP 409, documented code, no license and no ACK |
-| official Devnet buyer account recheck | BLOCKED: buyer has 5 Devnet SOL but no SPL token accounts and no official Circle test-USDC ATA/balance; no Payment Intent created |
+| official Devnet buyer account recheck | PASS before payment: official mint, canonical ATA, `decimals=6`, balance `20.000000`; post-payment balance `19.000000` |
+| installed live NSIS + Explorer `.slr` open | PASS; real archive reached verified Locked on Device A |
+| real Payment Intent + Solana Pay QR | PASS; one Device-A-bound intent, no protected access before finality |
+| real external-wallet Devnet payment | PASS; finalized slot `498304223`, exact 950000/50000 split, buyer signer, SolArch fee payer |
+| Backend Payment -> Entitlement | PASS; distinct confirmed/active authoritative records |
+| Device A signed license + HPKE | PASS; one active activation/license, Viewer fresh-response validation and local unwrap |
+| live PDF/PNG/DOCX/XLSX + watermark/no export | PASS in installed native Viewer |
+| full restart + cached reopen | PASS online and again while public Backend readiness returned HTTP 502 |
+| native Windows debug `live-devnet,live-e2e-clock` build | PASS; real HTTPS Backend/public anchors, no `development-fixtures` |
+| release build with `live-e2e-clock` | EXPECTED FAIL/PASS security assertion; compile-time rejection observed |
+| live mandatory refresh online | PASS; fresh Backend signature + HPKE, same license ID, exact new 259200-second window, protected PDF/watermark opened |
+| pre-refresh snapshot at same logical deadline with Backend unavailable | PASS; no protected table/content, fail closed |
+| safe live negative subset | PASS; wrong intent token 401, wrong refresh token 401, unknown archive 404; no protected output |
+| `viewer:devnet:evidence` | **EXPECTED BLOCKED** after passing on-chain payment/ATA proof; refresh fields true, Device B/full negative matrix false |
+| independent Device B/clean VM | **BLOCKED**: no independent Windows VM/tooling is available; same-host clean namespace is not claimed as independent evidence |
 
 The previously reported 12 production highs and 15 total-graph highs were
 triaged. All fixable high findings were removed by the minimal pins/overrides
 above; `bigint-buffer` is the one no-patch residual and keeps both audit commands
-nonzero. The Part also remains PARTIAL independently because the real
-payment/Device A/B E2E is incomplete.
+nonzero. The Part remains PARTIAL because the independent Device B HTTP 409 and
+the complete authenticated live negative matrix are incomplete.
+
+One complete Viewer run in this continuation produced an isolated i18n timing
+failure after the RU text and persisted locale assertions had already succeeded:
+another test cleanup cleared `document.documentElement.lang`. The isolated i18n
+file passed 4/4 immediately, and the complete Viewer suite then passed 34/34
+without source changes. The passing rerun is the final result; the transient run
+is retained here rather than hidden.
 
 One intermediate Backend unit run was stopped after a native-Windows pnpm
 attempt had left the shared generated Prisma client incomplete. The live Backend
@@ -774,9 +971,10 @@ slr_v1_multiformat.b64: 7655 bytes
 Actually run through native Windows tools:
 
 - `cargo.exe test --workspace` — PASS: 10 CLI, 60 Core and 60 Viewer tests,
-  including Windows Credential Manager and the new public-anchor regression.
-- `cargo.exe check --manifest-path apps/viewer/src-tauri/Cargo.toml
-  --all-features` — PASS.
+  including Windows Credential Manager and the public-anchor regression.
+- `cargo.exe test -p solarch-viewer --all-features` — PASS: 63 Viewer tests,
+  including canonical bounded live-E2E credential-scope validation.
+- `cargo.exe check --workspace --all-targets --all-features` — PASS.
 - Native release build with
   `desktop-runtime,custom-protocol,development-fixtures` — PASS solely for the
   existing Part 04 regression smoke.
@@ -811,46 +1009,50 @@ The native invocation used the exact pinned `@tauri-apps/cli@2.11.4` through an
 isolated `pnpm dlx`. Its one-time config skipped only duplicate
 `beforeBuildCommand` after the same source frontend build had already passed;
 this is required because WSL-created POSIX `.bin` shims are not executable by
-Windows Node in the shared checkout. The installer was built successfully, but
-install/open/payment UI evidence is not claimed in this checkpoint.
+Windows Node in the shared checkout. The installer was installed, Explorer
+association opened the exact archive, and the installed native Viewer completed
+Locked, QR, activation, protected rendering and two cached process restarts. One
+restart ran while the Backend was intentionally stopped. The final native Windows
+`cargo.exe test --workspace` and Viewer `cargo.exe check --all-features` were also
+rerun after the live fix and passed.
 
 ## 22. Deployment/E2E handoff required
 
-Backend/Core/archive/public-anchor integration and creator ATA creation are now
-complete for this live checkpoint. The immediate external handoff is:
+Backend/Core/archive/public-anchor integration, creator ATA creation, real
+payment, Device A activation/rendering, cached restarts and deterministic live
+mandatory refresh are complete. The remaining external handoff is deliberately
+narrow:
 
-1. request Circle **Solana Devnet** test USDC for the disposable buyer
-   `AumZDnQhNj83fFR4rNY4s37BximJbKoJqtMJTK8ZdRNc` at
-   <https://faucet.circle.com>; the faucet requires a human reCAPTCHA and the
-   tokens have no monetary value;
-2. replace or keep alive the temporary HTTPS Quick Tunnel for the duration of the
-   two-device run, then rebuild with that exact origin if it changes;
-3. on independent Windows Device A, install the live NSIS build, double-click the
-   retained exact archive and complete the external-wallet Solana Pay approval;
-4. capture only public finalized payment/reference and Backend entity IDs, then
-   execute the harness evidence command for 95/5 and SolArch fee-payer proof;
-5. complete real P/W/SIG/HPKE, four renderers/watermark, restart/cached reopen,
-   mandatory refresh and Backend-unavailable denial;
-6. open the same bytes on independent Device B/VM and record the current
-   frozen/documented typed HTTP 409 without changing the API contract.
+1. provide an independent Windows VM/device with its own secure store;
+2. during a coordinated live activation-recovery window, open the same exact
+   archive on a genuinely independent Device B/secure store and record the frozen
+   typed HTTP 409 plus absence of license, ACK and protected access;
+3. run the live negative matrix on that isolated environment and set only the
+   actually observed public checkpoint booleans; then rerun
+   `viewer:devnet:evidence`.
 
-No Payment Intent is pre-created for handoff: doing so would start its TTL before
-Device A and the funded external wallet are ready.
+If the transient Quick Tunnel changes before those steps, `PUBLIC_API_ORIGIN` and
+the Viewer compile-time origin must be updated together and the native live Viewer
+rebuilt. No new purchase should be fabricated merely to fill evidence fields.
 
 ## 23. Known limitations and not verified
 
 - The HTTPS origin is a transient Quick Tunnel, not a durable deployment with an
-  operational SLA.
-- The native live installer was built, but the real archive has not yet been
-  opened through Explorer on independent Device A.
-- No real Devnet Payment Intent, Solana Pay QR or external-wallet payment
-  transaction occurred. The buyer has 5 Devnet SOL, but an authoritative account
-  query shows no SPL token accounts and therefore no official Circle test-USDC.
-- The payment 95/5 deltas and public Payment/Entitlement/License IDs/reference do
-  not yet exist; no values are fabricated.
-- No real P/W/SIG/HPKE, protected renderer/watermark, cached live reopen or live
-  mandatory refresh was observed.
-- No independent Device B/VM rejection was possible.
+  operational SLA. The Backend process and public tunnel were stopped after
+  evidence capture rather than leaving a disposable credential-bearing service
+  exposed.
+- Mandatory refresh was verified with the isolated non-release live-E2E clock,
+  real Backend signing/custody/HPKE and two pre-refresh state snapshots. This is
+  deterministic hackathon evidence, not a production clock override.
+- No independent Device B/clean-VM rejection was available during the real
+  activation-recovery window, and no Device B license/ACK/access claim is made.
+- The live negative matrix remains deterministic-test evidence only.
+- `viewer:devnet:evidence` therefore remains intentionally nonzero even though
+  its on-chain finalized payment/split/fee-payer/ATA checks passed.
+- Current audits remain nonzero: 11 production advisories (1 low, 9 moderate,
+  1 high) and 14 full-graph advisories (3 low, 10 moderate, 1 high). The sole high
+  is the unpatched `bigint-buffer` native-binding path described above; no audit
+  PASS is claimed.
 - The general six-decimal 95/5 rounding rule remains post-hackathon work.
 - Mainnet, production RPC SLA, KMS/HSM, code signing, update and monitoring remain
   outside this Part.

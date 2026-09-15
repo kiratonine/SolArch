@@ -127,7 +127,15 @@ impl WindowsKeyedSecretStore {
 
 #[cfg(windows)]
 fn scoped_service(base: &str) -> String {
-    #[cfg(feature = "development-fixtures")]
+    #[cfg(feature = "live-e2e-clock")]
+    {
+        return std::env::var("SOLARCH_LIVE_E2E_CREDENTIAL_SCOPE")
+            .ok()
+            .filter(|scope| valid_live_e2e_scope(scope))
+            .map(|scope| format!("{base}.live-e2e.{scope}"))
+            .unwrap_or_else(|| format!("{base}.live-e2e.invalid"));
+    }
+    #[cfg(all(feature = "development-fixtures", not(feature = "live-e2e-clock")))]
     if let Ok(scope) = std::env::var("SOLARCH_DEV_CREDENTIAL_SCOPE") {
         if !scope.is_empty()
             && scope.len() <= 48
@@ -138,7 +146,19 @@ fn scoped_service(base: &str) -> String {
             return format!("{base}.dev.{scope}");
         }
     }
-    base.to_owned()
+    #[cfg(not(feature = "live-e2e-clock"))]
+    {
+        base.to_owned()
+    }
+}
+
+#[cfg(all(windows, feature = "live-e2e-clock"))]
+pub(crate) fn valid_live_e2e_scope(scope: &str) -> bool {
+    !scope.is_empty()
+        && scope.len() <= 48
+        && scope
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
 }
 
 #[cfg(windows)]
@@ -247,6 +267,16 @@ impl KeyedSecretStore for MemoryKeyedSecretStore {
 #[cfg(all(test, windows))]
 mod windows_tests {
     use super::*;
+
+    #[cfg(feature = "live-e2e-clock")]
+    #[test]
+    fn live_e2e_scope_is_canonical_and_bounded() {
+        assert!(valid_live_e2e_scope("refresh-online_2"));
+        for invalid in ["", "scope.with.dot", "scope with space", "scope/slash"] {
+            assert!(!valid_live_e2e_scope(invalid));
+        }
+        assert!(!valid_live_e2e_scope(&"a".repeat(49)));
+    }
 
     #[test]
     fn keyed_credentials_are_purpose_separated_durable_and_deletable() {

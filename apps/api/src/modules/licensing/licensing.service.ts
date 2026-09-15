@@ -292,7 +292,7 @@ export class LicensingService {
           });
         }
 
-        const issuedAt = new Date(Math.floor(Date.now() / 1000) * 1000);
+        const issuedAt = new Date(Math.floor(this.env.currentTime.getTime() / 1000) * 1000);
         const offlineValidUntil = new Date(issuedAt.getTime() + OFFLINE_WINDOW_MS);
         const archiveFingerprint = this.assertEntitlementAuthority(entitlement, issuedAt);
         this.assertOfflineDeadline(entitlement, offlineValidUntil);
@@ -528,7 +528,7 @@ export class LicensingService {
           });
         }
 
-        const issuedAt = new Date(Math.floor(Date.now() / 1000) * 1000);
+        const issuedAt = new Date(Math.floor(this.env.currentTime.getTime() / 1000) * 1000);
         const offlineValidUntil = new Date(issuedAt.getTime() + OFFLINE_WINDOW_MS);
         const archiveFingerprint = this.assertEntitlementAuthority(license.entitlement, issuedAt);
         this.assertOfflineDeadline(license.entitlement, offlineValidUntil);
