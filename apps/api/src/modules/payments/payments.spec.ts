@@ -681,9 +681,20 @@ describe('PaymentsService & Solana Pay', () => {
         }),
       }),
     );
-    expect((service.getConnection() as any).getBlock).toHaveBeenCalledWith(100, {
+    const verificationConnection = service.getConnection() as any;
+    expect(verificationConnection.getParsedTransaction).toHaveBeenCalledWith(VALID_SIGNATURE, {
       commitment: 'finalized',
       maxSupportedTransactionVersion: 0,
+    });
+    expect(verificationConnection.getTransaction).toHaveBeenCalledWith(VALID_SIGNATURE, {
+      commitment: 'finalized',
+      maxSupportedTransactionVersion: 0,
+    });
+    expect(verificationConnection.getBlock).toHaveBeenCalledWith(100, {
+      commitment: 'finalized',
+      transactionDetails: 'none',
+      rewards: false,
+      maxSupportedTransactionVersion: 1,
     });
 
     (service.getConnection() as any).getBlock.mockResolvedValueOnce({ blockHeight: 200_001 });

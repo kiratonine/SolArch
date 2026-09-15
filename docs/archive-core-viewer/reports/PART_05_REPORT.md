@@ -2,8 +2,8 @@
 
 **Part:** `PART_05`
 **Branch:** `integrate/marketplace-backend`
-**Status:** `PARTIAL`
-**Updated:** `2026-09-15`
+**Status:** `COMPLETE — FUNCTIONAL/E2E PASS`
+**Updated:** `2026-09-16`
 **Execution:** strict single-agent
 
 ## 1. Scope and outcome
@@ -18,23 +18,35 @@ follow-up hardened its real ArchiveBuilder, payment issuance/finality,
 Entitlement/Device License authority, ACK custody and live configuration paths
 without changing the reviewed Viewer/Core crypto or renderer boundaries.
 
-The Part remains correctly **PARTIAL**, not COMPLETE. A real Backend instance,
-disposable PostgreSQL 16 database, official Devnet RPC, transient public HTTPS
-origin, real role-separated signing keys, real Backend/Core multi-format archive,
-live public trust anchors, demo wallets and sponsored creator-ATA creation were
-integrated and verified. After the buyer was manually funded with Circle Devnet
-test USDC, one real external-wallet payment reached `finalized`; Backend committed
-distinct Payment and Entitlement records, Device A received and locally validated
-a real signed P/W/SIG plus HPKE-wrapped ACK, all four protected formats rendered
-with watermark, and cached reopen succeeded both online and with Backend actually
-unavailable. A release-inaccessible deterministic live-E2E clock then closed both
-mandatory-refresh branches without shortening the signed license: online refresh
-produced a fresh Backend signature/HPKE envelope and a new exact 259200-second
-window, while a separate pre-refresh state snapshot stayed locked with Backend
-unavailable. The remaining mandatory Definition-of-Done gap is an independent
-Device B/clean-VM Backend rejection and the live negative cases that require its
-authenticated recovery attempt. No development fixture became authority. No
-commit, push, merge, rebase or PR was performed.
+The Part is now **COMPLETE for the hackathon/MVP functional and E2E scope**.
+A real Backend instance, disposable PostgreSQL 16 database, Devnet RPC, transient
+public HTTPS origin, real role-separated signing keys, real Backend/Core
+multi-format archive, live public trust anchors, demo wallets and sponsored
+creator-ATA creation were integrated and verified.
+
+The primary Device A flow completed end to end: an external wallet submitted the
+real test-USDC purchase, Backend verified the finalized transaction, committed
+distinct Payment and Entitlement records, issued a signed device-bound license
+plus HPKE-wrapped Archive Content Key, and the installed Windows Viewer rendered
+PDF, PNG, DOCX and XLSX with watermark and no protected export path. Cached
+reopen succeeded both online and while Backend was unavailable. The isolated
+debug-only live-E2E clock then verified both mandatory-refresh branches while
+preserving the exact 259200-second signed window.
+
+The remaining external-review gap was subsequently closed on an independent
+Windows VM. Device B used a distinct secure store and X25519 public key, opened
+the same exact `.slr` as Locked, and never obtained protected content. A
+coordinated real Devnet security-test purchase bound to Device A provided an
+authenticated activation credential; presenting the independent Device B key
+returned HTTP 409 `DEVICE_BINDING_MISMATCH`. Database inspection showed zero
+Device B activation rows and zero Device B license rows, and the Viewer remained
+Locked. The authenticated live negative matrix was completed and the final
+`viewer:devnet:evidence` run exited successfully with code 0.
+
+This is a functional/E2E PASS for the Part 05 hackathon/MVP scope, not a claim of
+production DRM perfection or a clean dependency audit. Recorded dependency,
+deployment and post-hackathon residuals remain in section 23. No development
+fixture became authority. No commit, push, merge, rebase or PR was performed.
 
 ### External-review follow-up: deterministic mandatory refresh
 
@@ -61,6 +73,92 @@ commit, push, merge, rebase or PR was performed.
   HPKE envelope. The new window is also exactly 259200 seconds and protected PDF
   plus watermark opened. The separate offline snapshot exposed no protected file
   table. No snapshot clock was moved backwards.
+
+### Live Devnet follow-up: landing-block metadata regression
+
+- A later real finalized test-USDC transaction reproduced an RPC interoperability
+  regression while verifying its already-issued transaction: the target payment
+  was a supported v0 transaction, but the finalized landing block also contained
+  an unrelated v1 transaction. Asking `getBlock(slot)` for the entire block with
+  `maxSupportedTransactionVersion: 0` therefore failed before the authoritative
+  `blockHeight` could be read.
+- The landing-slot request now explicitly asks only for finalized block metadata
+  with `transactionDetails: 'none'`, `rewards: false`, and
+  `maxSupportedTransactionVersion: 1`. The exact target
+  `getParsedTransaction()` and `getTransaction()` calls remain capped at version
+  0. Txid, serialized-message hash, reference, signer, mint, destination, 95/5,
+  finality and landing-height checks are unchanged.
+- No new Payment Intent or transaction was created for the retry. Backend was
+  rebuilt and restarted against the same disposable live database/environment;
+  the retained mode-0600 intent credential was consumed only in process and was
+  not printed. Re-verification of PaymentIntent
+  `9510e226-b5a7-4b94-b31a-d3e86450fefd` and its already-submitted transaction
+  `3pdqMKh1Vws21KKzrk6WjtcrfH9sHUN9PQqeBvSiPjybRMv3rPH9EtiMXV2dptjQQfoTENZ9VFxECFGwxQVU1Fot`
+  returned HTTP 200 `confirmed`. Database state then showed issuance `consumed`,
+  Payment `4b36375c-fe9d-4955-b690-a1a871288165`, and Entitlement
+  `e2e3d613-4474-4585-9f98-ec8f966e8926`.
+
+### Final external-review closure: independent Device B and live negative matrix
+
+An independent Windows VM was used as Device B with its own application data,
+Windows secure-store namespace and freshly generated X25519 key.
+
+```text
+Device A:
+Y9W1I6ifJsJWzibkr1zDrh7/LxvTWgMHnj84Rw4uoGI=
+
+Device B:
+ALzIOw8z9UQNnJuYC17HEUiWQoiH5+Pj8curIrvZqyE=
+```
+
+The keys were distinct. The exact same authenticated archive remained Locked on
+Device B and exposed no protected file table or protected content.
+
+A separate disposable Devnet security-test purchase was intentionally used only
+to obtain a legitimate authenticated activation/recovery path without modifying
+the retained primary evidence purchase:
+
+```text
+PaymentIntent: 9510e226-b5a7-4b94-b31a-d3e86450fefd
+transaction: 3pdqMKh1Vws21KKzrk6WjtcrfH9sHUN9PQqeBvSiPjybRMv3rPH9EtiMXV2dptjQQfoTENZ9VFxECFGwxQVU1Fot
+Payment: 4b36375c-fe9d-4955-b690-a1a871288165
+Entitlement: e2e3d613-4474-4585-9f98-ec8f966e8926
+Device A security-test license: lic_22d778abf2f241e8
+```
+
+The retained transaction initially exposed a real RPC interoperability regression
+because its finalized landing block contained an unrelated v1 transaction. After
+the metadata-only `getBlock` fix, the exact same PaymentIntent/transaction
+verified as HTTP 200 `confirmed`; no replacement payment was created for that
+retry.
+
+The live authenticated negative matrix then passed:
+
+```text
+wrong intent credential        -> HTTP 401 INVALID_INTENT_CREDENTIAL
+wrong refresh credential       -> HTTP 401 INVALID_REFRESH_CREDENTIAL
+unknown archive                -> HTTP 404 ARCHIVE_NOT_AVAILABLE
+not-finalized activation       -> HTTP 403 PAYMENT_NOT_CONFIRMED
+nonce replay                   -> HTTP 409 REQUEST_NONCE_REPLAY
+independent Device B           -> HTTP 409 DEVICE_BINDING_MISMATCH
+cross-archive binding attempt  -> HTTP 409 DEVICE_BINDING_MISMATCH
+revoked license authority      -> HTTP 403 LICENSE_REVOKED
+expired entitlement authority  -> HTTP 410 ENTITLEMENT_EXPIRED
+```
+
+For the independent Device B attempt, database inspection returned:
+
+```text
+device_b_activations = 0
+device_b_licenses = 0
+```
+
+No Device B license, ACK or protected access was produced, and reopening the
+same `.slr` on the VM remained Locked. The bounded public evidence checkpoint
+therefore records `negative_cases_verified=true`,
+`device_b_independent_secure_store=true`,
+`device_b_protected_content_denied=true`, HTTP 409 and
+`DEVICE_BINDING_MISMATCH`.
 
 ### Shared-document conflicts and updates
 
@@ -270,7 +368,7 @@ A real production-built API process was started against a disposable PostgreSQL
 It was exposed for this integration checkpoint at the strict HTTPS root origin:
 
 ```text
-https://safe-yard-webshots-furnished.trycloudflare.com/
+https://interpolative-interiorly-jase.ngrok-free.dev/
 ```
 
 Public `/v1/health` and `/v1/health/ready` both passed; readiness reported the
@@ -607,35 +705,52 @@ accept this clock source. Both public evidence refresh booleans are now true.
 
 ## 15. Device B and negative live cases
 
-An independent Device B/clean VM is still unavailable. Read-only host checks
-found no Hyper-V management service/module, Windows Sandbox, VirtualBox, VMware,
-QEMU or Windows VM image, and the current user is not an administrator. A clean
-debug-only Windows Credential Manager/application-data namespace was prepared,
-opened the exact `.slr` as Locked and generated a fresh public Device B key
-different from Device A, with no license or protected table. This same-host
-namespace is useful preparation but is **not** represented as an independent VM
-or Backend rejection.
+**Verified live on an independent Windows VM.** Device B used its own clean
+application state and secure-store identity and generated a fresh canonical
+X25519 public key distinct from Device A:
 
-No live Backend Device B HTTP 409 is claimed. The completed intent credential
-was correctly deleted after durable Device A activation and was not recovered
-from public data. Because an independent Windows VM is absent, no second Devnet
-purchase was created merely to manufacture an activation credential. A future
-coordinated run may use the explicitly permitted security-test purchase, retain
-its credential only in controlled memory/secure storage, and make the Device B
-attempt inside the legitimate 10-minute recovery window. It must preserve the
-exact frozen/documented typed HTTP 409 returned by the current Backend; this
-Part does not rename that contract merely to prefer `DEVICE_LIMIT_REACHED`.
+```text
+Device A: Y9W1I6ifJsJWzibkr1zDrh7/LxvTWgMHnj84Rw4uoGI=
+Device B: ALzIOw8z9UQNnJuYC17HEUiWQoiH5+Pj8curIrvZqyE=
+```
 
-Safe live calls did verify three credential/state negatives against the real
-HTTPS Backend: a wrong intent credential returned HTTP 401
-`INVALID_INTENT_CREDENTIAL`, a wrong refresh credential returned HTTP 401
-`INVALID_REFRESH_CREDENTIAL`, and an unknown archive returned HTTP 404
-`ARCHIVE_NOT_AVAILABLE`; none produced protected access. The remaining cases
-that require a live authenticated intent/license mutation or Device B attempt
-(wrong Device binding, nonce replay, not-finalized activation, cross-archive
-reference and revoked/expired authority) were not fabricated against the retained
-successful purchase. Existing deterministic negative tests remain passing, but
-`negative_cases_verified` stays false until the complete live matrix is run.
+The exact same authenticated `.slr` opened on Device B as Locked. No Device A
+private key, cached license, refresh credential, ACK or application state was
+copied to the VM. Device B generated its own Payment Intent and remained unable
+to access the protected file table/content.
+
+A separate legitimate Devnet security-test purchase was then created bound to
+Device A solely to exercise the authenticated activation/recovery negatives.
+After the real test-USDC transaction verified as `confirmed`, Device A activation
+succeeded and produced security-test license `lic_22d778abf2f241e8`.
+
+Reusing the consumed Device A activation nonce returned HTTP 409
+`REQUEST_NONCE_REPLAY`. Presenting the independent Device B public key to the
+same authenticated confirmed PaymentIntent returned HTTP 409
+`DEVICE_BINDING_MISMATCH`. Database inspection immediately afterwards returned
+zero Device B activation rows and zero Device B license rows. No Device B license,
+ACK or protected access was produced, and reopening the archive on the VM
+remained Locked.
+
+The complete practical live negative matrix now includes:
+
+```text
+wrong intent credential        -> HTTP 401 INVALID_INTENT_CREDENTIAL
+wrong refresh credential       -> HTTP 401 INVALID_REFRESH_CREDENTIAL
+unknown archive                -> HTTP 404 ARCHIVE_NOT_AVAILABLE
+not-finalized activation       -> HTTP 403 PAYMENT_NOT_CONFIRMED
+nonce replay                   -> HTTP 409 REQUEST_NONCE_REPLAY
+wrong Device binding / Device B-> HTTP 409 DEVICE_BINDING_MISMATCH
+cross-archive binding attempt  -> HTTP 409 DEVICE_BINDING_MISMATCH
+revoked license authority      -> HTTP 403 LICENSE_REVOKED
+expired entitlement authority  -> HTTP 410 ENTITLEMENT_EXPIRED
+```
+
+Every negative remained fail-closed and produced no protected output. The final
+public checkpoint therefore sets `negative_cases_verified=true`,
+`device_b_independent_secure_store=true`,
+`device_b_protected_content_denied=true`,
+`device_b_license_issued=false` and `device_b_ack_received=false`.
 
 ## 16. Live harness usage and required public evidence
 
@@ -672,13 +787,31 @@ platform share: 50000 micro-USDC
 The release CLI authenticated the exact local bytes, Backend health/readiness and
 security-critical metadata matched, and the official RPC/mint checks passed.
 
-`viewer:devnet:evidence` was then run with the public successful payment and ATA
-signatures/reference plus a bounded partial checkpoint. It independently accepted
-both finalized transactions, the exact test-USDC owner deltas, buyer signer,
-reference and SolArch fee payer, then exited nonzero with the expected sanitized
-message `missing or inconsistent mandatory manual/native checkpoint`. This is not
-an evidence PASS: the refresh fields are now true, while independent Device B
-and the complete live negative matrix remain false.
+The final bounded checkpoint was updated only with actually observed public
+results from the native Windows/Devnet run. The primary evidence remains the
+original successful purchase and Device A entitlement/license; the later
+security-test purchase is used only as supporting authenticated negative-matrix
+evidence.
+
+`viewer:devnet:evidence` was rerun with the finalized public payment signature,
+payment reference, creator-ATA creation signature and the completed bounded
+manual/native checkpoint. The harness independently accepted the finalized
+on-chain payment and ATA transaction, exact test-USDC owner deltas, buyer signer,
+public reference, SolArch fee payer, archive/fingerprint inputs, mandatory
+refresh checkpoints, independent Device B denial and completed live negative
+matrix.
+
+Final result:
+
+```text
+rtk pnpm viewer:devnet:evidence
+EXIT_CODE=0
+```
+
+The accepted Device B evidence records distinct Device A/B public keys, HTTP 409
+`DEVICE_BINDING_MISMATCH`, no Device B license, no ACK, an independent secure
+store and denied protected content. `negative_cases_verified=true`.
+This closes the Part 05 functional/E2E evidence gate.
 
 ## 17. Security review
 
@@ -839,7 +972,7 @@ HTTPS/Devnet evidence required to mark Part 05 complete.
 
 ## 20. Commands and results
 
-Live integration checkpoints on 2026-09-14–15:
+Live integration checkpoints on 2026-09-14–16:
 
 | Command/check | Result |
 | --- | --- |
@@ -856,6 +989,8 @@ Live integration checkpoints on 2026-09-14–15:
 | `rtk pnpm --filter @solarch/api test` | PASS, 12 suites / 115 tests, including deterministic-clock and Multer 2.3 parsing/boundary coverage |
 | `rtk pnpm --filter @solarch/api test:e2e` | PASS, 1 suite / 23 tests |
 | `rtk pnpm --filter @solarch/api build` | PASS |
+| finalized-block metadata regression | PASS; unit regression proves metadata-only block request permits v1 while both exact target transaction calls remain capped at v0 |
+| same-intent/same-tx live verification retry | PASS; HTTP 200, intent confirmed, issuance consumed, Payment and Entitlement persisted; no new intent or transaction created |
 | `rtk pnpm --filter @solarch/viewer lint` | PASS |
 | `rtk pnpm --filter @solarch/viewer test` | PASS, 3 files / 34 tests |
 | `rtk pnpm --filter @solarch/viewer build` | PASS, 1,873 modules and local PDF worker |
@@ -885,15 +1020,29 @@ Live integration checkpoints on 2026-09-14–15:
 | release build with `live-e2e-clock` | EXPECTED FAIL/PASS security assertion; compile-time rejection observed |
 | live mandatory refresh online | PASS; fresh Backend signature + HPKE, same license ID, exact new 259200-second window, protected PDF/watermark opened |
 | pre-refresh snapshot at same logical deadline with Backend unavailable | PASS; no protected table/content, fail closed |
-| safe live negative subset | PASS; wrong intent token 401, wrong refresh token 401, unknown archive 404; no protected output |
-| `viewer:devnet:evidence` | **EXPECTED BLOCKED** after passing on-chain payment/ATA proof; refresh fields true, Device B/full negative matrix false |
-| independent Device B/clean VM | **BLOCKED**: no independent Windows VM/tooling is available; same-host clean namespace is not claimed as independent evidence |
+| authenticated live negative matrix | PASS; wrong intent 401 `INVALID_INTENT_CREDENTIAL`, wrong refresh 401 `INVALID_REFRESH_CREDENTIAL`, unknown archive 404 `ARCHIVE_NOT_AVAILABLE`, not-finalized activation 403 `PAYMENT_NOT_CONFIRMED`, nonce replay 409 `REQUEST_NONCE_REPLAY`, cross-archive binding denial, revoked authority denial and expired authority denial; all fail closed |
+| `rtk pnpm viewer:devnet:evidence` | **PASS**; final bounded public checkpoint accepted, on-chain payment/ATA proof accepted, independent Device B and complete live negative matrix accepted; `EXIT_CODE=0` |
+| independent Device B/clean VM | **PASS**; separate Windows VM/secure store, distinct X25519 key `ALzIOw8z9UQNnJuYC17HEUiWQoiH5+Pj8curIrvZqyE=`, same exact `.slr`, authenticated activation attempt returned HTTP 409 `DEVICE_BINDING_MISMATCH`, zero Device B activations/licenses, no ACK/protected access, Viewer remained Locked |
+| disposable Device-A security-test purchase | PASS; real Devnet PaymentIntent `9510e226-b5a7-4b94-b31a-d3e86450fefd` verified `confirmed`, Payment `4b36375c-fe9d-4955-b690-a1a871288165`, Entitlement `e2e3d613-4474-4585-9f98-ec8f966e8926`, license `lic_22d778abf2f241e8`; used only for authenticated negative testing |
+| paid Device B binding rejection | PASS; same authenticated confirmed PaymentIntent presented with independent Device B key returned HTTP 409 `DEVICE_BINDING_MISMATCH`; no Device B activation/license persisted |
+| nonce replay live rejection | PASS; consumed Device A nonce returned HTTP 409 `REQUEST_NONCE_REPLAY` |
 
 The previously reported 12 production highs and 15 total-graph highs were
 triaged. All fixable high findings were removed by the minimal pins/overrides
 above; `bigint-buffer` is the one no-patch residual and keeps both audit commands
-nonzero. The Part remains PARTIAL because the independent Device B HTTP 409 and
-the complete authenticated live negative matrix are incomplete.
+nonzero. The independent Device B HTTP 409, zero-license/activation checks, protected
+content denial, authenticated live negative matrix and final evidence harness are
+now complete. Part 05 therefore passes its hackathon/MVP functional/E2E gate.
+The dependency-audit findings below remain explicit production residuals and are
+not represented as PASS.
+
+For the 2026-09-16 focused regression, API lint, 12-suite/115-test unit run and
+build passed. The first literal E2E invocation inherited the ignored operational
+live `.env`, so its fixture TOKEN32 HMAC did not match the live HMAC secret and
+three credential-dependent cases returned the expected stable 401. Re-running
+the same E2E suite with only its documented non-live fixture HMAC explicitly
+scoped in the process passed all 23/23 tests. No source or production behavior
+was changed to accommodate the local operational env file.
 
 One complete Viewer run in this continuation produced an isolated i18n timing
 failure after the RU text and persisted locale assertions had already succeeded:
@@ -1016,48 +1165,68 @@ restart ran while the Backend was intentionally stopped. The final native Window
 `cargo.exe test --workspace` and Viewer `cargo.exe check --all-features` were also
 rerun after the live fix and passed.
 
-## 22. Deployment/E2E handoff required
+## 22. Functional/E2E closure and demo handoff
 
-Backend/Core/archive/public-anchor integration, creator ATA creation, real
-payment, Device A activation/rendering, cached restarts and deterministic live
-mandatory refresh are complete. The remaining external handoff is deliberately
-narrow:
+The Part 05 hackathon/MVP functional/E2E handoff is complete.
 
-1. provide an independent Windows VM/device with its own secure store;
-2. during a coordinated live activation-recovery window, open the same exact
-   archive on a genuinely independent Device B/secure store and record the frozen
-   typed HTTP 409 plus absence of license, ACK and protected access;
-3. run the live negative matrix on that isolated environment and set only the
-   actually observed public checkpoint booleans; then rerun
-   `viewer:devnet:evidence`.
+The final accepted path now covers:
 
-If the transient Quick Tunnel changes before those steps, `PUBLIC_API_ORIGIN` and
-the Viewer compile-time origin must be updated together and the native live Viewer
-rebuilt. No new purchase should be fabricated merely to fill evidence fields.
+1. Backend/Core generation and authentication of the exact self-contained `.slr`;
+2. real public archive metadata and live trust anchors;
+3. sponsored creator ATA creation;
+4. real external-wallet Devnet test-USDC payment with exact 95/5 split;
+5. finalized Backend verification and distinct Payment/Entitlement records;
+6. Device A activation with signed device-bound license and HPKE-wrapped ACK;
+7. internal PDF/PNG/DOCX/XLSX rendering with watermark and no protected export;
+8. cached process restart online and while Backend is unavailable;
+9. mandatory online refresh and fail-closed offline-expired snapshot;
+10. independent Windows VM / Device B with a distinct secure store and key;
+11. authenticated HTTP 409 Device B rejection with no license, ACK or protected
+    access;
+12. complete practical live negative matrix;
+13. final `viewer:devnet:evidence` PASS with exit code 0.
 
-## 23. Known limitations and not verified
+No additional Part 05 functional/E2E blocker remains.
 
-- The HTTPS origin is a transient Quick Tunnel, not a durable deployment with an
-  operational SLA. The Backend process and public tunnel were stopped after
-  evidence capture rather than leaving a disposable credential-bearing service
-  exposed.
-- Mandatory refresh was verified with the isolated non-release live-E2E clock,
-  real Backend signing/custody/HPKE and two pre-refresh state snapshots. This is
-  deterministic hackathon evidence, not a production clock override.
-- No independent Device B/clean-VM rejection was available during the real
-  activation-recovery window, and no Device B license/ACK/access claim is made.
-- The live negative matrix remains deterministic-test evidence only.
-- `viewer:devnet:evidence` therefore remains intentionally nonzero even though
-  its on-chain finalized payment/split/fee-payer/ATA checks passed.
-- Current audits remain nonzero: 11 production advisories (1 low, 9 moderate,
-  1 high) and 14 full-graph advisories (3 low, 10 moderate, 1 high). The sole high
-  is the unpatched `bigint-buffer` native-binding path described above; no audit
-  PASS is claimed.
-- The general six-decimal 95/5 rounding rule remains post-hackathon work.
-- Mainnet, production RPC SLA, KMS/HSM, code signing, update and monitoring remain
-  outside this Part.
+For a repeatable public demo, a transient Quick Tunnel should be replaced by a
+stable HTTPS deployment. If the Backend origin changes before a demo, the
+Viewer's compile-time `SOLARCH_BACKEND_ORIGIN` must be changed to the exact same
+origin and the native live Viewer/installer rebuilt.
 
-These are mandatory Definition-of-Done gaps, so status remains PARTIAL.
+The small expired-payment UX issue observed on Device B is non-authoritative:
+after a Payment Intent expires the Viewer may show a terminal-looking
+"close archive" action before a reopen returns to the normal Locked screen.
+Protected content remains denied. This can be polished separately without
+changing the payment/license/security contract.
+
+## 23. Known limitations and post-hackathon residuals
+
+- The HTTPS origin used for live evidence is a transient Cloudflare Quick Tunnel,
+  not a durable deployment with an operational SLA.
+- Mandatory refresh was verified with the isolated debug-only `live-e2e-clock`
+  path using the real Backend signing/custody/HPKE flow and two pre-refresh state
+  snapshots. Release compilation rejects that clock feature; this is deterministic
+  hackathon evidence, not a production clock override.
+- Current dependency audits remain nonzero: 11 production advisories
+  (1 low, 9 moderate, 1 high) and 14 full-graph advisories
+  (3 low, 10 moderate, 1 high). The sole high is the recorded unpatched
+  `bigint-buffer` native-binding path; no dependency-audit PASS is claimed.
+- The general six-decimal 95/5 rounding rule remains unresolved shared-contract
+  work. The demonstrated archive uses the exactly divisible `1.000000 USDC`
+  price and does not redefine that contract.
+- The expired-PaymentIntent Viewer UX can be improved so the terminal error action
+  returns directly to the Locked/new-payment state instead of requiring the user
+  to close and reopen the archive. This is a UX polish item; the observed behavior
+  remained fail-closed.
+- Mainnet, production RPC/SLA, durable HTTPS deployment, KMS/HSM-backed signing,
+  Windows code signing, updater and operational monitoring remain outside this
+  Part.
+- DRM remains practical/best-effort. No claim of absolute screenshot prevention,
+  hostile-host resistance or enterprise-grade DRM is made.
+
+These items do not reopen the completed Part 05 hackathon/MVP functional/E2E
+Definition of Done. Status is `COMPLETE — FUNCTIONAL/E2E PASS`, while the
+production/security residuals above remain explicitly documented.
 
 ### Mainnet and post-hackathon work
 

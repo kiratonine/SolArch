@@ -844,7 +844,9 @@ export class PaymentsService {
         }),
         connection.getBlock(sigStatus.slot, {
           commitment: 'finalized',
-          maxSupportedTransactionVersion: 0,
+          transactionDetails: 'none',
+          rewards: false,
+          maxSupportedTransactionVersion: 1,
         }),
       ]);
     } catch (e) {
