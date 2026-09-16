@@ -126,6 +126,7 @@ describe('PaymentsService & Solana Pay', () => {
     expect(res.solana_pay_url).toBe('solana:https://solarch.app/v1/solana-pay/payment-intents/pi_001/transaction');
     expect(res.payment_intent_client_secret).toBeDefined();
     expect(res.payment_intent_client_secret.length).toBe(43);
+    expect(new Date(res.expires_at).getTime() - new Date(res.created_at).getTime()).toBe(1_800_000);
 
     // Verify raw secret was NOT stored in database
     const savedData = prisma.paymentIntent.create.mock.calls[0][0].data;

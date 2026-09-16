@@ -151,6 +151,81 @@ describe("Viewer Part 03 state machine and desktop shell", () => {
     expect(mocks.invoke.mock.calls.filter(([command]) => command === "poll_payment")).toHaveLength(3);
   });
 
+  it("continues sequential polling while payment remains pending", async () => {
+    vi.useFakeTimers();
+    localStorage.setItem(LOCALE_STORAGE_KEY, "en");
+    mocks.invoke.mockImplementation((command: string) => {
+      if (command === "startup_archive_pending") return Promise.resolve(false);
+      if (command === "get_device_public_key") return Promise.resolve("public-device");
+      if (command === "open_archive") return Promise.resolve(snapshot("payment_ready"));
+      if (command === "poll_payment") return Promise.resolve(snapshot("payment_pending"));
+      return Promise.resolve(null);
+    });
+
+    renderApp();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Open archive" }));
+      await Promise.resolve();
+    });
+
+    for (const delay of [1_800, 2_600, 2_600, 2_600]) {
+      await act(async () => { await vi.advanceTimersByTimeAsync(delay); });
+    }
+    expect(mocks.invoke.mock.calls.filter(([command]) => command === "poll_payment")).toHaveLength(4);
+    expect(screen.getAllByText("Waiting for payment").length).toBeGreaterThan(0);
+  });
+
+  it("automatically renders payment expiry returned by a polling request", async () => {
+    vi.useFakeTimers();
+    localStorage.setItem(LOCALE_STORAGE_KEY, "en");
+    mocks.invoke.mockImplementation((command: string) => {
+      if (command === "startup_archive_pending") return Promise.resolve(false);
+      if (command === "get_device_public_key") return Promise.resolve("public-device");
+      if (command === "open_archive") return Promise.resolve(snapshot("payment_pending"));
+      if (command === "poll_payment") {
+        return Promise.reject({ code: "PAYMENT_EXPIRED", message_key: "errors.paymentExpired" });
+      }
+      return Promise.resolve(null);
+    });
+
+    renderApp();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Open archive" }));
+      await Promise.resolve();
+    });
+    expect(screen.getByTitle("Solana Pay payment QR code")).toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_600); });
+
+    expect(screen.getByRole("heading", { name: "Payment expired" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back to payment" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Close archive" })).toBeInTheDocument();
+  });
+
+  it("stops polling after payment reaches the terminal network state", async () => {
+    vi.useFakeTimers();
+    localStorage.setItem(LOCALE_STORAGE_KEY, "en");
+    mocks.invoke.mockImplementation((command: string) => {
+      if (command === "startup_archive_pending") return Promise.resolve(false);
+      if (command === "get_device_public_key") return Promise.resolve("public-device");
+      if (command === "open_archive") return Promise.resolve(snapshot("payment_pending"));
+      if (command === "poll_payment") return Promise.resolve(snapshot("activating"));
+      if (command === "activate_payment") return new Promise(() => undefined);
+      return Promise.resolve(null);
+    });
+
+    renderApp();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Open archive" }));
+      await Promise.resolve();
+    });
+    expect(screen.getByTitle("Solana Pay payment QR code")).toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_600); });
+    expect(screen.getByText(/Payment confirmed/)).toBeInTheDocument();
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(mocks.invoke.mock.calls.filter(([command]) => command === "poll_payment")).toHaveLength(1);
+  });
+
   it.each([
     ["payment_pending", "Waiting for payment"],
     ["awaiting_finality", "Awaiting finality"],
@@ -177,6 +252,30 @@ describe("Viewer Part 03 state machine and desktop shell", () => {
       expect(screen.getByText(/still locked/i)).toBeInTheDocument();
       expect(document.querySelector(".status-success")).not.toBeInTheDocument();
     }
+  });
+
+  it("returns an expired payment to Locked without closing the archive or starting a new intent", async () => {
+    mocks.invoke.mockImplementation((command: string) => {
+      if (["get_installer_locale", "startup_archive_pending", "take_startup_archive", "get_device_public_key"].includes(command)) {
+        return defaultInvoke(command);
+      }
+      if (command === "open_archive") return Promise.resolve(snapshot("payment_expired"));
+      return Promise.resolve();
+    });
+
+    renderApp();
+    await openManually();
+    expect(await screen.findByRole("heading", { name: "Payment expired" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to payment" }));
+
+    expect(await screen.findByText("Locked")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: archive.title })).toBeInTheDocument();
+    expect(screen.getByText(archive.archiveId)).toBeInTheDocument();
+    expect(screen.getByText(archive.fingerprint)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Unlock for 10.000000 USDC" })).toBeInTheDocument();
+    expect(mocks.invoke.mock.calls.filter(([command]) => command === "close_archive")).toHaveLength(0);
+    expect(mocks.invoke.mock.calls.filter(([command]) => command === "start_payment")).toHaveLength(0);
   });
 
   it("shows confirmed activation distinctly without claiming unlocked access", async () => {

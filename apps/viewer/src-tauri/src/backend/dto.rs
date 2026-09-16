@@ -464,6 +464,45 @@ mod tests {
         assert_ne!(validated.0.title, header.title);
     }
 
+    #[test]
+    fn live_intent_public_values_require_the_frozen_thirty_minute_window() {
+        let fingerprint = "885f7dc489d6f5042ba9cd287a5ff13109585a485d0067fd9365d249aa89b3e6";
+        let device_public_key = "ALzIOw8z9UQNnJuYC17HEUiWQoiH5+Pj8curIrvZqyE=";
+        let metadata = ValidatedArchiveMetadata(ArchiveMetadataResponse {
+            archive_id: "60ad6fed-6d73-4a20-af54-71f901da2460".into(),
+            status: "published".into(),
+            platform_fee_bps: 500,
+            title: "SolArch Devnet Multi Format".into(),
+            price: MoneyDto {
+                amount: "1.00".into(),
+                currency: "USDC".into(),
+            },
+            creator: CreatorDto {
+                wallet: "GXeFmnNdm3CqqsPuhUTYUk2AisrphPrEHZdRDJUowvV7".into(),
+            },
+            license_policy: LicensePolicyDto {
+                max_devices: 1,
+                allow_export: false,
+                watermark_enabled: true,
+            },
+            archive_fingerprint: fingerprint.into(),
+        });
+        let config =
+            BackendConfig::development("https://interpolative-interiorly-jase.ngrok-free.dev/")
+                .unwrap();
+
+        assert!(live_intent_with_expiry("2026-09-15T23:42:02Z")
+            .validate(&metadata, device_public_key, &config)
+            .is_err());
+
+        let validated = live_intent_with_expiry("2026-09-16T00:11:02Z")
+            .validate(&metadata, device_public_key, &config)
+            .unwrap();
+        assert_eq!(validated.public.archive_id, metadata.0.archive_id);
+        assert_eq!(validated.public.archive_fingerprint, fingerprint);
+        assert_eq!(validated.public.device_public_key, device_public_key);
+    }
+
     fn valid_header() -> PublicHeader {
         solarch_core::format::parse_header(br#"{"archive_id":"arc_test_01","backend":{"archive_api_id":"arc_test_01"},"commercial_snapshot":{"platform_fee_bps":500,"price_amount":"10.000000","price_currency":"USDC"},"created_at":"2026-09-07T00:00:00Z","creator_wallet":"11111111111111111111111111111111","crypto":{"chunk_size":1048576,"content_algorithm":"XChaCha20-Poly1305","kdf":"HKDF-SHA-256"},"format":"solarch","license_snapshot":{"allow_export":false,"max_devices":1,"watermark_enabled":true},"title":"Test archive","version":"1.0.0"}"#).unwrap()
     }
@@ -505,6 +544,28 @@ mod tests {
             solana_pay_url: "solana:https://api.solarch.example/v1/solana-pay/payment-intents/pi_test_01/transaction".into(),
             created_at: "2026-09-07T00:00:00Z".into(),
             expires_at: "2026-09-07T00:30:00Z".into(),
+            status: "created".into(),
+        }
+    }
+
+    fn live_intent_with_expiry(expires_at: &str) -> PaymentIntentResponse {
+        PaymentIntentResponse {
+            payment_intent_id: "05c5d183-eab7-4711-b4a4-3f3ac2bb3997".into(),
+            archive_id: "60ad6fed-6d73-4a20-af54-71f901da2460".into(),
+            archive_fingerprint:
+                "885f7dc489d6f5042ba9cd287a5ff13109585a485d0067fd9365d249aa89b3e6".into(),
+            device_public_key: "ALzIOw8z9UQNnJuYC17HEUiWQoiH5+Pj8curIrvZqyE=".into(),
+            // Synthetic documented TOKEN32 vector; the live credential is never logged or tested.
+            payment_intent_client_secret:
+                "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8".into(),
+            amount: "1.00".into(),
+            currency: "USDC".into(),
+            creator_share: "0.95".into(),
+            platform_share: "0.05".into(),
+            payment_reference: "AUE4vxC332bSUxaKWjCGoP3MV7etpCFvdtiKmpWCx5XC".into(),
+            solana_pay_url: "solana:https://interpolative-interiorly-jase.ngrok-free.dev/v1/solana-pay/payment-intents/05c5d183-eab7-4711-b4a4-3f3ac2bb3997/transaction".into(),
+            created_at: "2026-09-15T23:41:02Z".into(),
+            expires_at: expires_at.into(),
             status: "created".into(),
         }
     }

@@ -158,22 +158,41 @@ export function useViewerController() {
 
   useEffect(() => {
     if (!NETWORK_PAYMENT_STATES.includes(screen.state)) return;
-    const timer = window.setTimeout(() => {
-      void pollPayment()
-        .then((next) => {
-          setPollRetry(0);
-          applySnapshot(next);
-        })
-        .catch((error: unknown) => {
-          if (stateFromError(error) === "backend_unavailable" && pollRetry < 2) {
-            setPollRetry((attempt) => attempt + 1);
-          } else {
+    let active = true;
+    let timer: number | undefined;
+    const paymentIntentId = screen.payment?.paymentIntentId;
+
+    const schedule = (delay: number) => {
+      timer = window.setTimeout(() => {
+        void pollPayment()
+          .then((next) => {
+            if (!active) return;
             setPollRetry(0);
-            applyError(error);
-          }
-        });
-    }, (screen.state === "payment_ready" ? 1_800 : 2_600) * 2 ** pollRetry);
-    return () => window.clearTimeout(timer);
+            applySnapshot(next);
+            if (
+              NETWORK_PAYMENT_STATES.includes(next.state)
+              && next.payment?.paymentIntentId === paymentIntentId
+            ) {
+              schedule(next.state === "payment_ready" ? 1_800 : 2_600);
+            }
+          })
+          .catch((error: unknown) => {
+            if (!active) return;
+            if (stateFromError(error) === "backend_unavailable" && pollRetry < 2) {
+              setPollRetry((attempt) => attempt + 1);
+            } else {
+              setPollRetry(0);
+              applyError(error);
+            }
+          });
+      }, delay);
+    };
+
+    schedule((screen.state === "payment_ready" ? 1_800 : 2_600) * 2 ** pollRetry);
+    return () => {
+      active = false;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
   }, [applyError, applySnapshot, pollRetry, screen.payment?.paymentIntentId, screen.state]);
 
   useEffect(() => {
@@ -223,12 +242,21 @@ export function useViewerController() {
   }, [applyError, applySnapshot, screen.payment, screen.state]);
 
   const clearArchive = useCallback(async () => {
-    try {
-      await closeArchive();
-    } finally {
-      setPollRetry(0);
-      setScreen(EMPTY_SCREEN);
-    }
+    setPollRetry(0);
+    setScreen(EMPTY_SCREEN);
+    await closeArchive();
+  }, []);
+
+  const returnToLocked = useCallback(() => {
+    setPollRetry(0);
+    setScreen((current) => current.archive ? {
+      ...current,
+      state: "locked",
+      payment: null,
+      files: [],
+      watermark: null,
+      messageKey: null,
+    } : EMPTY_SCREEN);
   }, []);
 
   return {
@@ -238,6 +266,7 @@ export function useViewerController() {
     chooseArchive,
     beginPayment,
     retryNetwork,
+    returnToLocked,
     clearArchive,
   };
 }

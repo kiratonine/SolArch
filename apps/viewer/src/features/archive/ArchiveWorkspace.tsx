@@ -105,11 +105,12 @@ export function LockedWorkspace({ archive, onPay, onClose }: {
   );
 }
 
-export function FailureSurface({ state, messageKey, canRetry, onRetry, onClose }: {
+export function FailureSurface({ state, messageKey, canRetry, onRetry, onReturnToLocked, onClose }: {
   state: ViewerState;
   messageKey: MessageKey | null;
   canRetry: boolean;
   onRetry: () => void;
+  onReturnToLocked: () => void;
   onClose: () => void;
 }) {
   const { t } = useI18n();
@@ -121,6 +122,11 @@ export function FailureSurface({ state, messageKey, canRetry, onRetry, onClose }
         <p>{messageKey ? t(messageKey) : t("error.description")}</p>
       </div>
       <div className="failure-actions">
+        {state === "payment_expired" ? (
+          <button className="primary-button" type="button" onClick={onReturnToLocked}>
+            {t("payment.backToPayment")}
+          </button>
+        ) : null}
         {canRetry ? (
           <button className="primary-button" type="button" onClick={onRetry}>
             <RefreshCw size={16} aria-hidden="true" />

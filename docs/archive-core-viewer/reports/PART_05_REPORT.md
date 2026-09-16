@@ -98,6 +98,64 @@ fixture became authority. No commit, push, merge, rebase or PR was performed.
   Payment `4b36375c-fe9d-4955-b690-a1a871288165`, and Entitlement
   `e2e3d613-4474-4585-9f98-ec8f966e8926`.
 
+### Live Viewer follow-up: PaymentIntent metadata and expired-payment recovery
+
+- A fresh installed Windows Viewer opened the canonical archive
+  `60ad6fed-6d73-4a20-af54-71f901da2460` with fingerprint
+  `885f7dc489d6f5042ba9cd287a5ff13109585a485d0067fd9365d249aa89b3e6`,
+  but rejected the otherwise correctly bound live PaymentIntent as
+  `MetadataMismatch`. The exact rejected condition was the Viewer's strict
+  `expires_at == created_at + 1800 seconds` check: the Backend had temporarily
+  issued a 60-second response for UX testing.
+- `docs/API.md`, `docs/PAYMENTS.md` and `docs/INTEGRATION.md` all freeze the
+  public PaymentIntent lifetime at 1800 seconds. Viewer validation was therefore
+  not weakened. Backend issuance was restored to the frozen 30-minute value,
+  with both a Backend duration assertion and a Viewer DTO regression using the
+  safe public bindings from the reproduced response. The regression uses a
+  synthetic documented TOKEN32 vector and contains no live credential.
+- `viewer:devnet:preflight` passed against the current HTTPS origin, canonical
+  archive, public trust anchors and the Devnet RPC configured in
+  `apps/api/.env`; the RPC credential was not printed or copied into this
+  report. A fresh isolated Windows secure-store profile then opened the same
+  archive as Locked, created a real 1800-second PaymentIntent and displayed its
+  real Solana Pay QR without `MetadataMismatch`.
+- Expired-payment UX now offers `Вернуться к оплате` / `Back to payment`. It
+  returns the current verified archive locally to Locked, clears payment/files/
+  watermark/error presentation, preserves archive metadata and does not call
+  `close_archive` or create another intent. `Закрыть архив` remains the
+  secondary action.
+- A subsequent live review found that PaymentIntent polling stopped after two
+  successful checks. The effect owned a single timeout: the first response
+  changed `payment_ready` to `payment_pending` and retriggered the effect, while
+  the second remained `payment_pending`, left every primitive dependency
+  unchanged and therefore did not arm another timeout. Polling is now a
+  sequential self-scheduling loop with at most one request in flight. It keeps
+  checking `payment_ready`, `payment_pending` and `awaiting_finality`, while its
+  cleanup cancels the timer and ignores stale async completions after a terminal
+  result/error, archive close/switch or component unmount. Backend validation,
+  payment semantics and the frozen 1800-second TTL are unchanged.
+- For the requested expiry smoke, no immutable database snapshot or frozen wire
+  response was altered. A temporary generated-runtime-only verify threshold of
+  60 seconds was used with an isolated disposable Viewer profile; the source
+  remained at 1800 seconds. The installed Viewer reached `Срок оплаты истёк`,
+  returned to Locked with the same archive ID and fingerprint, exposed Unlock
+  again, and the smoke-device PaymentIntent count remained unchanged. The
+  original Device A profile was restored afterward. A final Backend build
+  replaced the temporary generated runtime, and both source and `dist` again
+  contain the exact 1800-second lifetime.
+- The refreshed unsigned Windows NSIS artifact is
+  `target/release/bundle/nsis/SolArch Viewer_0.1.0_x64-setup.exe`, 4,901,470
+  bytes, modified `2026-09-16 05:17:10.957659800 +0500`, SHA-256
+  `b4c6e7f54823bd8c406b99a8cf97ecc036404bfd915f28f2feab246fe071884f`.
+  The production frontend was built in WSL first; native Windows then built the
+  installer with `SOLARCH_LIVE_FRONTEND_PREBUILT=1`, the current public origin,
+  current public trust anchors and the configured Devnet RPC.
+- Final checks passed: API unit tests (12 suites / 115 tests) and build; Viewer
+  lint, tests (3 files / 38 tests) and production build (1,873 modules); Rust
+  workspace tests (129 tests); `cargo fmt --check`; `git diff --check`; and the
+  final live Devnet preflight. The post-smoke API test/build rerun also passed
+  after the 1800-second runtime was restored.
+
 ### Final external-review closure: independent Device B and live negative matrix
 
 An independent Windows VM was used as Device B with its own application data,
@@ -1193,12 +1251,6 @@ stable HTTPS deployment. If the Backend origin changes before a demo, the
 Viewer's compile-time `SOLARCH_BACKEND_ORIGIN` must be changed to the exact same
 origin and the native live Viewer/installer rebuilt.
 
-The small expired-payment UX issue observed on Device B is non-authoritative:
-after a Payment Intent expires the Viewer may show a terminal-looking
-"close archive" action before a reopen returns to the normal Locked screen.
-Protected content remains denied. This can be polished separately without
-changing the payment/license/security contract.
-
 ## 23. Known limitations and post-hackathon residuals
 
 - The HTTPS origin used for live evidence is a transient Cloudflare Quick Tunnel,
@@ -1214,10 +1266,6 @@ changing the payment/license/security contract.
 - The general six-decimal 95/5 rounding rule remains unresolved shared-contract
   work. The demonstrated archive uses the exactly divisible `1.000000 USDC`
   price and does not redefine that contract.
-- The expired-PaymentIntent Viewer UX can be improved so the terminal error action
-  returns directly to the Locked/new-payment state instead of requiring the user
-  to close and reopen the archive. This is a UX polish item; the observed behavior
-  remained fail-closed.
 - Mainnet, production RPC/SLA, durable HTTPS deployment, KMS/HSM-backed signing,
   Windows code signing, updater and operational monitoring remain outside this
   Part.

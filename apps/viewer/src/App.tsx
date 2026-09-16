@@ -83,6 +83,7 @@ export default function App() {
             messageKey={screen.messageKey}
             canRetry={screen.state === "backend_unavailable" || screen.state === "refresh_required"}
             onRetry={viewer.retryNetwork}
+            onReturnToLocked={viewer.returnToLocked}
             onClose={viewer.clearArchive}
           />
         ) : null}
