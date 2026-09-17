@@ -18,7 +18,7 @@ export function PaymentWorkspace({ archive, payment, state, onClose }: {
       statusTone={tone}
       onClose={onClose}
     >
-      <div className="archive-layout">
+      <div className="archive-layout archive-layout-payment">
         <ArchiveDetails archive={archive} />
         <PaymentPanel payment={payment} state={state} />
       </div>

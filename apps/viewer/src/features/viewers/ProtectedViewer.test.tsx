@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { vi } from "vitest";
 
 import { I18nProvider, LOCALE_STORAGE_KEY } from "../../i18n";
@@ -20,6 +20,8 @@ const mocks = vi.hoisted(() => ({
   rangeRequests: [] as number[],
   createObjectURL: vi.fn(() => "blob:protected-image"),
   revokeObjectURL: vi.fn(),
+  resizeCallbacks: [] as ResizeObserverCallback[],
+  resizeDisconnect: vi.fn(),
 }));
 
 vi.mock("../../ipc", async (importOriginal) => ({
@@ -76,6 +78,13 @@ beforeEach(() => {
   localStorage.setItem(LOCALE_STORAGE_KEY, "en");
   vi.clearAllMocks();
   mocks.rangeRequests.length = 0;
+  mocks.resizeCallbacks.length = 0;
+  vi.stubGlobal("ResizeObserver", class {
+    constructor(callback: ResizeObserverCallback) { mocks.resizeCallbacks.push(callback); }
+    observe() {}
+    unobserve() {}
+    disconnect() { mocks.resizeDisconnect(); }
+  });
   Object.defineProperty(URL, "createObjectURL", { configurable: true, value: mocks.createObjectURL });
   Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: mocks.revokeObjectURL });
   mocks.rendererBeginOpen.mockImplementation((_fileId: string, kind: string) => Promise.resolve({ requestId: `open_${kind}` }));
@@ -98,6 +107,18 @@ beforeEach(() => {
   });
 });
 
+afterEach(() => vi.unstubAllGlobals());
+
+function emitPdfResize(width: number, height: number) {
+  act(() => mocks.resizeCallbacks[0]?.([
+    { contentRect: { width, height } } as ResizeObserverEntry,
+  ], {} as ResizeObserver));
+}
+
+function pdfCanvasWidth(name = "pages.pdf, Page 1"): number {
+  return Number.parseFloat(screen.getByLabelText(name).style.width);
+}
+
 it("renders PDF pages through bounded ranges with compact navigation and no escape controls", async () => {
   mocks.pdfOpen.mockResolvedValue({ handle: "view_pdf", sizeBytes: 4096 });
   const view = renderViewer(file("application/pdf", "pages.pdf"));
@@ -109,8 +130,17 @@ it("renders PDF pages through bounded ranges with compact navigation and no esca
     maxImageSize: 16_777_216,
   }));
   expect(mocks.rangeRequests.every((length) => length <= 256 * 1024)).toBe(true);
+  expect(screen.getByRole("button", { name: "Fit width" })).toHaveAttribute("aria-pressed", "true");
+  await waitFor(() => expect(mocks.resizeCallbacks).toHaveLength(1));
+  emitPdfResize(900, 650);
+  await waitFor(() => expect(screen.getByLabelText("pages.pdf, Page 1")).toHaveStyle({ width: "868px" }));
+  emitPdfResize(600, 650);
+  await waitFor(() => expect(screen.getByLabelText("pages.pdf, Page 1")).toHaveStyle({ width: "568px" }));
+  fireEvent.click(screen.getByRole("button", { name: "Fit page" }));
+  expect(screen.getByRole("button", { name: "Fit page" })).toHaveAttribute("aria-pressed", "true");
   fireEvent.click(screen.getByRole("button", { name: "Next page" }));
   expect(await screen.findByText("Page 2 of 2")).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Zoom in" })).toBeEnabled());
   for (let index = 0; index < 20; index += 1) {
     fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
   }
@@ -120,6 +150,35 @@ it("renders PDF pages through bounded ranges with compact navigation and no esca
   assertWatermarkAndNoEscapeActions();
   view.unmount();
   await waitFor(() => expect(mocks.rendererClose).toHaveBeenCalledWith("view_pdf"));
+  expect(mocks.resizeDisconnect).toHaveBeenCalled();
+});
+
+it.each([
+  ["Fit width", 868],
+  ["Fit page", 463],
+] as const)("first manual zoom changes from the rendered %s scale", async (fitLabel, expectedAutoWidth) => {
+  mocks.pdfOpen.mockResolvedValue({ handle: "view_pdf_zoom", sizeBytes: 4096 });
+  renderViewer(file("application/pdf", "pages.pdf"));
+  expect(await screen.findByText("Page 1 of 2")).toBeInTheDocument();
+  await waitFor(() => expect(mocks.resizeCallbacks).toHaveLength(1));
+  emitPdfResize(900, 650);
+
+  const fitButton = screen.getByRole("button", { name: fitLabel });
+  fireEvent.click(fitButton);
+  await waitFor(() => expect(pdfCanvasWidth()).toBe(expectedAutoWidth));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Zoom in" })).toBeEnabled());
+
+  const autoWidthBeforeZoomIn = pdfCanvasWidth();
+  fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+  await waitFor(() => expect(pdfCanvasWidth()).toBeGreaterThan(autoWidthBeforeZoomIn));
+
+  fireEvent.click(fitButton);
+  await waitFor(() => expect(pdfCanvasWidth()).toBe(expectedAutoWidth));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Zoom out" })).toBeEnabled());
+
+  const autoWidthBeforeZoomOut = pdfCanvasWidth();
+  fireEvent.click(screen.getByRole("button", { name: "Zoom out" }));
+  await waitFor(() => expect(pdfCanvasWidth()).toBeLessThan(autoWidthBeforeZoomOut));
 });
 
 it.each([

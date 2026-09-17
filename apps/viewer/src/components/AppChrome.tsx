@@ -1,4 +1,4 @@
-import { Archive, FolderOpen, ShieldCheck, ShieldX } from "lucide-react";
+import { FolderOpen, ShieldCheck, ShieldX } from "lucide-react";
 
 import { type Locale, useI18n } from "../i18n";
 import { type DeviceStatus } from "../app/useViewerController";
@@ -19,10 +19,6 @@ export function AppChrome({ archiveTitle, deviceStatus, onOpen }: AppChromeProps
 
   return (
     <header className="topbar">
-      <div className="brand" aria-label={t("app.name")}>
-        <span className="brand-mark" aria-hidden="true"><Archive size={17} /></span>
-        <span>{t("app.name")}</span>
-      </div>
       <div className="archive-context" title={archiveTitle ?? undefined}>
         {archiveTitle ?? ""}
       </div>

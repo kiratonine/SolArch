@@ -11,6 +11,7 @@ import { type ReactNode } from "react";
 
 import { type MessageKey, useI18n } from "../../i18n";
 import { type VerifiedArchive, type ViewerState } from "../../ipc";
+import { formatPaymentAmount } from "../payment/formatPaymentAmount";
 
 export function EmptyWorkspace({ onOpen }: { onOpen: () => void }) {
   const { t } = useI18n();
@@ -35,12 +36,13 @@ type ArchiveFrameProps = {
   statusTone: "warning" | "success" | "neutral";
   onClose: () => void;
   children: ReactNode;
+  compact?: boolean;
 };
 
-export function ArchiveFrame({ archive, status, statusTone, onClose, children }: ArchiveFrameProps) {
+export function ArchiveFrame({ archive, status, statusTone, onClose, children, compact = false }: ArchiveFrameProps) {
   const { t } = useI18n();
   return (
-    <article className="archive-workspace">
+    <article className={`archive-workspace${compact ? " archive-workspace-compact" : ""}`}>
       <header className="archive-heading">
         <div className="archive-title-block">
           <div className="status-row">
@@ -51,7 +53,6 @@ export function ArchiveFrame({ archive, status, statusTone, onClose, children }:
             </span>
           </div>
           <h1>{archive.title}</h1>
-          <p>{t("locked.description")}</p>
         </div>
         <button className="icon-button" type="button" aria-label={t("locked.close")} onClick={onClose}>
           <X size={18} aria-hidden="true" />
@@ -85,18 +86,19 @@ export function LockedWorkspace({ archive, onPay, onClose }: {
   onClose: () => void;
 }) {
   const { t } = useI18n();
+  const displayPrice = formatPaymentAmount(archive.priceAmount);
   return (
     <ArchiveFrame archive={archive} status={t("locked.status")} statusTone="warning" onClose={onClose}>
-      <div className="archive-layout">
+      <div className="archive-layout archive-layout-locked">
         <ArchiveDetails archive={archive} />
         <aside className="action-pane">
           <div className="price-block">
             <span>{t("locked.price")}</span>
-            <strong><b>{archive.priceAmount}</b> {archive.priceCurrency}</strong>
+            <strong><b>{displayPrice}</b> {archive.priceCurrency}</strong>
           </div>
           <button className="primary-button unlock-button" type="button" onClick={onPay}>
             <LockKeyhole size={17} aria-hidden="true" />
-            {t("payment.unlockFor")} {archive.priceAmount} {archive.priceCurrency}
+            {t("payment.unlockFor")} {displayPrice} {archive.priceCurrency}
           </button>
           <p className="action-note">{t("locked.unlockNote")}</p>
         </aside>
@@ -115,7 +117,7 @@ export function FailureSurface({ state, messageKey, canRetry, onRetry, onReturnT
 }) {
   const { t } = useI18n();
   return (
-    <section className="failure-surface" role="alert">
+    <section className={`failure-surface${state === "payment_expired" ? " failure-surface-payment" : ""}`} role="alert">
       <ShieldAlert size={22} aria-hidden="true" />
       <div className="failure-copy">
         <h1>{t(`states.${state}` as MessageKey)}</h1>

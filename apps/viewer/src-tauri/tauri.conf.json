@@ -20,7 +20,8 @@
         "height": 720,
         "minWidth": 375,
         "minHeight": 560,
-        "resizable": true
+        "resizable": true,
+        "decorations": false
       }
     ]
   },

@@ -2,14 +2,23 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { vi } from "vitest";
 
 import App from "./App";
+import { formatPaymentAmount } from "./features/payment/formatPaymentAmount";
 import { I18nProvider, LOCALE_STORAGE_KEY } from "./i18n";
 import type { FileOpenEvent, ViewerSnapshot, ViewerState } from "./ipc";
+import "./styles.css";
 
 type EventCallback = (event: { payload: unknown }) => void;
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
   open: vi.fn(),
   listeners: new Map<string, EventCallback>(),
+  appWindow: {
+    isMaximized: vi.fn(() => Promise.resolve(false)),
+    onResized: vi.fn(() => Promise.resolve(vi.fn())),
+    minimize: vi.fn(() => Promise.resolve()),
+    toggleMaximize: vi.fn(() => Promise.resolve()),
+    close: vi.fn(() => Promise.resolve()),
+  },
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: mocks.invoke }));
@@ -20,6 +29,7 @@ vi.mock("@tauri-apps/api/event", () => ({
   }),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: mocks.open }));
+vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: () => mocks.appWindow }));
 
 const archive = {
   title: "Авторский заголовок — unchanged",
@@ -37,7 +47,7 @@ const qr = "solana:https://api.solarch.example/v1/solana-pay/payment-intents/pi_
 const payment = {
   state: "payment_ready" as const,
   paymentIntentId: "pi_test_01",
-  amount: "10.00",
+  amount: "10.000000",
   currency: "USDC" as const,
   solanaPayUrl: qr,
   expiresAt: "2026-09-10T00:30:00Z",
@@ -80,11 +90,26 @@ function defaultInvoke(command: string): Promise<unknown> {
   return Promise.reject(new Error(`unexpected command ${command}`));
 }
 
+function viewportRect(top: number): DOMRect {
+  return {
+    x: 0,
+    y: top,
+    top,
+    right: 800,
+    bottom: top + 40,
+    left: 0,
+    width: 800,
+    height: 40,
+    toJSON: () => ({}),
+  };
+}
+
 beforeEach(() => {
   localStorage.clear();
   mocks.invoke.mockReset();
   mocks.open.mockReset();
   mocks.listeners.clear();
+  vi.clearAllMocks();
   mocks.invoke.mockImplementation(defaultInvoke);
   mocks.open.mockResolvedValue("C:\\fixtures\\vector.slr");
 });
@@ -94,14 +119,137 @@ afterEach(() => {
 });
 
 describe("Viewer Part 03 state machine and desktop shell", () => {
+  it.each([
+    ["1.000000", "1.00"],
+    ["1", "1.00"],
+    ["1.2", "1.20"],
+    ["1.235000", "1.24"],
+  ])("formats payment amount %s as %s for presentation only", (value, expected) => {
+    expect(formatPaymentAmount(value)).toBe(expected);
+  });
+
+  it.each([
+    ["idle", "auto", 0],
+    ["locked", "auto", 0],
+    ["payment_pending", "auto", 0],
+    ["error", "auto", 0],
+    ["unlocked", "hidden", -1],
+  ] as const)("keeps %s inside the bounded desktop shell", async (state, workspaceOverflow, tabIndex) => {
+    mocks.invoke.mockImplementation((command: string) => {
+      if (["get_installer_locale", "startup_archive_pending", "take_startup_archive", "get_device_public_key"].includes(command)) {
+        return defaultInvoke(command);
+      }
+      if (command === "open_archive") return Promise.resolve(snapshot(state));
+      if (command === "poll_payment") return new Promise(() => undefined);
+      return Promise.resolve();
+    });
+    renderApp();
+    await openManually();
+    await waitFor(() => expect(document.querySelector(".app-shell")).toHaveAttribute("data-viewer-state", state));
+    await act(async () => { await Promise.resolve(); });
+
+    const shell = document.querySelector<HTMLElement>(".app-shell");
+    const titlebar = document.querySelector<HTMLElement>(".window-titlebar");
+    const topbar = document.querySelector<HTMLElement>(".topbar");
+    const workspace = document.querySelector<HTMLElement>(".workspace");
+    expect(shell && titlebar && topbar && workspace).toBeTruthy();
+    if (!shell || !titlebar || !topbar || !workspace) return;
+
+    expect(getComputedStyle(shell).position).toBe("fixed");
+    expect(getComputedStyle(shell).overflow).toBe("hidden");
+    expect(getComputedStyle(workspace).overflowY).toBe(workspaceOverflow);
+    expect(workspace.tabIndex).toBe(tabIndex);
+    expect(workspace).not.toContainElement(titlebar);
+    expect(workspace).not.toContainElement(topbar);
+  });
+
+  it("scrolls Payment content without moving either chrome row", async () => {
+    mocks.invoke.mockImplementation((command: string) => {
+      if (["get_installer_locale", "startup_archive_pending", "take_startup_archive", "get_device_public_key"].includes(command)) {
+        return defaultInvoke(command);
+      }
+      if (command === "open_archive") return Promise.resolve(snapshot("payment_pending"));
+      if (command === "poll_payment") return new Promise(() => undefined);
+      return Promise.resolve();
+    });
+    renderApp();
+    await openManually();
+    expect(await screen.findByTitle("Solana Pay payment QR code")).toBeInTheDocument();
+    await waitFor(() => expect(mocks.appWindow.onResized).toHaveBeenCalled());
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+
+    const titlebar = document.querySelector<HTMLElement>(".window-titlebar");
+    const topbar = document.querySelector<HTMLElement>(".topbar");
+    const workspace = document.querySelector<HTMLElement>(".workspace");
+    const content = document.querySelector<HTMLElement>(".archive-workspace");
+    expect(titlebar && topbar && workspace && content).toBeTruthy();
+    if (!titlebar || !topbar || !workspace || !content) return;
+
+    const measuredRect = (element: HTMLElement, baseTop: number) => vi
+      .spyOn(element, "getBoundingClientRect")
+      .mockImplementation(() => viewportRect(baseTop - (workspace.contains(element) ? workspace.scrollTop : 0)));
+    measuredRect(titlebar, 0);
+    measuredRect(topbar, 40);
+    measuredRect(content, 92);
+    const before = {
+      titlebar: titlebar.getBoundingClientRect().top,
+      topbar: topbar.getBoundingClientRect().top,
+      content: content.getBoundingClientRect().top,
+    };
+
+    workspace.scrollTop = 320;
+    fireEvent.scroll(workspace);
+
+    expect(titlebar.getBoundingClientRect().top).toBe(before.titlebar);
+    expect(topbar.getBoundingClientRect().top).toBe(before.topbar);
+    expect(content.getBoundingClientRect().top).toBeLessThan(before.content);
+    expect(document.documentElement.scrollTop).toBe(0);
+  });
+
+  it("uses the compact readable payment composition without document scroll", async () => {
+    mocks.invoke.mockImplementation((command: string) => {
+      if (["get_installer_locale", "startup_archive_pending", "take_startup_archive", "get_device_public_key"].includes(command)) {
+        return defaultInvoke(command);
+      }
+      if (command === "open_archive") return Promise.resolve(snapshot("payment_pending"));
+      if (command === "poll_payment") return new Promise(() => undefined);
+      return Promise.resolve();
+    });
+    renderApp();
+    await openManually();
+    expect(await screen.findByTitle("Solana Pay payment QR code")).toBeInTheDocument();
+    await waitFor(() => expect(mocks.appWindow.onResized).toHaveBeenCalled());
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+
+    const workspace = document.querySelector<HTMLElement>(".workspace");
+    const layout = document.querySelector<HTMLElement>(".archive-layout-payment");
+    const metadataValue = document.querySelector<HTMLElement>(".metadata-list dd");
+    const helper = document.querySelector<HTMLElement>(".payment-detail");
+    const qrFrame = document.querySelector<HTMLElement>(".qr-frame");
+    expect(workspace && layout && metadataValue && helper && qrFrame).toBeTruthy();
+    if (!workspace || !layout || !metadataValue || !helper || !qrFrame) return;
+
+    expect(getComputedStyle(workspace).paddingBlock).toBe("12px");
+    expect(getComputedStyle(layout).minHeight).toBe("0");
+    expect(getComputedStyle(metadataValue).fontSize).toBe("14px");
+    expect(getComputedStyle(helper).fontSize).toBe("13px");
+    expect(getComputedStyle(qrFrame).width).toBe("168px");
+    expect(document.documentElement.scrollTop).toBe(0);
+  });
+
   it("opens to trusted Locked metadata with no wallet, export, or device-key controls", async () => {
     renderApp();
     await openManually();
     expect(await screen.findByText("Locked")).toBeInTheDocument();
+    await act(async () => { await Promise.resolve(); });
     expect(screen.getByRole("heading", { name: archive.title })).toBeInTheDocument();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(screen.queryByText(/save as|open external|extract/i)).not.toBeInTheDocument();
     expect(screen.queryByText("public-device-value-that-must-not-render")).not.toBeInTheDocument();
+    expect(document.querySelector(".app-shell")).toHaveAttribute("data-viewer-state", "locked");
+    expect(document.querySelector(".price-block strong")).toHaveTextContent("10.00 USDC");
+    expect(screen.getByRole("button", { name: "Unlock for 10.00 USDC" })).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("10.000000 USDC");
   });
 
   it("persists no secret in DOM and renders the exact Rust-validated QR URL", async () => {
@@ -116,9 +264,11 @@ describe("Viewer Part 03 state machine and desktop shell", () => {
     });
     renderApp();
     await openManually();
-    fireEvent.click(await screen.findByRole("button", { name: "Unlock for 10.000000 USDC" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Unlock for 10.00 USDC" }));
     expect(await screen.findByTitle("Solana Pay payment QR code")).toBeInTheDocument();
     expect(document.querySelector("[data-qr-value]")).toHaveAttribute("data-qr-value", qr);
+    expect(screen.getByText("10.00 USDC")).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("10.000000 USDC");
     expect(document.body.textContent).not.toMatch(/client_secret|refresh_token|AAECAwQF/);
   });
 
@@ -273,7 +423,7 @@ describe("Viewer Part 03 state machine and desktop shell", () => {
     expect(screen.getByRole("heading", { name: archive.title })).toBeInTheDocument();
     expect(screen.getByText(archive.archiveId)).toBeInTheDocument();
     expect(screen.getByText(archive.fingerprint)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Unlock for 10.000000 USDC" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Unlock for 10.00 USDC" })).toBeInTheDocument();
     expect(mocks.invoke.mock.calls.filter(([command]) => command === "close_archive")).toHaveLength(0);
     expect(mocks.invoke.mock.calls.filter(([command]) => command === "start_payment")).toHaveLength(0);
   });
@@ -297,7 +447,7 @@ describe("Viewer Part 03 state machine and desktop shell", () => {
     expect(await screen.findByText("Protected archive unlocked")).toBeInTheDocument();
   });
 
-  it("lists safe catalog fields in a file table after durable unlock", async () => {
+  it("uses the full-size unlocked shell and lists safe catalog fields in the file navigator", async () => {
     mocks.invoke.mockImplementation((command: string) => {
       if (["get_installer_locale", "startup_archive_pending", "take_startup_archive", "get_device_public_key"].includes(command)) {
         return defaultInvoke(command);
@@ -307,11 +457,12 @@ describe("Viewer Part 03 state machine and desktop shell", () => {
     renderApp();
     await openManually();
     expect(await screen.findByText("Protected archive unlocked")).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "Name" })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "Type" })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "Size" })).toBeInTheDocument();
+    expect(document.querySelector(".app-shell")).toHaveAttribute("data-viewer-state", "unlocked");
+    expect(screen.getByRole("list", { name: "Protected files" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open internally: a.pdf" })).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByText("a.pdf")).toBeInTheDocument();
     expect(screen.getByText("PDF")).toBeInTheDocument();
+    expect(screen.getByText("1.2 KB")).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/chunk|offset|content key|ACK/i);
   });
 
@@ -341,7 +492,7 @@ describe("Viewer Part 03 state machine and desktop shell", () => {
     });
     renderApp();
     await openManually();
-    fireEvent.click(await screen.findByRole("button", { name: "Unlock for 10.000000 USDC" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Unlock for 10.00 USDC" }));
     expect(await screen.findByText("Preparing secure payment")).toBeInTheDocument();
     finish?.(snapshot("unlocked"));
     await waitFor(() => expect(screen.getByText("Protected archive unlocked")).toBeInTheDocument());

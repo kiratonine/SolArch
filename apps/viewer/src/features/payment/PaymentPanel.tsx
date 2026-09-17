@@ -3,11 +3,13 @@ import { QRCodeSVG } from "qrcode.react";
 
 import { type Locale, type MessageKey, useI18n } from "../../i18n";
 import { type PaymentView, type ViewerState } from "../../ipc";
+import { formatPaymentAmount } from "./formatPaymentAmount";
 
 export function PaymentPanel({ payment, state }: { payment: PaymentView; state: ViewerState }) {
   const { locale, t } = useI18n();
   const activating = state === "activating";
   const tone = activating ? "success" : state === "payment_ready" ? "neutral" : "warning";
+  const displayAmount = formatPaymentAmount(payment.amount);
 
   return (
     <aside className="payment-pane">
@@ -18,28 +20,30 @@ export function PaymentPanel({ payment, state }: { payment: PaymentView; state: 
         </div>
       ) : (
         <div className="qr-frame" data-qr-value={payment.solanaPayUrl}>
-          <QRCodeSVG value={payment.solanaPayUrl} size={184} level="M" title={t("payment.qrLabel")} />
+          <QRCodeSVG value={payment.solanaPayUrl} size={160} level="M" title={t("payment.qrLabel")} />
         </div>
       )}
       <dl className="payment-facts">
-        <Fact label={t("payment.amount")} value={`${payment.amount} ${payment.currency}`} mono />
+        <Fact label={t("payment.amount")} value={`${displayAmount} ${payment.currency}`} mono />
         <Fact label={t("payment.network")} value={t("payment.networkValue")} />
-        <div>
+        <div className="payment-fact-status">
           <dt>{t("payment.status")}</dt>
           <dd><span className={`status-chip status-${tone}`}>{t(`states.${state}` as MessageKey)}</span></dd>
         </div>
       </dl>
-      <p className="payment-detail">
-        {activating
-          ? t("progress.wait")
-          : state === "awaiting_finality"
-            ? t("payment.awaitingDetail")
-            : t("payment.scan")}
-      </p>
-      <p className="expiry-row">
-        <span>{t("payment.expires")}</span>
-        <time dateTime={payment.expiresAt}>{formatExpiry(payment.expiresAt, locale)}</time>
-      </p>
+      <div className="payment-guidance">
+        <p className="payment-detail">
+          {activating
+            ? t("progress.wait")
+            : state === "awaiting_finality"
+              ? t("payment.awaitingDetail")
+              : t("payment.scan")}
+        </p>
+        <p className="expiry-row">
+          <span>{t("payment.expires")}</span>
+          <time dateTime={payment.expiresAt}>{formatExpiry(payment.expiresAt, locale)}</time>
+        </p>
+      </div>
       {activating ? <LoaderCircle className="spinner activation-spinner" size={18} aria-hidden="true" /> : null}
     </aside>
   );

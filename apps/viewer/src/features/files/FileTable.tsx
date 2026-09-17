@@ -12,33 +12,34 @@ export function FileTable({ files, selectedFileId, onOpen }: {
   if (files.length === 0) return <p className="files-empty">{t("files.empty")}</p>;
 
   return (
-    <div className="file-table-wrap">
-      <table className="file-table">
-        <thead>
-          <tr>
-            <th scope="col">{t("files.name")}</th>
-            <th scope="col">{t("files.type")}</th>
-            <th scope="col" className="numeric">{t("files.size")}</th>
-            <th scope="col" className="visually-hidden">{t("files.open")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {files.map((file) => (
-            <tr key={file.fileId} className={selectedFileId === file.fileId ? "selected" : undefined}>
-              <td>
-                <button type="button" className="file-open-button" onClick={() => onOpen(file)} aria-label={`${t("files.open")}: ${file.displayName}`}>
-                  <FileLock2 size={16} aria-hidden="true" />
-                  <span>{file.displayName}</span>
-                </button>
-              </td>
-              <td>{fileType(file.mimeType)}</td>
-              <td className="numeric mono">{formatBytes(file.sizeBytes, locale)}</td>
-              <td className="file-row-action"><ChevronRight size={16} aria-hidden="true" /></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <ul className="file-list" aria-label={t("unlocked.files")}>
+      {files.map((file) => {
+        const selected = selectedFileId === file.fileId;
+        return (
+          <li key={file.fileId}>
+            <button
+              type="button"
+              className="file-list-button"
+              aria-label={`${t("files.open")}: ${file.displayName}`}
+              aria-pressed={selected}
+              title={file.displayName}
+              onClick={() => onOpen(file)}
+            >
+              <FileLock2 size={16} aria-hidden="true" />
+              <span className="file-list-copy">
+                <span className="file-list-name">{file.displayName}</span>
+                <span className="file-list-meta">
+                  <span>{fileType(file.mimeType)}</span>
+                  <span aria-hidden="true">·</span>
+                  <span className="mono">{formatBytes(file.sizeBytes, locale)}</span>
+                </span>
+              </span>
+              <ChevronRight size={15} aria-hidden="true" />
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

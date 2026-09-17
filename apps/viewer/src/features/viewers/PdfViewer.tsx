@@ -28,6 +28,9 @@ GlobalWorkerOptions.workerSrc = workerUrl;
 const RANGE_BYTES = 256 * 1024;
 export const MAX_PDF_CANVAS_PIXELS = 16_777_216;
 const MAX_PDF_CANVAS_DIMENSION = 16_384;
+const MIN_PDF_SCALE = 0.25;
+const MAX_PDF_SCALE = 4;
+const PDF_ZOOM_STEP = 0.25;
 
 export function boundedPdfCanvasSize(width: number, height: number, pixelRatio: number) {
   const canvasWidth = Math.floor(width * pixelRatio);
@@ -51,6 +54,11 @@ type State =
   | { kind: "ready"; handle: string; document: PDFDocumentProxy; loadingTask: PDFDocumentLoadingTask }
   | { kind: "error"; messageKey: string };
 type Fit = "page" | "width" | "manual";
+type StageSize = { width: number; height: number };
+
+function boundedPdfScale(scale: number): number {
+  return Math.max(MIN_PDF_SCALE, Math.min(MAX_PDF_SCALE, scale));
+}
 
 class ProtectedRangeTransport extends PDFDataRangeTransport {
   private active = true;
@@ -86,10 +94,13 @@ export function PdfViewer({ file, watermark, onClose }: {
   const [generation, setGeneration] = useState(0);
   const [state, setState] = useState<State>({ kind: "loading" });
   const [pageNumber, setPageNumber] = useState(1);
-  const [fit, setFit] = useState<Fit>("page");
+  const [fit, setFit] = useState<Fit>("width");
   const [zoom, setZoom] = useState(1);
+  const [visualScale, setVisualScale] = useState<number | null>(null);
+  const [stageSize, setStageSize] = useState<StageSize>({ width: 0, height: 0 });
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const observedStageSizeRef = useRef<StageSize>({ width: 0, height: 0 });
 
   useEffect(() => {
     let active = true;
@@ -99,6 +110,10 @@ export function PdfViewer({ file, watermark, onClose }: {
     let transport: ProtectedRangeTransport | null = null;
     setState({ kind: "loading" });
     setPageNumber(1);
+    setFit("width");
+    setZoom(1);
+    setVisualScale(null);
+    observedStageSizeRef.current = { width: 0, height: 0 };
     void rendererBeginOpen(file.fileId, "pdf")
       .then((request) => {
         requestId = request.requestId;
@@ -152,6 +167,27 @@ export function PdfViewer({ file, watermark, onClose }: {
   const document = state.kind === "ready" ? state.document : null;
   const rendererHandle = state.kind === "ready" ? state.handle : null;
   const activeLoadingTask = state.kind === "ready" ? state.loadingTask : null;
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!document || !stage || typeof ResizeObserver === "undefined") return;
+    const updateSize = (width: number, height: number) => {
+      if (width <= 0 || height <= 0) return;
+      const current = observedStageSizeRef.current;
+      if (current.width === width && current.height === height) return;
+      observedStageSizeRef.current = { width, height };
+      setVisualScale(null);
+      setStageSize({ width, height });
+    };
+    updateSize(stage.clientWidth, stage.clientHeight);
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) updateSize(entry.contentRect.width, entry.contentRect.height);
+    });
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, [document]);
+
   useEffect(() => {
     if (!document || !rendererHandle || !activeLoadingTask || !canvasRef.current || !stageRef.current) return;
     let active = true;
@@ -159,14 +195,16 @@ export function PdfViewer({ file, watermark, onClose }: {
     void document.getPage(pageNumber).then((page) => {
       if (!active || !canvasRef.current || !stageRef.current) return;
       const base = page.getViewport({ scale: 1 });
-      const availableWidth = Math.max(240, stageRef.current.clientWidth - 56);
-      const availableHeight = Math.max(240, stageRef.current.clientHeight - 56);
+      const availableWidth = Math.max(240, (stageSize.width || stageRef.current.clientWidth) - 32);
+      const availableHeight = Math.max(240, (stageSize.height || stageRef.current.clientHeight) - 32);
       const scale = fit === "width"
         ? availableWidth / base.width
         : fit === "page"
           ? Math.min(availableWidth / base.width, availableHeight / base.height)
           : zoom;
-      const viewport = page.getViewport({ scale: Math.max(0.25, Math.min(4, scale)) });
+      const renderedScale = boundedPdfScale(scale);
+      setVisualScale(renderedScale);
+      const viewport = page.getViewport({ scale: renderedScale });
       const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
       const canvas = canvasRef.current;
       const canvasSize = boundedPdfCanvasSize(viewport.width, viewport.height, pixelRatio);
@@ -196,20 +234,36 @@ export function PdfViewer({ file, watermark, onClose }: {
       const canvas = canvasRef.current;
       if (canvas) { canvas.width = 0; canvas.height = 0; }
     };
-  }, [activeLoadingTask, document, fit, pageNumber, rendererHandle, zoom]);
+  }, [activeLoadingTask, document, fit, pageNumber, rendererHandle, stageSize, zoom]);
 
   const retry = useCallback(() => setGeneration((value) => value + 1), []);
   const pageCount = state.kind === "ready" ? state.document.numPages : 0;
+  const changePage = useCallback((nextPage: number) => {
+    setVisualScale(null);
+    setPageNumber(nextPage);
+  }, []);
+  const selectFit = useCallback((nextFit: Exclude<Fit, "manual">) => {
+    if (fit === nextFit) return;
+    setVisualScale(null);
+    setFit(nextFit);
+  }, [fit]);
+  const adjustZoom = useCallback((delta: number) => {
+    if (visualScale === null) return;
+    const nextZoom = boundedPdfScale(visualScale + delta);
+    setFit("manual");
+    setZoom(nextZoom);
+    setVisualScale(nextZoom);
+  }, [visualScale]);
   const controls = state.kind === "ready" ? (
     <>
-      <button className="icon-button" type="button" onClick={() => setPageNumber((value) => Math.max(1, value - 1))} disabled={pageNumber <= 1} aria-label={t("pdf.previous")}><ChevronLeft size={17} aria-hidden="true" /></button>
+      <button className="icon-button" type="button" onClick={() => changePage(Math.max(1, pageNumber - 1))} disabled={pageNumber <= 1} aria-label={t("pdf.previous")}><ChevronLeft size={17} aria-hidden="true" /></button>
       <span className="viewer-page-count mono">{t("pdf.page")} {pageNumber} {t("pdf.of")} {pageCount}</span>
-      <button className="icon-button" type="button" onClick={() => setPageNumber((value) => Math.min(pageCount, value + 1))} disabled={pageNumber >= pageCount} aria-label={t("pdf.next")}><ChevronRight size={17} aria-hidden="true" /></button>
+      <button className="icon-button" type="button" onClick={() => changePage(Math.min(pageCount, pageNumber + 1))} disabled={pageNumber >= pageCount} aria-label={t("pdf.next")}><ChevronRight size={17} aria-hidden="true" /></button>
       <span className="viewer-control-divider" aria-hidden="true" />
-      <button className="icon-button" type="button" onClick={() => { setFit("manual"); setZoom((value) => Math.max(0.25, value - 0.25)); }} aria-label={t("pdf.zoomOut")}><Minus size={17} aria-hidden="true" /></button>
-      <button className="icon-button" type="button" onClick={() => { setFit("manual"); setZoom((value) => Math.min(4, value + 0.25)); }} aria-label={t("pdf.zoomIn")}><Plus size={17} aria-hidden="true" /></button>
-      <button className="icon-button" type="button" onClick={() => setFit("page")} aria-pressed={fit === "page"} aria-label={t("pdf.fitPage")}><Maximize2 size={17} aria-hidden="true" /></button>
-      <button className="icon-button" type="button" onClick={() => setFit("width")} aria-pressed={fit === "width"} aria-label={t("pdf.fitWidth")}><Columns2 size={17} aria-hidden="true" /></button>
+      <button className="icon-button" type="button" onClick={() => adjustZoom(-PDF_ZOOM_STEP)} disabled={visualScale === null} aria-label={t("pdf.zoomOut")}><Minus size={17} aria-hidden="true" /></button>
+      <button className="icon-button" type="button" onClick={() => adjustZoom(PDF_ZOOM_STEP)} disabled={visualScale === null} aria-label={t("pdf.zoomIn")}><Plus size={17} aria-hidden="true" /></button>
+      <button className="icon-button" type="button" onClick={() => selectFit("page")} aria-pressed={fit === "page"} aria-label={t("pdf.fitPage")}><Maximize2 size={17} aria-hidden="true" /></button>
+      <button className="icon-button" type="button" onClick={() => selectFit("width")} aria-pressed={fit === "width"} aria-label={t("pdf.fitWidth")}><Columns2 size={17} aria-hidden="true" /></button>
     </>
   ) : null;
 

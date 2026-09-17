@@ -3,6 +3,7 @@ import { LockKeyhole } from "lucide-react";
 import { useViewerController } from "./app/useViewerController";
 import { AppChrome } from "./components/AppChrome";
 import { OperationSurface } from "./components/OperationSurface";
+import { WindowTitleBar } from "./components/WindowTitleBar";
 import {
   EmptyWorkspace,
   FailureSurface,
@@ -38,6 +39,12 @@ const FAILURE_STATES: ViewerState[] = [
   "error",
 ];
 
+const TRANSACTION_STATES: ViewerState[] = [
+  "locked",
+  ...PAYMENT_STATES,
+  "payment_expired",
+];
+
 export default function App() {
   const { t } = useI18n();
   const viewer = useViewerController();
@@ -45,13 +52,18 @@ export default function App() {
   const busy = viewer.busy;
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-viewer-state={screen.state}>
+      <WindowTitleBar />
       <AppChrome
         archiveTitle={screen.archive?.title ?? null}
         deviceStatus={viewer.deviceStatus}
         onOpen={viewer.chooseArchive}
       />
-      <main className="workspace" aria-busy={busy}>
+      <main
+        className={`workspace${TRANSACTION_STATES.includes(screen.state) ? " workspace-transaction" : ""}`}
+        aria-busy={busy}
+        tabIndex={screen.state === "unlocked" ? undefined : 0}
+      >
         {screen.state === "idle" ? <EmptyWorkspace onOpen={viewer.chooseArchive} /> : null}
         {OPERATION_STATES.includes(screen.state) ? <OperationSurface state={screen.state} /> : null}
         {screen.state === "locked" && screen.archive ? (
