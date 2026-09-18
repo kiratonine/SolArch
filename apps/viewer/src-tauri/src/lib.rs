@@ -1074,11 +1074,14 @@ mod tests {
             Arc::new(MemorySecretStore::with_value(private.to_vec()));
         let clock_store: Arc<dyn SecretStore> = Arc::new(MemorySecretStore::default());
         let keyed_store: Arc<dyn KeyedSecretStore> = Arc::new(MemoryKeyedSecretStore::default());
-        let state = AppState::new(
+        let state = AppState::new_inner(
             device_store.clone(),
             clock_store.clone(),
             keyed_store.clone(),
             directory.path().to_owned(),
+            TrustConfig::development_fixtures().unwrap(),
+            None,
+            None,
         )
         .unwrap();
         let archive_path = directory.path().join("vector.slr");
@@ -1123,11 +1126,14 @@ mod tests {
             )
             .unwrap();
 
-        let restarted = AppState::new(
+        let restarted = AppState::new_inner(
             device_store,
             clock_store,
             keyed_store,
             directory.path().to_owned(),
+            TrustConfig::development_fixtures().unwrap(),
+            None,
+            None,
         )
         .unwrap();
         restarted.archives.open(&archive_path).unwrap();
@@ -1200,7 +1206,7 @@ mod tests {
     fn expired_cached_grant_with_refresh_credential_denies_when_backend_is_unavailable() {
         let directory = tempfile::tempdir().unwrap();
         let keyed_store: Arc<dyn KeyedSecretStore> = Arc::new(MemoryKeyedSecretStore::default());
-        let state = AppState::new(
+        let state = AppState::new_inner(
             Arc::new(MemorySecretStore::with_value(
                 vector_private_bytes().to_vec(),
             )),
@@ -1209,6 +1215,9 @@ mod tests {
             )),
             keyed_store.clone(),
             directory.path().to_owned(),
+            TrustConfig::development_fixtures().unwrap(),
+            None,
+            None,
         )
         .unwrap();
         let archive_path = directory.path().join("vector.slr");

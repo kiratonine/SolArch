@@ -2,10 +2,19 @@
   "name": "solarch-workspace",
   "private": true,
   "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
   "scripts": {
-    "lint": "pnpm --filter @solarch/viewer lint",
-    "test": "pnpm --filter @solarch/viewer test",
-    "build": "pnpm --filter @solarch/viewer build",
+    "lint": "pnpm --filter @solarch/web lint && pnpm --filter @solarch/api lint && pnpm --filter @solarch/viewer lint",
+    "test": "pnpm --filter @solarch/web test && pnpm --filter @solarch/api test && pnpm --filter @solarch/viewer test",
+    "build": "pnpm --filter @solarch/web build && pnpm --filter @solarch/api build && pnpm --filter @solarch/viewer build",
+    "web": "pnpm --filter @solarch/web dev",
+    "web:typecheck": "pnpm --filter @solarch/web typecheck",
+    "web:lint": "pnpm --filter @solarch/web lint",
+    "web:test": "pnpm --filter @solarch/web test",
+    "web:build": "pnpm --filter @solarch/web build",
+    "test:web-production-output": "node --test scripts/web-production-output.test.mjs",
     "viewer:devnet:preflight": "node scripts/viewer-live-devnet-e2e.mjs preflight",
     "viewer:devnet:build": "node scripts/viewer-live-devnet-e2e.mjs build",
     "viewer:devnet:evidence": "node scripts/viewer-live-devnet-e2e.mjs evidence",

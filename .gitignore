@@ -49,3 +49,9 @@ storage_data/
 
 # playwright mcp artifacts
 .playwright-mcp/
+
+# vitest json output (rtk hook)
+.vitest/
+
+# tanstack router plugin cache
+.tanstack/
