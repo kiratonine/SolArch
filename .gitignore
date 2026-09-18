@@ -13,6 +13,7 @@
 *.key
 AGENTS.md
 AGENTS_backup.md
+CLAUDE.md
 prompt.md
 secrets/
 
