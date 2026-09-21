@@ -233,9 +233,14 @@ describe('загрузка файлов', () => {
     const bundle = await createZip([upload('inner.pdf', 1)], 'bundle.zip')
     await userEvent.upload(fileInput(), [bundle, upload('loose.pdf', 1)])
 
-    const refused = await screen.findByRole('alert')
-    expect(within(refused).getByText('bundle.zip')).toBeInTheDocument()
-    expect(within(refused).getByText(/a ZIP goes on its own/)).toBeInTheDocument()
+    // Alert ищется заново на каждой попытке: пока уходит второй файл, страница
+    // перерисовывает его, и ссылка на найденный раньше узел остаётся висеть
+    // вне документа.
+    await waitFor(() => {
+      const refused = screen.getByRole('alert')
+      expect(within(refused).getByText('bundle.zip')).toBeInTheDocument()
+      expect(within(refused).getByText(/a ZIP goes on its own/)).toBeInTheDocument()
+    })
 
     await waitFor(() => {
       expect(storedPaths('arc_draft_notes')).toEqual(['loose.pdf'])

@@ -85,6 +85,21 @@ beforeAll(() => {
     })
   }
 
+  // Тот же пробел jsdom 26 и для `text()`: им тест читает скачанный `.slr`.
+  if (typeof Blob.prototype.text !== 'function') {
+    Object.defineProperty(Blob.prototype, 'text', {
+      value(this: Blob): Promise<string> {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onerror = () => reject(reader.error)
+          reader.onload = () => resolve(reader.result as string)
+          reader.readAsText(this)
+        })
+      },
+      configurable: true,
+    })
+  }
+
   // Незамоканный запрос должен падать: тест не имеет права молча уйти в сеть.
   server.listen({ onUnhandledRequest: 'error' })
 
