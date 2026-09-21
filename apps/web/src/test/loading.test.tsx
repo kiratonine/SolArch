@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 import { ArchiveCardSkeleton } from '@/components/state/archive-card-skeleton'
 import { API_BASE_URL, API_PREFIX } from '@/lib/api/config'
+import { db } from '@/mocks/db'
 import { server } from '@/mocks/node'
 import { renderApp, renderWithI18n } from '@/test/render'
 import { signIn } from '@/test/session'
@@ -159,6 +160,7 @@ describe('пока данные обновляются', () => {
   })
 
   it('каталог не схлопывается в скелет при переходе на вторую страницу', async () => {
+    db.perPage = 6
     renderApp()
     await screen.findAllByRole('article')
 

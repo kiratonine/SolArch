@@ -155,6 +155,7 @@ describe('каталог', () => {
   })
 
   it('разбивает выдачу на страницы и переходит на вторую', async () => {
+    db.perPage = 6
     const user = userEvent.setup()
     const { router } = renderApp()
 
@@ -187,6 +188,7 @@ describe('каталог', () => {
   })
 
   it('переводит управление каталогом на русский', async () => {
+    db.perPage = 6
     renderApp({ locale: 'ru' })
     await cardTitles()
 

@@ -2,13 +2,40 @@ import type { ReactNode } from 'react'
 
 import { cn } from '@/lib/utils'
 
+/** Внешняя рамка: одна на весь сайт, чтобы шапка, подвал и содержимое делили кромку. */
+const FRAME = 'mx-auto w-full max-w-480 px-5 sm:px-8 xl:px-12'
+
 /**
- * Единственная мера ширины: шапка, содержимое и подвал делят обе кромки.
+ * Мера ширины.
  *
- * 54rem — ширина читаемого документа, а каталог и есть документ: список
- * запечатанных контейнеров. Более широкая мера появится, когда её действительно
- * потребует экран кабинета автора (S6), а не «на будущее».
+ * Рамка — 120rem: на обычных мониторах, вплоть до 1920px, полей по бокам нет,
+ * только внутренний отступ. Потолок нужен ультрашироким экранам, где плитки
+ * каталога без него раздулись бы. Каталог — витрина плиток, ему нужна вся рамка
+ * (`wide`). Остальные страницы — документы и формы: их колонка остаётся 54rem
+ * и прижата к той же левой кромке, а не центрируется отдельно, иначе кромки
+ * шапки и текста разъехались бы.
+ *
+ * `centered` ставит ту же колонку посередине рамки — для страниц-решений
+ * (вход, создание архива), у которых нет соседей по ширине.
  */
-export function Container({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn('mx-auto w-full max-w-216 px-5 sm:px-8', className)}>{children}</div>
+export function Container({
+  children,
+  className,
+  wide = false,
+  centered = false,
+}: {
+  children: ReactNode
+  className?: string
+  wide?: boolean
+  centered?: boolean
+}) {
+  if (wide) {
+    return <div className={cn(FRAME, className)}>{children}</div>
+  }
+
+  return (
+    <div className={FRAME}>
+      <div className={cn('max-w-216', centered && 'mx-auto', className)}>{children}</div>
+    </div>
+  )
 }

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
+import { PlusIcon } from 'lucide-react'
 
 import { SignOutButton } from '@/components/auth/sign-out-button'
 import { WalletAddress } from '@/components/auth/wallet-address'
@@ -9,6 +10,7 @@ import { LanguageSwitch } from '@/components/layout/language-switch'
 import { ProductNav } from '@/components/layout/product-nav'
 import { SiteMenu } from '@/components/layout/site-menu'
 import { ThemeSwitch } from '@/components/layout/theme-switch'
+import { buttonVariants } from '@/components/ui/button'
 import { sessionQuery } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 
@@ -32,7 +34,7 @@ export function SiteHeader() {
     <header className="border-border bg-background/85 sticky top-0 z-40 border-b backdrop-blur-sm">
       {/* Высота строки — общий токен: меню рисуется в портале и висит ровно
           под ней, а достать её оттуда через DOM нельзя. */}
-      <Container className="flex h-(--header-height) items-center gap-4">
+      <Container wide className="flex h-(--header-height) items-center gap-4">
         <Link
           to="/"
           className="focus-visible:ring-ring/60 rounded-sm focus-visible:ring-2 focus-visible:outline-none"
@@ -67,11 +69,10 @@ export function SiteHeader() {
 }
 
 /**
- * Навигация во всю строку. Порог `lg` измерен, а не выбран на глаз: худший
- * случай — вошедший автор в русской локали с двумя продуктовыми ссылками —
- * просит 750px. Мера страницы даёт 800 (54rem минус кромки), `md` — 689.
- * Запас в 50px значит, что третья такая ссылка встанет только вместо одной
- * из этих, а не рядом с ними.
+ * Навигация во всю строку, с `lg`. Худший случай — вошедший автор в русской
+ * локали: две продуктовые ссылки, кабинет, выход, адрес и кнопка «Create archive».
+ * Без кнопки он просил 750px при старой мере 800; рамка на `lg` теперь даёт 960
+ * (1024 минус кромки), и кнопке остаётся около 200px. Ниже `lg` всё уходит в меню.
  */
 function FullNav({ wallet }: { wallet?: string }) {
   const { t } = useI18n()
@@ -106,6 +107,13 @@ function FullNav({ wallet }: { wallet?: string }) {
             address={wallet}
             className="border-border rounded-sm border px-2 py-1.5 text-xs leading-none"
           />
+
+          {/* Главное действие автора — одним нажатием с любой страницы, без захода
+              в кабинет. Гостю кнопка не показывается: создание требует входа. */}
+          <Link to="/dashboard/new" className={buttonVariants({ size: 'sm' })}>
+            <PlusIcon aria-hidden="true" />
+            {t.nav.createArchive}
+          </Link>
         </>
       ) : (
         <Link to="/login" className={navLink} activeProps={{ className: navLinkActive }}>

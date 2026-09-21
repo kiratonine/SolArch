@@ -2,6 +2,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { Link, createFileRoute } from '@tanstack/react-router'
 
 import { ArchiveCard } from '@/components/archive/archive-card'
+import { TILE_GRID } from '@/components/archive/tile'
 import { CatalogPagination } from '@/components/catalog/catalog-pagination'
 import { SearchField } from '@/components/catalog/search-field'
 import { SortNav } from '@/components/catalog/sort-nav'
@@ -47,24 +48,24 @@ function CatalogPage() {
   const searching = q !== ''
 
   return (
-    <Container>
+    <Container wide>
       <PageHeader title={t.catalog.title} lead={t.catalog.lead} />
 
-      {/* Поиск и сортировка стоят отдельными строками: в русской локали пять
-          подписей сортировки занимают почти всю меру ширины, и в одной строке
-          с полем поиска они разваливались бы переносом. */}
-      <div className="mb-6 space-y-3">
-        <SearchField value={q} />
+      {/* На узком экране поиск и сортировка стоят отдельными строками: в русской
+          локали пять подписей сортировки занимают почти всю ширину. На широком
+          встают в одну строку — поле на всю рамку было бы бесконечно длинным. */}
+      <div className="mb-6 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <SearchField value={q} className="w-full xl:max-w-sm" />
         {/* Без отрицательного отступа: активный чип нарисован рамкой, и сдвиг
             «под текст» выносил бы её за общую левую кромку страницы. */}
         <SortNav active={sort} />
       </div>
 
       {isPending && (
-        <div className="space-y-3" aria-busy="true" aria-label={t.catalog.loading}>
-          <ArchiveCardSkeleton />
-          <ArchiveCardSkeleton />
-          <ArchiveCardSkeleton />
+        <div className={TILE_GRID} aria-busy="true" aria-label={t.catalog.loading}>
+          {Array.from({ length: 10 }, (_, i) => (
+            <ArchiveCardSkeleton key={i} />
+          ))}
         </div>
       )}
 
@@ -99,7 +100,7 @@ function CatalogPage() {
       {data && data.items.length > 0 && (
         <>
           <ul
-            className={cn('space-y-3 transition-opacity', isPlaceholderData && 'opacity-60')}
+            className={cn(TILE_GRID, 'transition-opacity', isPlaceholderData && 'opacity-60')}
             aria-busy={isPlaceholderData || undefined}
           >
             {data.items.map((archive) => (
