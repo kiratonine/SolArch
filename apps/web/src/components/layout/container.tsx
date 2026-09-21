@@ -10,24 +10,22 @@ const FRAME = 'mx-auto w-full max-w-480 px-5 sm:px-8 xl:px-12'
  *
  * Рамка — 120rem: на обычных мониторах, вплоть до 1920px, полей по бокам нет,
  * только внутренний отступ. Потолок нужен ультрашироким экранам, где плитки
- * каталога без него раздулись бы. Каталог — витрина плиток, ему нужна вся рамка
- * (`wide`). Остальные страницы — документы и формы: их колонка остаётся 54rem
- * и прижата к той же левой кромке, а не центрируется отдельно, иначе кромки
- * шапки и текста разъехались бы.
+ * без него раздулись бы.
  *
- * `centered` ставит ту же колонку посередине рамки — для страниц-решений
- * (вход, создание архива), у которых нет соседей по ширине.
+ * `wide` — вся рамка: витрины плиток (каталог, кабинет), шапка и подвал.
+ * Без него — колонка 54rem посередине рамки: страницы-документы и формы.
+ * У левой кромки широкой рамки такая колонка оставляла пустыми две трети
+ * экрана справа. Колонку можно сузить через `className` (`max-w-136` у формы
+ * создания) — она останется по центру.
  */
 export function Container({
   children,
   className,
   wide = false,
-  centered = false,
 }: {
   children: ReactNode
   className?: string
   wide?: boolean
-  centered?: boolean
 }) {
   if (wide) {
     return <div className={cn(FRAME, className)}>{children}</div>
@@ -35,7 +33,7 @@ export function Container({
 
   return (
     <div className={FRAME}>
-      <div className={cn('max-w-216', centered && 'mx-auto', className)}>{children}</div>
+      <div className={cn('mx-auto max-w-216', className)}>{children}</div>
     </div>
   )
 }
