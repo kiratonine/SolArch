@@ -20,6 +20,8 @@ export const en = {
     howItWorks: 'How it works',
     viewer: 'Get the Viewer',
     dashboard: 'Dashboard',
+    /** Кнопка в шапке: глагол, а не название страницы, куда она ведёт («New archive»). */
+    createArchive: 'Create archive',
     signIn: 'Sign in',
     language: 'Language',
     themeDark: 'Switch to the dark theme',

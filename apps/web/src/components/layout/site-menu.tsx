@@ -138,7 +138,7 @@ function MenuRows({ wallet, onNavigate }: { wallet?: string; onNavigate: () => v
   }, [pathname, onNavigate])
 
   return (
-    <Container>
+    <Container wide>
       <nav aria-label={t.nav.menu} className="flex flex-col py-1">
         <Link
           to="/"
@@ -165,6 +165,15 @@ function MenuRows({ wallet, onNavigate }: { wallet?: string; onNavigate: () => v
               onClick={onNavigate}
             >
               {t.nav.dashboard}
+            </Link>
+
+            <Link
+              to="/dashboard/new"
+              className={menuRow}
+              activeProps={{ className: menuRowActive }}
+              onClick={onNavigate}
+            >
+              {t.nav.createArchive}
             </Link>
 
             {/* Выход и здесь спрашивает подтверждение (F63). Меню при этом

@@ -15,6 +15,7 @@ export const ru: Dictionary = {
     howItWorks: 'Как это работает',
     viewer: 'Скачать Viewer',
     dashboard: 'Кабинет',
+    createArchive: 'Создать архив',
     signIn: 'Войти',
     language: 'Язык',
     themeDark: 'Включить тёмную тему',

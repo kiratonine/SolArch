@@ -50,7 +50,7 @@ export function CatalogPreview({
         {t.dashboard.detail.listing.preview.body}
       </p>
 
-      <ArchiveCard archive={preview} preview className="mt-4" />
+      <ArchiveCard archive={preview} preview className="mt-4 h-auto max-w-80" />
     </div>
   )
 }

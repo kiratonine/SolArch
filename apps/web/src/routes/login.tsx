@@ -116,9 +116,10 @@ function LoginPage() {
   const onMessageStep = step.kind === 'sign' || signing
 
   return (
-    // Вход — одно решение, а не документ: колонка стоит по левой кромке страницы,
-    // но по высоте держится середины экрана, иначе под ней зияет пустой подвал.
-    <Container className="flex min-h-[58vh] items-center">
+    // Вход — одно решение, а не документ: колонка стоит посередине экрана и по
+    // ширине, и по высоте. У левой кромки широкой рамки она терялась, а по высоте
+    // без центровки под ней зиял бы пустой подвал.
+    <Container wide className="flex min-h-[58vh] items-center justify-center">
       <div className="w-full max-w-136">
         <PageHeader title={t.auth.title} lead={t.auth.lead} className="mb-8" />
 

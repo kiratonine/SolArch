@@ -163,7 +163,9 @@ function NewArchivePage() {
     : t.create.fields.payoutWallet.hint
 
   return (
-    <Container>
+    // Форма — решение, а не документ: колонка по ширине самой формы стоит
+    // посередине, как на входе.
+    <Container centered className="max-w-136">
       <PageHeader title={t.create.title} lead={t.create.lead} />
 
       <form onSubmit={submit} noValidate className="max-w-136 space-y-7">

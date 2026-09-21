@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, createFileRoute } from '@tanstack/react-router'
 
 import { CreatorArchiveCard } from '@/components/archive/creator-archive-card'
+import { TILE_GRID } from '@/components/archive/tile'
 import { WalletAddress } from '@/components/auth/wallet-address'
 import { Container } from '@/components/layout/container'
 import { PageHeader } from '@/components/layout/page-header'
@@ -54,15 +55,10 @@ function DashboardPage() {
   const { data, isPending, isError, error, refetch } = useQuery(myArchivesQuery())
 
   return (
-    <Container>
-      {/* Заголовок и вход в форму делят одну строку: создание архива — то, зачем
-          в кабинет заходят чаще всего, и оно не должно ждать конца списка. */}
-      <div className="mb-10 flex flex-wrap items-start justify-between gap-4">
-        <PageHeader title={t.dashboard.title} lead={t.dashboard.lead} className="mb-0 min-w-0" />
-        <Link to="/dashboard/new" className={buttonVariants({ size: 'lg' })}>
-          {t.create.action}
-        </Link>
-      </div>
+    <Container wide>
+      {/* Отдельной кнопки создания здесь нет: «Create archive» стоит в шапке на
+          любой странице. Пустой кабинет всё же зовёт к ней — ниже, в пустом состоянии. */}
+      <PageHeader title={t.dashboard.title} lead={t.dashboard.lead} />
 
       {/* Полный адрес, а не сокращённый: в шапке он обрезан, а сверять кошелёк
           перед созданием архива придётся целиком. */}
@@ -74,7 +70,8 @@ function DashboardPage() {
       )}
 
       {isPending && (
-        <div className="space-y-3" aria-busy="true" aria-label={t.dashboard.loading}>
+        <div className={TILE_GRID} aria-busy="true" aria-label={t.dashboard.loading}>
+          <ArchiveCardSkeleton />
           <ArchiveCardSkeleton />
           <ArchiveCardSkeleton />
         </div>
@@ -101,7 +98,7 @@ function DashboardPage() {
       )}
 
       {data && data.length > 0 && (
-        <ul className="space-y-3">
+        <ul className={TILE_GRID}>
           {newestFirst(data).map((archive) => (
             <li key={archive.archive_id}>
               <CreatorArchiveCard archive={archive} />

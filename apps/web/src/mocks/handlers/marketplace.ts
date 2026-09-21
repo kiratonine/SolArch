@@ -6,12 +6,6 @@ import { db, findBySlug, type MockArchive } from '../db'
 import { apiError, route, toDetail, toListItem } from './shared'
 
 /**
- * Размер страницы задаёт backend. В моке он намеренно маленький: иначе на девяти
- * фикстурах вторая страница не появилась бы и постраничность осталась бы непроверенной.
- */
-const PER_PAGE = 6
-
-/**
  * Порядок выдачи каталога.
  *
  * Повторяет формулу из `docs/SPEC.md` §9: popularity считается по подтверждённым
@@ -60,14 +54,14 @@ export const marketplaceHandlers = [
     }
 
     const ordered = sortArchives(visible, sort)
-    const start = (page - 1) * PER_PAGE
+    const start = (page - 1) * db.perPage
 
     return HttpResponse.json({
-      items: ordered.slice(start, start + PER_PAGE).map(toListItem),
+      items: ordered.slice(start, start + db.perPage).map(toListItem),
       page,
-      per_page: PER_PAGE,
+      per_page: db.perPage,
       total: ordered.length,
-      has_more: start + PER_PAGE < ordered.length,
+      has_more: start + db.perPage < ordered.length,
     })
   }),
 

@@ -82,13 +82,13 @@ describe('создание архива', () => {
 })
 
 describe('путь к форме', () => {
-  it('ведёт в форму из кабинета', async () => {
+  it('ведёт в форму из шапки', async () => {
     signIn()
     const user = userEvent.setup()
 
     const { router } = renderApp({ path: '/dashboard' })
 
-    await user.click(await screen.findByRole('link', { name: 'New archive' }))
+    await user.click(await screen.findByRole('link', { name: 'Create archive' }))
 
     await waitFor(() => {
       expect(router.state.location.pathname).toBe('/dashboard/new')
@@ -104,7 +104,7 @@ describe('путь к форме', () => {
     expect(await screen.findByRole('heading', { name: 'No archives yet' })).toBeInTheDocument()
     // Ссылка ведёт на страницу «New archive», и названа она так же: создаёт архив
     // кнопка на форме, а не эта ссылка.
-    expect(screen.getAllByRole('link', { name: 'New archive' })).toHaveLength(2)
+    expect(screen.getByRole('link', { name: 'New archive' })).toBeInTheDocument()
   })
 })
 

@@ -476,6 +476,78 @@ function seed(): MockArchive[] {
   ]
 }
 
+/**
+ * Витрина для ручного просмотра в браузере.
+ *
+ * Девяти опубликованных фикстур на страницу в 20 не хватает, и без этих архивов
+ * постраничность в dev не видна. В тестовую базу они не входят: тесты сортировки
+ * и постраничности считают карточки поштучно, и лишние записи ломали бы каждый
+ * такой подсчёт без всякой пользы. Подключает их только `browser.ts`.
+ *
+ * Записи намеренно проще основных: одна строка описания, один-два файла. Их дело —
+ * заполнить сетку, а не проверять опись.
+ */
+const SHOWCASE: [
+  slug: string,
+  title: string,
+  short: string,
+  creator: string,
+  amount: string,
+  views: number,
+  paid: number,
+  coverHue?: number,
+][] = [
+  ['defi-risk-models', 'DeFi Risk Models', 'Модели оценки рисков пулов ликвидности: таблицы и методика.', 'Ledgerline', '39.00', 7420, 318],
+  ['icon-set-outline', 'Outline Icon Set', 'Четыреста иконок в одном стиле, сетка 24 px, светлая и тёмная версии.', 'Pixel Harbor', '9.00', 15230, 902, 32],
+  ['pitch-deck-teardowns', 'Pitch Deck Teardowns', 'Разборы тридцати питч-деков посевной стадии с комментариями.', 'Northbound VC', '24.00', 11890, 540],
+  ['rust-async-handbook', 'Rust Async Handbook', 'Асинхронный Rust без магии: tokio, pinning, отмена задач.', 'Ferris Press', '29.00', 9640, 477],
+  ['botanical-prints', 'Botanical Prints', 'Тридцать ботанических иллюстраций в высоком разрешении для печати.', 'Vera Linde', '14.00', 6310, 265, 120],
+  ['saas-metrics-kit', 'SaaS Metrics Kit', 'Шаблоны для MRR, оттока и когорт: формулы уже внутри.', 'Mara Velez', '19.50', 8805, 391],
+  ['legal-templates-startups', 'Startup Legal Templates', 'Договоры, NDA и оферта для небольшой команды на старте.', 'Clause & Co', '45.00', 5120, 188],
+  ['city-maps-vector', 'Minimal City Maps', 'Двенадцать городских карт в минималистичном стиле.', 'Studio Kirn', '11.00', 4470, 152, 200],
+  ['anchor-testing-guide', 'Anchor Testing Guide', 'Как тестировать программы на Anchor: bankrun, фикстуры, CI.', 'Aurora Labs', '17.00', 7030, 284],
+  ['ux-research-toolkit', 'UX Research Toolkit', 'Сценарии интервью, шаблоны отчётов и карта инсайтов.', 'Field Notes Lab', '22.00', 6680, 233],
+  ['tokenomics-workbook', 'Tokenomics Workbook', 'Рабочая тетрадь по токеномике: вестинг, эмиссия, сценарии.', 'Ledgerline', '34.00', 5905, 207],
+  ['film-grain-textures', 'Film Grain Textures', 'Сорок сканов плёночного зерна для обработки фотографий.', 'Analog Room', '8.00', 12470, 688, 60],
+  ['zk-circuits-notes', 'ZK Circuits Notes', 'Конспект по схемам с нулевым разглашением: от R1CS до PLONK.', 'Nadia Oyelaran', '27.00', 4210, 140],
+  ['freelance-finance', 'Freelance Finance Sheets', 'Учёт доходов, налогов и резервов для фрилансера.', 'Mara Velez', '6.50', 9920, 574],
+  ['typography-specimens', 'Typography Specimens', 'Образцы шрифтовых пар для интерфейсов и печати.', 'Pixel Harbor', '12.00', 5530, 219, 300],
+  ['validator-ops-runbook', 'Validator Ops Runbook', 'Регламент для оператора валидатора Solana: мониторинг и инциденты.', 'Ferris Press', '59.00', 3180, 96],
+]
+
+function showcase(): MockArchive[] {
+  return SHOWCASE.map(([slug, title, short, creator, amount, views, paid, coverHue], index) =>
+    seedArchive({
+      id: `arc_showcase_${index + 1}`,
+      slug,
+      title,
+      short,
+      description: short,
+      creator,
+      amount,
+      views,
+      downloads: Math.round(views * 0.3),
+      paid,
+      // Даты разнесены на сутки, чтобы сортировки по времени было что упорядочивать.
+      createdAt: new Date(Date.UTC(2026, 6, 1 + index, 10)).toISOString(),
+      cover: coverHue === undefined ? undefined : cover(coverHue),
+      files:
+        index % 3 === 0
+          ? [pdf(`${slug}.pdf`, 900 + index * 150), sheet(`${slug}.xlsx`, 120)]
+          : index % 3 === 1
+            ? [pdf(`${slug}.pdf`, 1400 + index * 90), image(`${slug}-preview.png`, 480)]
+            : [pdf(`${slug}.pdf`, 2100 + index * 60)],
+    }),
+  )
+}
+
+/** Добавляет витрину в базу. Только для браузера — см. `SHOWCASE`. */
+export function addShowcase(): void {
+  db.archives.push(...showcase())
+}
+
+const CATALOG_PER_PAGE = 20
+
 interface MockDb {
   archives: MockArchive[]
   uploads: MockUpload[]
@@ -484,6 +556,12 @@ interface MockDb {
   token: string | null
   challenges: Map<string, string>
   counter: number
+  /**
+   * Размер страницы каталога. Его задаёт backend (по умолчанию 20), фронт не
+   * передаёт. 20 — четыре полных ряда по пять плиток. Тесты постраничности уменьшают
+   * его: девяти опубликованных фикстур на вторую страницу при 20 не хватит.
+   */
+  perPage: number
 }
 
 export const db: MockDb = {
@@ -493,6 +571,7 @@ export const db: MockDb = {
   token: null,
   challenges: new Map(),
   counter: 0,
+  perPage: CATALOG_PER_PAGE,
 }
 
 /** Сбрасывает мок в исходное состояние. Вызывается между тестами. */
@@ -503,6 +582,7 @@ export function resetDb(): void {
   db.token = null
   db.challenges = new Map()
   db.counter = 0
+  db.perPage = CATALOG_PER_PAGE
 }
 
 export function nextId(prefix: string): string {

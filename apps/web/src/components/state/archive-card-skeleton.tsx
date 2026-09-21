@@ -1,37 +1,33 @@
+import { TILE_FRAME } from '@/components/archive/tile'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
 /**
- * Скелет повторяет геометрию `ArchiveCard` — тот же корешок, те же отступы,
+ * Скелет повторяет геометрию плитки — тот же кадр обложки, те же отступы,
  * та же линия манифеста, — поэтому при загрузке страница не переставляется.
+ * Им пользуются и каталог, и кабинет автора: каркас плиток у них общий.
  */
 export function ArchiveCardSkeleton({ className }: { className?: string }) {
   return (
-    <div
-      aria-hidden="true"
-      className={cn('bg-card border-border relative overflow-hidden rounded-lg border', className)}
-    >
-      <span className="bg-border absolute inset-y-0 left-0 w-[3px]" />
+    <div aria-hidden="true" className={cn(TILE_FRAME, className)}>
+      <div className="border-border bg-secondary aspect-[1200/630] border-b" />
 
-      <div className="py-5 pr-5 pl-6 sm:pl-7">
-        <div className="flex items-start justify-between gap-6">
-          <div className="min-w-0 flex-1 space-y-2">
-            <Skeleton className="h-[1.0625rem] w-[min(60%,15rem)]" />
-            <Skeleton className="h-3 w-24" />
-          </div>
-          <Skeleton className="h-[1.0625rem] w-24" />
+      <div className="flex flex-1 flex-col p-4">
+        <Skeleton className="h-[1.0625rem] w-3/4" />
+        <Skeleton className="mt-2 h-3 w-24" />
+
+        <div className="mt-4 mb-4 space-y-2">
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-2/3" />
         </div>
 
-        <div className="mt-4 space-y-2">
-          <Skeleton className="h-3 w-full max-w-[38rem]" />
-          <Skeleton className="h-3 w-2/3 max-w-[26rem]" />
-        </div>
-
-        <div className="border-border mt-5 flex gap-8 border-t pt-4">
+        <div className="border-border mt-auto flex gap-6 border-t pt-3">
+          <Skeleton className="h-8 w-10" />
           <Skeleton className="h-8 w-14" />
-          <Skeleton className="h-8 w-16" />
-          <Skeleton className="h-8 w-20" />
+          <Skeleton className="h-8 w-12" />
         </div>
+
+        <Skeleton className="mt-3 h-[1.0625rem] w-24" />
       </div>
     </div>
   )
