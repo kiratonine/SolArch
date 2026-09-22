@@ -68,7 +68,7 @@ export function ArchiveDetails({ archive }: { archive: VerifiedArchive }) {
   return (
     <section className="archive-details" aria-label={t("locked.description")}>
       <dl className="metadata-list">
-        <Metadata label={t("locked.creator")} value={archive.creatorWallet} mono />
+        <Metadata label={t("locked.creator")} value={archive.creatorWallet} mono wallet />
         <Metadata label={t("locked.archiveId")} value={archive.archiveId} mono />
         <Metadata label={t("locked.policy")} value={t("locked.policyValue")} />
       </dl>
@@ -141,11 +141,17 @@ export function FailureSurface({ state, messageKey, canRetry, onRetry, onReturnT
   );
 }
 
-function Metadata({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+function Metadata({ label, value, mono = false, wallet = false }: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  wallet?: boolean;
+}) {
+  const className = [mono && "mono", wallet && "wallet"].filter(Boolean).join(" ");
   return (
     <div>
       <dt>{label}</dt>
-      <dd className={mono ? "mono" : undefined}>{value}</dd>
+      <dd className={className || undefined}>{value}</dd>
     </div>
   );
 }

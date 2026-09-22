@@ -1,4 +1,4 @@
-import { Archive, Copy, Maximize2, Minus, X } from "lucide-react";
+import { Copy, Maximize2, Minus, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
@@ -38,8 +38,14 @@ export function WindowTitleBar() {
   return (
     <header className="window-titlebar" aria-label={t("window.titlebar")}>
       <div className="window-titlebar-brand" data-tauri-drag-region>
-        <Archive size={15} aria-hidden="true" data-tauri-drag-region />
-        <span data-tauri-drag-region>{t("app.name")}</span>
+        <SealMark />
+        <span className="visually-hidden">{t("app.name")}</span>
+        <span className="brand-lockup" aria-hidden="true" data-tauri-drag-region>
+          <span className="brand-wordmark" data-tauri-drag-region>
+            <span className="brand-wordmark-sol">Sol</span>Arch
+          </span>
+          <span className="brand-product" data-tauri-drag-region>Viewer</span>
+        </span>
       </div>
       <div
         className="window-titlebar-drag"
@@ -72,5 +78,18 @@ export function WindowTitleBar() {
         </button>
       </div>
     </header>
+  );
+}
+
+/** SolArch mark: an ink sheet with a sealed brass corner. Same path as the marketplace logo. */
+function SealMark() {
+  return (
+    <svg className="seal-mark" viewBox="0 0 16 16" aria-hidden="true" focusable="false" data-tauri-drag-region>
+      <path
+        d="M4 1.5H12a1.25 1.25 0 0 1 1.25 1.25V13.25a1.25 1.25 0 0 1-1.25 1.25H4a1.25 1.25 0 0 1-1.25-1.25V2.75A1.25 1.25 0 0 1 4 1.5Z"
+        fill="currentColor"
+      />
+      <path className="seal-mark-corner" d="M8.75 1.5H12a1.25 1.25 0 0 1 1.25 1.25V6Z" />
+    </svg>
   );
 }

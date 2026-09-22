@@ -1,26 +1,55 @@
+/*
+ * Golos Text — весь интерфейс. Unbounded — только h1 и логотип.
+ * IBM Plex Mono — только машинные строки: кошельки, id, fingerprint, суммы.
+ * Шрифты лежат в сборке: CSP окна (`style-src 'self'`) не пускает внешние.
+ */
+@import "@fontsource-variable/golos-text";
+@import "@fontsource-variable/unbounded";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+
+/*
+ * Палитра — тёмная Almond маркетплейса (apps/web/src/styles/theme-almond.css, блок `.dark`):
+ * обсидиановые чернила, тёплый светлый текст. Значения держим синхронно с сайтом.
+ *
+ * Золото (--seal, --seal-ink) — только для денег и кошельков: цена, сумма, кошелёк
+ * автора, «Sol» в логотипе. Кнопки, выделение и ссылки золота не получают.
+ * Статусы — своя приглушённая шкала --state-*.
+ */
 :root {
-  font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
-  color: #F2F4F7;
-  background: #0B0D10;
+  font-family: "Golos Text Variable", system-ui, sans-serif;
+  color: oklch(0.905 0.028 72);
+  background: oklch(0.188 0.006 68);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --background: #0B0D10;
-  --surface-primary: #101318;
-  --surface-secondary: #15191F;
-  --surface-hover: #1A1F26;
-  --border: #262C34;
-  --border-strong: #343C47;
-  --text-primary: #F2F4F7;
-  --text-secondary: #929BA7;
-  --accent: #7185F5;
-  --accent-hover: #8293F7;
-  --success: #4DBA84;
-  --warning: #D2A04C;
-  --danger: #D66B73;
-  --panel-radius: 9px;
-  --control-radius: 7px;
-  --focus-ring: #8293F7;
+  --background: oklch(0.188 0.006 68);
+  --surface-primary: oklch(0.235 0.008 66);
+  --surface-secondary: oklch(0.262 0.009 66);
+  --surface-hover: oklch(0.305 0.011 66);
+  --border: oklch(0.335 0.012 66);
+  --border-strong: oklch(0.4 0.014 66);
+  --text-primary: oklch(0.905 0.028 72);
+  --text-secondary: oklch(0.705 0.022 70);
+  --ink-button: oklch(0.905 0.028 72);
+  --ink-button-hover: oklch(0.96 0.02 72);
+  --ink-button-text: oklch(0.188 0.006 68);
+  --seal: oklch(0.8 0.15 76);
+  --seal-ink: oklch(0.835 0.13 78);
+  --seal-soft: oklch(0.3 0.055 66);
+  --state-idle: oklch(0.705 0.02 68);
+  --state-progress: oklch(0.72 0.1 255);
+  --state-ok: oklch(0.72 0.11 155);
+  --state-error: oklch(0.7 0.16 30);
+  --stage: oklch(0.165 0.005 68);
+  --panel-radius: 0.375rem;
+  --control-radius: 0.3rem;
+  --chip-radius: 0.225rem;
+  --focus-ring: oklch(0.8 0.15 76);
+  --font-display: "Unbounded Variable", "Golos Text Variable", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 }
+
+::selection { color: var(--text-primary); background: var(--seal-soft); }
 
 * { box-sizing: border-box; }
 
@@ -68,7 +97,7 @@ button:active:not(:disabled) { transform: translateY(1px); }
   height: 40px;
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border);
-  background: var(--surface-primary);
+  background: var(--background);
   user-select: none;
 }
 
@@ -80,10 +109,15 @@ button:active:not(:disabled) { transform: translateY(1px); }
   padding-inline: 12px;
   color: var(--text-primary);
   font-size: 12px;
-  font-weight: 650;
 }
 
-.window-titlebar-brand svg { color: var(--text-secondary); }
+.window-titlebar-brand .seal-mark { width: 15px; height: 15px; color: var(--text-primary); transform: translateY(-6%); }
+.window-titlebar-brand .seal-mark-corner { fill: var(--seal); }
+/* Надпись и «Viewer» разных гарнитур: ровняем их по общей базовой линии, а не по центру боксов. */
+.brand-lockup { display: flex; align-items: baseline; gap: 6px; line-height: 1; }
+.brand-wordmark { font-family: var(--font-display); font-size: 12.5px; font-weight: 700; letter-spacing: -0.04em; }
+.brand-wordmark-sol { color: var(--seal-ink); }
+.brand-product { color: var(--text-secondary); font-size: 12px; font-weight: 500; }
 .window-titlebar-drag { min-width: 0; }
 .window-controls { display: flex; align-items: stretch; }
 
@@ -112,7 +146,7 @@ button:active:not(:disabled) { transform: translateY(1px); }
   min-height: 52px;
   padding: 6px 20px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface-primary);
+  background: var(--background);
 }
 
 .topbar-actions,
@@ -162,15 +196,15 @@ button:active:not(:disabled) { transform: translateY(1px); }
   font-size: 12px;
 }
 
-.device-ready svg { color: var(--success); }
+.device-ready svg { color: var(--state-ok); }
 .device-loading svg { color: var(--text-secondary); }
-.device-unavailable { color: var(--danger); }
+.device-unavailable { color: var(--state-error); }
 
 .locale-switcher {
   min-height: 40px;
   color: var(--border-strong);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .locale-switcher button {
@@ -179,7 +213,7 @@ button:active:not(:disabled) { transform: translateY(1px); }
   padding: 0 8px;
   color: var(--text-secondary);
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--control-radius);
   background: transparent;
   cursor: pointer;
   transition: color 100ms cubic-bezier(0, 0, 0.2, 1), background-color 100ms cubic-bezier(0, 0, 0.2, 1);
@@ -215,16 +249,17 @@ h1, h2, p { overflow-wrap: anywhere; }
 h1 {
   margin: 0;
   color: var(--text-primary);
-  font-size: 26px;
-  font-weight: 650;
-  line-height: 1.25;
-  letter-spacing: -0.02em;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.025em;
 }
 
 h2 {
   margin: 0;
   font-size: 16px;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.4;
 }
 
@@ -247,7 +282,7 @@ h2 {
 }
 
 .empty-workspace > svg { color: var(--text-secondary); }
-.empty-workspace h1 { font-size: 21px; }
+.empty-workspace h1 { font-size: 19px; }
 .empty-workspace p,
 .operation-surface p,
 .failure-copy p {
@@ -272,16 +307,16 @@ h2 {
   gap: 8px;
   padding: 9px 14px;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .primary-button {
-  color: var(--text-primary);
-  border: 1px solid var(--accent);
-  background: var(--accent);
+  color: var(--ink-button-text);
+  border: 1px solid var(--ink-button);
+  background: var(--ink-button);
 }
 
-.primary-button:hover { border-color: var(--accent-hover); background: var(--accent-hover); }
+.primary-button:hover { border-color: var(--ink-button-hover); background: var(--ink-button-hover); }
 
 .secondary-button {
   color: var(--text-primary);
@@ -312,13 +347,12 @@ h2 {
   padding: 24px;
 }
 
-.operation-surface > svg { color: var(--accent); }
-.operation-surface h1, .failure-surface h1 { font-size: 18px; }
+.operation-surface > svg { color: var(--state-progress); }
+.operation-surface h1, .failure-surface h1 { font-size: 17px; }
 
 .archive-workspace {
   width: 100%;
   overflow: hidden;
-  box-shadow: 0 16px 40px rgb(0 0 0 / 8%);
 }
 
 .archive-heading {
@@ -338,18 +372,18 @@ h2 {
   min-height: 24px;
   padding: 3px 8px;
   border: 1px solid currentcolor;
-  border-radius: 999px;
+  border-radius: var(--chip-radius);
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1;
 }
 
-.status-warning { color: var(--warning); }
-.status-success { color: var(--success); }
-.status-neutral { color: var(--text-secondary); }
+.status-warning { color: var(--state-progress); }
+.status-success { color: var(--state-ok); }
+.status-neutral { color: var(--state-idle); }
 
-.verified-label { gap: 6px; color: var(--success); font-size: 12px; }
-.archive-title-block h1 { font-size: 22px; }
+.verified-label { gap: 6px; color: var(--state-ok); font-size: 12px; }
+.archive-title-block h1 { font-size: 20px; }
 .archive-title-block > p { margin: 7px 0 0; color: var(--text-secondary); font-size: 13px; }
 
 .archive-workspace-compact {
@@ -358,8 +392,7 @@ h2 {
   min-width: 0;
   min-height: 0;
   height: 100%;
-  border-radius: 7px;
-  box-shadow: none;
+  border-radius: var(--panel-radius);
 }
 
 .archive-workspace-compact .archive-heading {
@@ -403,12 +436,10 @@ h2 {
 .fingerprint-row > span,
 .payment-facts dt,
 .price-block > span {
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   color: var(--text-secondary);
   font-size: 12px;
-  font-weight: 650;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-weight: 500;
 }
 
 .metadata-list dd,
@@ -422,9 +453,12 @@ h2 {
 
 .mono,
 code {
-  font-family: "Cascadia Code", Consolas, monospace;
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
+
+/* Деньги и кошельки — единственное место, где живёт золото. */
+.metadata-list dd.wallet { color: var(--seal-ink); }
 
 .fingerprint-row { padding-top: 18px; }
 .fingerprint-row > span { display: block; }
@@ -446,8 +480,8 @@ code {
 
 .price-block { margin-bottom: 20px; }
 .price-block > span { display: block; }
-.price-block strong { display: flex; align-items: baseline; gap: 8px; font-size: 15px; font-weight: 500; }
-.price-block b { font-family: "Cascadia Code", Consolas, monospace; font-size: 29px; font-weight: 650; letter-spacing: -0.03em; }
+.price-block strong { display: flex; align-items: baseline; gap: 8px; color: var(--seal-ink); font-size: 15px; font-weight: 500; }
+.price-block b { font-family: var(--font-mono); font-size: 30px; font-weight: 500; letter-spacing: -0.02em; }
 .unlock-button { width: 100%; }
 .action-note { margin: 12px 0 0; color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
 
@@ -459,7 +493,7 @@ code {
   margin: 0 auto 12px;
   place-items: center;
   border: 1px solid var(--border-strong);
-  border-radius: 8px;
+  border-radius: var(--panel-radius);
   background: #FFFFFF;
 }
 
@@ -471,12 +505,12 @@ code {
   align-items: start;
   margin: 0;
 }
-.payment-facts dd.mono { font-size: 17px; font-weight: 650; white-space: nowrap; }
+.payment-facts dd.mono { color: var(--seal-ink); font-size: 17px; font-weight: 500; white-space: nowrap; }
 .payment-fact-status dd { padding-top: 1px; }
 .payment-guidance { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
 .payment-detail { margin: 0; color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
 .expiry-row { display: grid; gap: 4px; margin: 8px 0 0; color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
-.expiry-row time { color: var(--text-primary); font-family: "Cascadia Code", Consolas, monospace; }
+.expiry-row time { color: var(--text-primary); font-family: var(--font-mono); }
 
 .payment-confirmed {
   display: grid;
@@ -484,16 +518,16 @@ code {
   min-height: 180px;
   margin-bottom: 24px;
   place-content: center;
-  color: var(--success);
+  color: var(--state-ok);
   text-align: center;
 }
 
 .payment-confirmed strong { max-width: 28ch; color: var(--text-primary); font-size: 14px; line-height: 1.5; }
-.activation-spinner { position: absolute; right: 20px; bottom: 20px; color: var(--success); }
+.activation-spinner { position: absolute; right: 20px; bottom: 20px; color: var(--state-ok); }
 
 .files-workspace { min-width: 0; min-height: 0; padding: 28px; }
 .files-heading { gap: 12px; margin-bottom: 24px; }
-.files-heading > svg { color: var(--success); }
+.files-heading > svg { color: var(--state-ok); }
 .files-heading p { margin: 4px 0 0; color: var(--text-secondary); font-size: 12px; }
 .protected-layout {
   display: grid;
@@ -549,12 +583,12 @@ code {
 
 .file-list-button > svg { flex: 0 0 auto; color: var(--text-secondary); }
 .file-list-button:hover { background: var(--surface-hover); }
-.file-list-button[aria-pressed="true"] { background: var(--surface-hover); box-shadow: inset 2px 0 var(--accent); }
-.file-list-button[aria-pressed="true"] > svg:first-child { color: var(--accent); }
+.file-list-button[aria-pressed="true"] { background: var(--surface-hover); box-shadow: inset 2px 0 var(--text-primary); }
+.file-list-button[aria-pressed="true"] > svg:first-child { color: var(--text-primary); }
 .file-list-button:focus-visible { position: relative; z-index: 1; outline: 2px solid var(--focus-ring); outline-offset: -3px; }
 .file-list-copy { display: grid; gap: 3px; min-width: 0; }
 .file-list-name { overflow: hidden; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.file-list-meta { display: flex; gap: 5px; min-width: 0; color: var(--text-secondary); font-size: 10px; }
+.file-list-meta { display: flex; gap: 5px; min-width: 0; color: var(--text-secondary); font-family: var(--font-mono); font-size: 10.5px; }
 .files-empty { margin: 0; padding: 20px; color: var(--text-secondary); font-size: 13px; }
 
 .visually-hidden {
@@ -583,20 +617,20 @@ code {
 
 .viewer-empty p,
 .viewer-message span { max-width: 42ch; margin: 0; font-size: 13px; line-height: 1.55; }
-.viewer-empty-icon { display: grid; width: 42px; height: 42px; place-items: center; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-primary); }
+.viewer-empty-icon { display: grid; width: 42px; height: 42px; place-items: center; border: 1px solid var(--border); border-radius: var(--panel-radius); background: var(--surface-primary); }
 .viewer-surface { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; min-width: 0; min-height: 0; background: var(--surface-secondary); }
 .viewer-toolbar { display: grid; grid-template-columns: minmax(120px, 1fr) auto 40px; align-items: center; gap: 12px; min-height: 52px; padding: 6px 8px 6px 16px; border-bottom: 1px solid var(--border); background: var(--surface-primary); }
 .viewer-file-name { min-width: 0; overflow: hidden; color: var(--text-primary); font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .viewer-controls { display: flex; align-items: center; gap: 2px; }
 .viewer-controls .icon-button { width: 34px; min-height: 34px; height: 34px; }
 .viewer-controls .icon-button:disabled { opacity: .35; cursor: default; }
-.viewer-controls .icon-button[aria-pressed="true"] { color: var(--accent); background: var(--surface-hover); }
+.viewer-controls .icon-button[aria-pressed="true"] { color: var(--text-primary); background: var(--surface-hover); }
 .viewer-control-divider { width: 1px; height: 20px; margin-inline: 5px; background: var(--border); }
 .viewer-page-count,
-.viewer-scale { padding-inline: 7px; color: var(--text-secondary); font-size: 11px; white-space: nowrap; }
+.viewer-scale { padding-inline: 7px; color: var(--text-secondary); font-family: var(--font-mono); font-size: 11px; white-space: nowrap; }
 .viewer-stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
 .viewer-policy { padding: 8px 12px; color: var(--text-secondary); border-top: 1px solid var(--border); background: var(--surface-primary); font-size: 10px; text-align: center; }
-.viewer-message-error > svg { color: var(--danger); }
+.viewer-message-error > svg { color: var(--state-error); }
 .viewer-message-error .secondary-button { margin-top: 4px; }
 
 .watermark-overlay {
@@ -612,9 +646,9 @@ code {
 }
 .watermark-overlay span {
   align-self: center;
-  color: var(--accent);
-  font: 600 10px/1.4 "Cascadia Code", Consolas, monospace;
-  opacity: .22;
+  color: oklch(0.6 0.04 70);
+  font: 500 10px/1.4 var(--font-mono);
+  opacity: .3;
   text-align: center;
   transform: rotate(-24deg);
   white-space: nowrap;
@@ -624,14 +658,14 @@ code {
 .image-viewport,
 .document-viewport,
 .xlsx-viewport { position: absolute; inset: 0; overflow: auto; }
-.pdf-viewport { display: grid; place-items: start center; padding: 16px; background: #1A1D22; }
-.pdf-viewport canvas { display: block; background: #FFFFFF; box-shadow: 0 8px 24px rgb(0 0 0 / 18%); }
-.image-viewport { display: grid; place-items: center; padding: 28px; background: #111419; }
+.pdf-viewport { display: grid; place-items: start center; padding: 16px; background: var(--stage); }
+.pdf-viewport canvas { display: block; background: #FFFFFF; }
+.image-viewport { display: grid; place-items: center; padding: 28px; background: var(--stage); }
 .image-viewport img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; user-select: none; }
-.document-viewport { padding: 32px; background: #1A1D22; }
-.document-page { width: min(100%, 760px); min-height: 960px; margin-inline: auto; padding: 64px 72px; color: #20242A; background: #FFFFFF; box-shadow: 0 8px 24px rgb(0 0 0 / 18%); font: 15px/1.65 "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; }
+.document-viewport { padding: 32px; background: var(--stage); }
+.document-page { width: min(100%, 760px); min-height: 960px; margin-inline: auto; padding: 64px 72px; color: #20242A; background: #FFFFFF; font: 15px/1.65 "Golos Text Variable", system-ui, sans-serif; }
 .document-page p { margin: 0 0 12px; white-space: pre-wrap; }
-.document-page .docx-heading { margin: 24px 0 12px; color: #16191D; font-size: 21px; font-weight: 650; line-height: 1.35; }
+.document-page .docx-heading { margin: 24px 0 12px; color: #16191D; font-size: 21px; font-weight: 600; line-height: 1.35; }
 .document-page p.docx-list { padding-left: 20px; }
 .docx-bold { font-weight: 700; }
 .docx-italic { font-style: italic; }
@@ -639,13 +673,13 @@ code {
 .docx-table { width: 100%; margin: 16px 0; border-collapse: collapse; table-layout: fixed; }
 .docx-table td { padding: 7px 9px; border: 1px solid #C9CED5; overflow-wrap: anywhere; white-space: pre-wrap; }
 
-.xlsx-viewport { display: grid; grid-template-rows: auto minmax(0, 1fr); background: #111419; }
+.xlsx-viewport { display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--stage); }
 .xlsx-tabs { display: flex; gap: 2px; min-height: 42px; padding: 6px 10px; overflow-x: auto; border-bottom: 1px solid var(--border); background: var(--surface-primary); }
-.xlsx-tabs button { min-height: 30px; padding: 4px 10px; color: var(--text-secondary); border: 1px solid transparent; border-radius: 6px; background: transparent; cursor: pointer; white-space: nowrap; }
+.xlsx-tabs button { min-height: 30px; padding: 4px 10px; color: var(--text-secondary); border: 1px solid transparent; border-radius: var(--control-radius); background: transparent; cursor: pointer; white-space: nowrap; }
 .xlsx-tabs button:hover { color: var(--text-primary); background: var(--surface-hover); }
 .xlsx-tabs button[aria-selected="true"] { color: var(--text-primary); border-color: var(--border-strong); background: var(--surface-secondary); }
 .xlsx-grid-wrap { min-width: 0; overflow: auto; }
-.xlsx-grid { min-width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; color: var(--text-primary); font-size: 12px; }
+.xlsx-grid { min-width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; color: var(--text-primary); font-size: 12px; font-variant-numeric: tabular-nums; }
 .xlsx-grid th,
 .xlsx-grid td { min-width: 120px; height: 30px; padding: 5px 8px; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); text-align: left; text-overflow: ellipsis; white-space: nowrap; }
 .xlsx-grid thead th { position: sticky; z-index: 2; top: 0; color: var(--text-secondary); background: var(--surface-primary); text-align: center; }
@@ -662,10 +696,10 @@ code {
   padding: 24px;
 }
 
-.failure-surface > svg { color: var(--danger); }
+.failure-surface > svg { color: var(--state-error); }
 .failure-actions { display: flex; gap: 8px; }
 .failure-surface-payment { border-color: var(--border-strong); }
-.failure-surface-payment > svg { color: var(--warning); }
+.failure-surface-payment > svg { color: var(--state-progress); }
 
 .security-footer {
   justify-content: center;
@@ -674,7 +708,7 @@ code {
   padding: 10px 20px;
   color: var(--text-secondary);
   border-top: 1px solid var(--border);
-  background: var(--surface-primary);
+  background: var(--background);
   font-size: 11px;
   text-align: center;
 }
