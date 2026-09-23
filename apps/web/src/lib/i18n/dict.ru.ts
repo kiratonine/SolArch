@@ -344,6 +344,20 @@ export const ru: Dictionary = {
         },
       },
 
+      cover: {
+        title: 'Обложка архива',
+        body: 'Показывается на карточке в каталоге и публичной странице. Замена не меняет запечатанный .slr.',
+        formats: 'PNG, JPEG или WebP; до 5 MiB и 4096 × 4096 пикселей.',
+        choose: 'Выбрать обложку',
+        replace: 'Заменить обложку',
+        upload: 'Загрузить обложку',
+        uploading: 'Загружаем',
+        selected: (name: string) => `Выбрано: ${name}`,
+        success: 'Обложка обновлена.',
+        invalidType: 'Выберите изображение PNG, JPEG или WebP.',
+        tooLarge: 'Обложка должна быть не больше 5 MiB.',
+      },
+
       files: {
         title: 'Внутри архива',
         loading: 'Загружаем список файлов',

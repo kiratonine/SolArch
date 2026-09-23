@@ -386,6 +386,20 @@ export const en = {
         },
       },
 
+      cover: {
+        title: 'Archive cover',
+        body: 'Shown on the catalog card and public archive page. Replacing it does not change the sealed .slr.',
+        formats: 'PNG, JPEG or WebP; up to 5 MiB and 4096 × 4096 pixels.',
+        choose: 'Choose cover',
+        replace: 'Replace cover',
+        upload: 'Upload cover',
+        uploading: 'Uploading',
+        selected: (name: string) => `Selected: ${name}`,
+        success: 'Cover updated.',
+        invalidType: 'Choose a PNG, JPEG or WebP image.',
+        tooLarge: 'The cover must be 5 MiB or smaller.',
+      },
+
       files: {
         title: 'Inside the archive',
         loading: 'Loading the file list',

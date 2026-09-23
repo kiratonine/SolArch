@@ -3,6 +3,7 @@ import { Link, createFileRoute } from '@tanstack/react-router'
 import { ArrowLeftIcon } from 'lucide-react'
 
 import { FileManifest } from '@/components/archive/file-manifest'
+import { CoverUpload } from '@/components/archive/cover-upload'
 import { MetricGrid } from '@/components/archive/metric-grid'
 import { PriceTag } from '@/components/archive/price-tag'
 import { StatusBadge } from '@/components/archive/status-badge'
@@ -188,6 +189,7 @@ function ArchiveDetailPage() {
           архива, а опись — справка, за которой возвращаются, а не действие. */}
       <section className="mt-10">
         <SectionHeading>{t.dashboard.detail.listing.title}</SectionHeading>
+        <CoverUpload archive={data} />
         <PublishPanel archive={data} className="mt-4" />
 
         {/* Опубликованный архив показан в каталоге настоящей карточкой, и предпросмотр

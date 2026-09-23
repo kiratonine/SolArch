@@ -10,6 +10,7 @@ import { getAssociatedTokenAddressSync, createAssociatedTokenAccountInstruction,
 import { PrismaService } from '@/common/prisma.service';
 import { EnvService } from '@/config/env.service';
 import { CreateArchiveDto, UpdateArchiveDto } from './archives.dto';
+import { ArchiveCoversService } from './archive-covers.service';
 
 @Injectable()
 export class ArchivesService {
@@ -19,6 +20,7 @@ export class ArchivesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly env: EnvService,
+    private readonly archiveCovers: ArchiveCoversService,
   ) {}
 
   async isAtaReady(ataAddress?: string | null): Promise<boolean> {
@@ -73,7 +75,7 @@ export class ArchivesService {
       title: arc.title,
       short_description: arc.shortDescription || '',
       description: arc.description || '',
-      cover_url: arc.listing?.coverStorageKey || null,
+      cover_url: this.archiveCovers.publicUrl(arc.listing?.coverStorageKey),
       technical_status: arc.technicalStatus,
       marketplace_status: arc.marketplaceStatus,
       price: {
@@ -280,8 +282,6 @@ export class ArchivesService {
       throw new NotFoundException('Archive not found');
     }
 
-    const coverKey = dto.cover_url !== undefined ? dto.cover_url : dto.cover_storage_key;
-
     const updated = await this.prisma.archive.update({
       where: { id: archiveId },
       data: {
@@ -293,7 +293,6 @@ export class ArchivesService {
             title: dto.title ?? archive.title,
             shortDescription: dto.short_description ?? archive.shortDescription,
             description: dto.description ?? archive.description,
-            coverStorageKey: coverKey !== undefined ? coverKey : archive.listing?.coverStorageKey,
             category: dto.category,
             tags: dto.tags,
           },

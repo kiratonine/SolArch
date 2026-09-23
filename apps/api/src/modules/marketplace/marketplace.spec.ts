@@ -1,6 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { MarketplaceService } from './marketplace.service';
 import { PrismaService } from '@/common/prisma.service';
+import { ArchiveCoversService } from '@/modules/archives/archive-covers.service';
+
+const COVER_KEY = '01234567-89ab-4cde-8fab-0123456789ab.jpg';
 
 describe('MarketplaceService Hardening', () => {
   let service: MarketplaceService;
@@ -25,6 +28,13 @@ describe('MarketplaceService Hardening', () => {
       providers: [
         MarketplaceService,
         { provide: PrismaService, useValue: prisma },
+        {
+          provide: ArchiveCoversService,
+          useValue: {
+            publicUrl: (key?: string | null) =>
+              key ? `https://api.solarch.example/v1/marketplace/covers/${key}` : null,
+          },
+        },
       ],
     }).compile();
 
@@ -93,7 +103,7 @@ describe('MarketplaceService Hardening', () => {
   test('getArchiveBySlug includes cover_url and id alias (B2)', async () => {
     const mockListing = {
       slug: 'cover-slug',
-      coverStorageKey: 'covers/cover1.jpg',
+      coverStorageKey: COVER_KEY,
       marketplaceStatus: 'published',
       archive: {
         id: 'arc_cover_1',
@@ -115,7 +125,9 @@ describe('MarketplaceService Hardening', () => {
     prisma.marketplaceEvent.findFirst.mockResolvedValue({ id: 'evt_1' });
 
     const res = await service.getArchiveBySlug('cover-slug', 'sess_1');
-    expect(res.cover_url).toBe('covers/cover1.jpg');
+    expect(res.cover_url).toBe(
+      `https://api.solarch.example/v1/marketplace/covers/${COVER_KEY}`,
+    );
     expect(res.id).toBe('arc_cover_1');
     expect(res.archive_id).toBe('arc_cover_1');
   });

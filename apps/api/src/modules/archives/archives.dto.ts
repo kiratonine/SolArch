@@ -75,14 +75,6 @@ export class UpdateArchiveDto {
 
   @IsOptional()
   @IsString()
-  cover_storage_key?: string;
-
-  @IsOptional()
-  @IsString()
-  cover_url?: string;
-
-  @IsOptional()
-  @IsString()
   category?: string;
 
   @IsOptional()

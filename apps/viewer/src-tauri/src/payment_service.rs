@@ -13,6 +13,7 @@ use crate::{
         BackendApi, BackendConfig, BackendError, BackendErrorCode, CreateIntentRequest,
         ValidatedArchiveMetadata, VerifyIntentRequest, VerifyOutcome, VerifyTransport,
     },
+    clock::{ClockSource, ProcessClockSource},
     device::DeviceManager,
     error::ViewerError,
     license_repository::LocalLicenseRepository,
@@ -54,6 +55,7 @@ pub struct PaymentService {
     runtime: Mutex<Runtime>,
     operation: Mutex<()>,
     nonce_source: Arc<dyn NonceSource>,
+    clock_source: Arc<dyn ClockSource>,
 }
 
 pub trait NonceSource: Send + Sync {
@@ -70,6 +72,19 @@ impl NonceSource for OsNonceSource {
     }
 }
 
+#[cfg(test)]
+struct FixedTestClock;
+
+#[cfg(test)]
+impl ClockSource for FixedTestClock {
+    fn sample(&self) -> Result<ProcessClockSample, ViewerError> {
+        Ok(ProcessClockSample {
+            utc_unix_seconds: 1_788_825_600,
+            monotonic_millis: 1_000,
+        })
+    }
+}
+
 impl PaymentService {
     pub fn new(
         backend: Option<Arc<dyn BackendApi>>,
@@ -77,21 +92,23 @@ impl PaymentService {
         secrets: Arc<dyn KeyedSecretStore>,
         repository: ActiveIntentRepository,
     ) -> Self {
-        Self::with_nonce_source(
+        Self::with_sources(
             backend,
             config,
             secrets,
             repository,
             Arc::new(OsNonceSource),
+            Arc::new(ProcessClockSource),
         )
     }
 
-    fn with_nonce_source(
+    fn with_sources(
         backend: Option<Arc<dyn BackendApi>>,
         config: Option<BackendConfig>,
         secrets: Arc<dyn KeyedSecretStore>,
         repository: ActiveIntentRepository,
         nonce_source: Arc<dyn NonceSource>,
+        clock_source: Arc<dyn ClockSource>,
     ) -> Self {
         Self {
             backend,
@@ -104,7 +121,26 @@ impl PaymentService {
             }),
             operation: Mutex::new(()),
             nonce_source,
+            clock_source,
         }
+    }
+
+    #[cfg(test)]
+    fn with_nonce_source(
+        backend: Option<Arc<dyn BackendApi>>,
+        config: Option<BackendConfig>,
+        secrets: Arc<dyn KeyedSecretStore>,
+        repository: ActiveIntentRepository,
+        nonce_source: Arc<dyn NonceSource>,
+    ) -> Self {
+        Self::with_sources(
+            backend,
+            config,
+            secrets,
+            repository,
+            nonce_source,
+            Arc::new(FixedTestClock),
+        )
     }
 
     pub fn reset_for_archive_switch(&self) -> Result<(), ViewerError> {
@@ -284,8 +320,7 @@ impl PaymentService {
         licenses: &LocalLicenseRepository,
         license_trust: &solarch_core::license::LicenseTrustStore,
         rollback: &RollbackManager,
-        clock: ProcessClockSample,
-    ) -> Result<(), ViewerError> {
+    ) -> Result<ProcessClockSample, ViewerError> {
         let _guard = self.operation.lock().map_err(|_| ViewerError::Internal)?;
         let active = self
             .runtime
@@ -318,7 +353,8 @@ impl PaymentService {
         let (grant, refresh_token) = response
             .into_parts()
             .map_err(|_| ViewerError::InvalidLicense)?;
-        let now = time::OffsetDateTime::from_unix_timestamp(clock.utc_unix_seconds)
+        let response_clock = self.clock_source.sample()?;
+        let now = time::OffsetDateTime::from_unix_timestamp(response_clock.utc_unix_seconds)
             .map_err(|_| ViewerError::RefreshRequired)?;
         let validated = validate_fresh_response(
             &grant,
@@ -351,14 +387,14 @@ impl PaymentService {
             return Err(error);
         }
         licenses.save_validated(&validated)?;
-        rollback.reset_after_online_refresh(clock)?;
+        rollback.reset_after_online_refresh(response_clock)?;
         archives.install_unwrapped(
             &archive.archive_id,
             &archive.fingerprint,
             validated.into_unwrapped(),
         )?;
         self.cleanup_completed_intent(&active);
-        Ok(())
+        Ok(response_clock)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -369,8 +405,7 @@ impl PaymentService {
         licenses: &LocalLicenseRepository,
         license_trust: &solarch_core::license::LicenseTrustStore,
         rollback: &RollbackManager,
-        clock: ProcessClockSample,
-    ) -> Result<(), ViewerError> {
+    ) -> Result<ProcessClockSample, ViewerError> {
         let _guard = self.operation.lock().map_err(|_| ViewerError::Internal)?;
         let archive = archives.locked_identity()?;
         let private = device.load_or_create()?;
@@ -421,7 +456,8 @@ impl PaymentService {
                 return Err(mapped);
             }
         };
-        let now = time::OffsetDateTime::from_unix_timestamp(clock.utc_unix_seconds)
+        let response_clock = self.clock_source.sample()?;
+        let now = time::OffsetDateTime::from_unix_timestamp(response_clock.utc_unix_seconds)
             .map_err(|_| ViewerError::RefreshRequired)?;
         let validated = validate_fresh_response(
             &grant,
@@ -442,12 +478,13 @@ impl PaymentService {
             return Err(ViewerError::InvalidLicense);
         }
         licenses.save_validated(&validated)?;
-        rollback.reset_after_online_refresh(clock)?;
+        rollback.reset_after_online_refresh(response_clock)?;
         archives.install_unwrapped(
             &archive.archive_id,
             &archive.fingerprint,
             validated.into_unwrapped(),
-        )
+        )?;
+        Ok(response_clock)
     }
 
     fn backend(&self) -> Result<&dyn BackendApi, ViewerError> {
@@ -702,6 +739,24 @@ mod tests {
         }
     }
 
+    struct SequenceClock(Mutex<std::collections::VecDeque<ProcessClockSample>>);
+
+    impl SequenceClock {
+        fn new(samples: impl IntoIterator<Item = ProcessClockSample>) -> Self {
+            Self(Mutex::new(samples.into_iter().collect()))
+        }
+    }
+
+    impl ClockSource for SequenceClock {
+        fn sample(&self) -> Result<ProcessClockSample, ViewerError> {
+            self.0
+                .lock()
+                .map_err(|_| ViewerError::Internal)?
+                .pop_front()
+                .ok_or(ViewerError::Internal)
+        }
+    }
+
     #[derive(Default)]
     struct MockBackend {
         creates: AtomicUsize,
@@ -712,6 +767,8 @@ mod tests {
         verify_blocker: Mutex<Option<(Arc<Barrier>, Arc<Barrier>)>>,
         metadata_mismatch: AtomicBool,
         refresh_error: Mutex<Option<BackendErrorCode>>,
+        activation_window: Mutex<Option<(String, String)>>,
+        refresh_window: Mutex<Option<(String, String)>>,
     }
 
     impl BackendApi for MockBackend {
@@ -830,11 +887,12 @@ mod tests {
             {
                 return Err(BackendError::Unavailable);
             }
-            let grant = issued_grant(
-                &request.request_nonce,
-                "2026-09-07T00:00:00Z",
-                "2026-09-10T00:00:00Z",
-            );
+            let window = self.activation_window.lock().unwrap().clone();
+            let (issued_at, offline_valid_until) = window
+                .as_ref()
+                .map(|(issued_at, deadline)| (issued_at.as_str(), deadline.as_str()))
+                .unwrap_or(("2026-09-07T00:00:00Z", "2026-09-10T00:00:00Z"));
+            let grant = issued_grant(&request.request_nonce, issued_at, offline_valid_until);
             Ok(ActivationResponse {
                 license: grant.license,
                 wrapped_content_key: grant.wrapped_content_key,
@@ -857,10 +915,15 @@ mod tests {
                     request_id: Some("req_refresh".into()),
                 });
             }
+            let window = self.refresh_window.lock().unwrap().clone();
+            let (issued_at, offline_valid_until) = window
+                .as_ref()
+                .map(|(issued_at, deadline)| (issued_at.as_str(), deadline.as_str()))
+                .unwrap_or(("2026-09-10T00:00:00Z", "2026-09-13T00:00:00Z"));
             Ok(issued_grant(
                 &request.request_nonce,
-                "2026-09-10T00:00:00Z",
-                "2026-09-13T00:00:00Z",
+                issued_at,
+                offline_valid_until,
             ))
         }
     }
@@ -1036,7 +1099,6 @@ mod tests {
                 &LocalLicenseRepository::new(directory.path().join("early-licenses")).unwrap(),
                 &TrustConfig::development_fixtures().unwrap().license_keys,
                 &RollbackManager::new(Arc::new(MemorySecretStore::default())),
-                sample(),
             ),
             Err(ViewerError::PaymentFailed)
         ));
@@ -1090,14 +1152,7 @@ mod tests {
         service.verify_payment().unwrap();
         let license_trust = TrustConfig::development_fixtures().unwrap().license_keys;
         service
-            .activate(
-                &archives,
-                &device,
-                &licenses,
-                &license_trust,
-                &rollback,
-                sample(),
-            )
+            .activate(&archives, &device, &licenses, &license_trust, &rollback)
             .unwrap();
         assert!(vault
             .read(SecretPurpose::PaymentIntent, "pi_test_01")
@@ -1129,6 +1184,110 @@ mod tests {
     }
 
     #[test]
+    fn activation_uses_fresh_response_clock_for_newly_issued_license() {
+        let directory = tempfile::tempdir().unwrap();
+        let backend = Arc::new(MockBackend::default());
+        *backend.activation_window.lock().unwrap() =
+            Some(("2026-09-07T00:00:02Z".into(), "2026-09-10T00:00:02Z".into()));
+        let request_started_at = sample();
+        let response_clock = ProcessClockSample {
+            utc_unix_seconds: request_started_at.utc_unix_seconds + 2,
+            monotonic_millis: request_started_at.monotonic_millis + 2_000,
+        };
+        let (archives, device) = open_fixture(directory.path());
+        let licenses = LocalLicenseRepository::new(directory.path().join("licenses")).unwrap();
+        let rollback = RollbackManager::new(Arc::new(MemorySecretStore::default()));
+        let service = PaymentService::with_sources(
+            Some(backend),
+            Some(BackendConfig::development("https://api.solarch.example/").unwrap()),
+            Arc::new(MemoryKeyedSecretStore::default()),
+            ActiveIntentRepository::new(directory.path().join("payments")).unwrap(),
+            Arc::new(FixedNonce),
+            Arc::new(SequenceClock::new([response_clock])),
+        );
+        service.check_metadata(&archives, &device).unwrap();
+        service.prepare_payment(&archives, &device).unwrap();
+        service.verify_payment().unwrap();
+        service.verify_payment().unwrap();
+        service.verify_payment().unwrap();
+
+        let used_clock = service
+            .activate(
+                &archives,
+                &device,
+                &licenses,
+                &TrustConfig::development_fixtures().unwrap().license_keys,
+                &rollback,
+            )
+            .unwrap();
+
+        assert_eq!(used_clock, response_clock);
+        assert!(used_clock.utc_unix_seconds > request_started_at.utc_unix_seconds);
+        assert_eq!(
+            archives
+                .list_files(
+                    time::OffsetDateTime::from_unix_timestamp(used_clock.utc_unix_seconds).unwrap()
+                )
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn refresh_uses_fresh_response_clock_for_newly_issued_license() {
+        let directory = tempfile::tempdir().unwrap();
+        let backend = Arc::new(MockBackend::default());
+        *backend.refresh_window.lock().unwrap() =
+            Some(("2026-09-10T00:00:02Z".into(), "2026-09-13T00:00:02Z".into()));
+        let request_started_at = ProcessClockSample {
+            utc_unix_seconds: 1_789_084_800,
+            monotonic_millis: 2_000,
+        };
+        let response_clock = ProcessClockSample {
+            utc_unix_seconds: request_started_at.utc_unix_seconds + 2,
+            monotonic_millis: request_started_at.monotonic_millis + 2_000,
+        };
+        let (archives, device) = open_fixture(directory.path());
+        let licenses = LocalLicenseRepository::new(directory.path().join("licenses")).unwrap();
+        let rollback = RollbackManager::new(Arc::new(MemorySecretStore::default()));
+        let service = PaymentService::with_sources(
+            Some(backend),
+            Some(BackendConfig::development("https://api.solarch.example/").unwrap()),
+            Arc::new(MemoryKeyedSecretStore::default()),
+            ActiveIntentRepository::new(directory.path().join("payments")).unwrap(),
+            Arc::new(FixedNonce),
+            Arc::new(SequenceClock::new([sample(), response_clock])),
+        );
+        service.check_metadata(&archives, &device).unwrap();
+        service.prepare_payment(&archives, &device).unwrap();
+        service.verify_payment().unwrap();
+        service.verify_payment().unwrap();
+        service.verify_payment().unwrap();
+        let trust = TrustConfig::development_fixtures().unwrap().license_keys;
+        service
+            .activate(&archives, &device, &licenses, &trust, &rollback)
+            .unwrap();
+        archives.relock().unwrap();
+
+        let used_clock = service
+            .refresh(&archives, &device, &licenses, &trust, &rollback)
+            .unwrap();
+
+        assert_eq!(used_clock, response_clock);
+        assert!(used_clock.utc_unix_seconds > request_started_at.utc_unix_seconds);
+        assert_eq!(
+            archives
+                .list_files(
+                    time::OffsetDateTime::from_unix_timestamp(used_clock.utc_unix_seconds).unwrap()
+                )
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[test]
     fn activation_cleanup_failure_keeps_license_hides_qr_and_retries_on_reopen() {
         let directory = tempfile::tempdir().unwrap();
         let payments_root = directory.path().join("payments");
@@ -1155,14 +1314,7 @@ mod tests {
         let license_trust = TrustConfig::development_fixtures().unwrap().license_keys;
 
         service
-            .activate(
-                &archives,
-                &device,
-                &licenses,
-                &license_trust,
-                &rollback,
-                sample(),
-            )
+            .activate(&archives, &device, &licenses, &license_trust, &rollback)
             .unwrap();
         assert!(licenses.has_local_grant("arc_test_01").unwrap());
         assert!(vault
@@ -1285,7 +1437,6 @@ mod tests {
                 &licenses,
                 &TrustConfig::development_fixtures().unwrap().license_keys,
                 &RollbackManager::new(Arc::new(MemorySecretStore::default())),
-                sample(),
             )
             .unwrap();
 
@@ -1353,7 +1504,6 @@ mod tests {
                 &licenses,
                 &license_trust,
                 &RollbackManager::new(rollback_store.clone()),
-                sample(),
             ),
             Err(ViewerError::LicenseStorage)
         ));
@@ -1392,7 +1542,6 @@ mod tests {
                 &licenses,
                 &license_trust,
                 &RollbackManager::new(rollback_store),
-                sample(),
             )
             .unwrap();
         let activation_nonces = backend.activation_nonces.lock().unwrap();
@@ -1429,14 +1578,7 @@ mod tests {
         let license_trust = TrustConfig::development_fixtures().unwrap().license_keys;
 
         assert!(matches!(
-            service.activate(
-                &archives,
-                &device,
-                &licenses,
-                &license_trust,
-                &rollback,
-                sample(),
-            ),
+            service.activate(&archives, &device, &licenses, &license_trust, &rollback,),
             Err(ViewerError::SecureStoreUnavailable)
         ));
         assert!(licenses.has_local_grant("arc_test_01").unwrap());
@@ -1455,14 +1597,7 @@ mod tests {
         assert!(archives.list_files(at("2026-09-08T00:00:00Z")).is_err());
 
         service
-            .activate(
-                &archives,
-                &device,
-                &licenses,
-                &license_trust,
-                &rollback,
-                sample(),
-            )
+            .activate(&archives, &device, &licenses, &license_trust, &rollback)
             .unwrap();
         let activation_nonces = backend.activation_nonces.lock().unwrap();
         assert_eq!(activation_nonces.len(), 2);
@@ -1504,14 +1639,7 @@ mod tests {
         std::fs::write(&archive_path, b"changed after payment confirmation").unwrap();
 
         assert!(service
-            .activate(
-                &archives,
-                &device,
-                &licenses,
-                &license_trust,
-                &rollback,
-                sample(),
-            )
+            .activate(&archives, &device, &licenses, &license_trust, &rollback,)
             .is_err());
         assert!(licenses.has_local_grant("arc_test_01").unwrap());
         assert!(vault
@@ -1765,12 +1893,17 @@ mod tests {
         let (archives, device) = open_fixture(directory.path());
         let licenses = LocalLicenseRepository::new(directory.path().join("licenses")).unwrap();
         let rollback = RollbackManager::new(Arc::new(MemorySecretStore::default()));
-        let service = PaymentService::with_nonce_source(
+        let refresh_sample = ProcessClockSample {
+            utc_unix_seconds: 1_789_084_800,
+            monotonic_millis: 2_000,
+        };
+        let service = PaymentService::with_sources(
             Some(backend.clone()),
             Some(config),
             vault,
             ActiveIntentRepository::new(directory.path().join("payments")).unwrap(),
             Arc::new(SequenceNonce::default()),
+            Arc::new(SequenceClock::new([sample(), refresh_sample])),
         );
         service.check_metadata(&archives, &device).unwrap();
         service.prepare_payment(&archives, &device).unwrap();
@@ -1779,11 +1912,11 @@ mod tests {
         service.verify_payment().unwrap();
         let trust = TrustConfig::development_fixtures().unwrap().license_keys;
         assert!(matches!(
-            service.activate(&archives, &device, &licenses, &trust, &rollback, sample()),
+            service.activate(&archives, &device, &licenses, &trust, &rollback),
             Err(ViewerError::BackendUnavailable)
         ));
         service
-            .activate(&archives, &device, &licenses, &trust, &rollback, sample())
+            .activate(&archives, &device, &licenses, &trust, &rollback)
             .unwrap();
         let nonces = backend.activation_nonces.lock().unwrap();
         assert_eq!(nonces.len(), 2);
@@ -1791,19 +1924,8 @@ mod tests {
         drop(nonces);
 
         archives.relock().unwrap();
-        let refresh_sample = ProcessClockSample {
-            utc_unix_seconds: 1_789_084_800,
-            monotonic_millis: 2_000,
-        };
         service
-            .refresh(
-                &archives,
-                &device,
-                &licenses,
-                &trust,
-                &rollback,
-                refresh_sample,
-            )
+            .refresh(&archives, &device, &licenses, &trust, &rollback)
             .unwrap();
         let after_old_deadline = time::OffsetDateTime::from_unix_timestamp(1_789_171_200).unwrap();
         assert_eq!(archives.list_files(after_old_deadline).unwrap().len(), 1);
@@ -1811,14 +1933,7 @@ mod tests {
         archives.relock().unwrap();
         *backend.refresh_error.lock().unwrap() = Some(BackendErrorCode::LicenseRevoked);
         assert!(matches!(
-            service.refresh(
-                &archives,
-                &device,
-                &licenses,
-                &trust,
-                &rollback,
-                refresh_sample,
-            ),
+            service.refresh(&archives, &device, &licenses, &trust, &rollback),
             Err(ViewerError::LicenseRevoked)
         ));
         assert!(archives.list_files(after_old_deadline).is_err());
@@ -1862,7 +1977,6 @@ mod tests {
                 &licenses,
                 &TrustConfig::development_fixtures().unwrap().license_keys,
                 &RollbackManager::new(rollback_store.clone()),
-                sample(),
             ),
             Err(ViewerError::SecureStoreUnavailable)
         ));
@@ -1906,7 +2020,6 @@ mod tests {
                 &licenses,
                 &TrustConfig::development_fixtures().unwrap().license_keys,
                 &RollbackManager::new(rollback_store),
-                sample(),
             )
             .unwrap();
         let activation_nonces = backend.activation_nonces.lock().unwrap();

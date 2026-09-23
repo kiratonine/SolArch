@@ -8,10 +8,16 @@ import {
   UseGuards,
   Res,
   NotFoundException,
+  UploadedFile,
+  UseInterceptors,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import * as fs from 'fs';
+import { memoryStorage } from 'multer';
 import { ArchivesService } from './archives.service';
+import { ArchiveCoversService, MAX_COVER_BYTES } from './archive-covers.service';
 import { CreateArchiveDto, UpdateArchiveDto } from './archives.dto';
 import { WalletAuthGuard } from '@/common/guards/wallet-auth.guard';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
@@ -19,7 +25,10 @@ import { CurrentUser } from '@/common/decorators/current-user.decorator';
 @Controller('v1/archives')
 @UseGuards(WalletAuthGuard)
 export class ArchivesController {
-  constructor(private readonly archivesService: ArchivesService) {}
+  constructor(
+    private readonly archivesService: ArchivesService,
+    private readonly archiveCovers: ArchiveCoversService,
+  ) { }
 
   @Post()
   async create(@CurrentUser() user: any, @Body() dto: CreateArchiveDto) {
@@ -48,6 +57,28 @@ export class ArchivesController {
     @Body() dto: UpdateArchiveDto,
   ) {
     return this.archivesService.update(archiveId, user.id, dto);
+  }
+
+  @Post(':archiveId/cover')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: {
+        files: 1,
+        fields: 0,
+        fileSize: MAX_COVER_BYTES,
+      },
+    }),
+  )
+  async replaceCover(
+    @Param('archiveId') archiveId: string,
+    @CurrentUser() user: any,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException({ code: 'INVALID_COVER', message: 'Cover file is required' });
+    }
+    return this.archiveCovers.replace(archiveId, user.id, file);
   }
 
   @Post(':archiveId/block')

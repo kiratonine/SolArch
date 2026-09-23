@@ -240,9 +240,8 @@ impl AppState {
                     &self.licenses,
                     &self.license_trust,
                     &self.rollback,
-                    clock,
                 ) {
-                    Ok(()) => self.unlocked_snapshot(archive, clock),
+                    Ok(response_clock) => self.unlocked_snapshot(archive, response_clock),
                     Err(ViewerError::BackendUnavailable) => Ok(ViewerSnapshot {
                         state: ViewerStateKind::RefreshRequired,
                         archive: Some(archive),
@@ -297,31 +296,27 @@ impl AppState {
     }
 
     pub fn activate_payment(&self) -> Result<ViewerSnapshot, ViewerError> {
-        let clock = clock::process_clock_sample()?;
-        self.payments.activate(
+        let response_clock = self.payments.activate(
             &self.archives,
             &self.device,
             &self.licenses,
             &self.license_trust,
             &self.rollback,
-            clock,
         )?;
         let identity = self.archives.current_identity()?;
-        self.unlocked_snapshot(archive_dto(&identity), clock)
+        self.unlocked_snapshot(archive_dto(&identity), response_clock)
     }
 
     pub fn refresh_license(&self) -> Result<ViewerSnapshot, ViewerError> {
-        let clock = clock::process_clock_sample()?;
-        self.payments.refresh(
+        let response_clock = self.payments.refresh(
             &self.archives,
             &self.device,
             &self.licenses,
             &self.license_trust,
             &self.rollback,
-            clock,
         )?;
         let identity = self.archives.current_identity()?;
-        self.unlocked_snapshot(archive_dto(&identity), clock)
+        self.unlocked_snapshot(archive_dto(&identity), response_clock)
     }
 
     fn unlocked_snapshot(
@@ -1165,10 +1160,6 @@ mod tests {
                 &restarted.licenses,
                 &restarted.license_trust,
                 &restarted.rollback,
-                solarch_core::license::ProcessClockSample {
-                    utc_unix_seconds: 1_788_998_400,
-                    monotonic_millis: 3_000,
-                },
             ),
             Err(ViewerError::BackendUnavailable)
         ));
@@ -1266,7 +1257,6 @@ mod tests {
                 &state.licenses,
                 &state.license_trust,
                 &state.rollback,
-                deadline,
             ),
             Err(ViewerError::BackendUnavailable)
         ));

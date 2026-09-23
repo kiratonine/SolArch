@@ -162,9 +162,9 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
         devicePublicKey: DEVICE_A,
         maxDevices: 1,
         devicesActivated: 0,
-      status: 'active',
-      expiresAt: null,
-      archive: mockArchive,
+        status: 'active',
+        expiresAt: null,
+        archive: mockArchive,
         activations: [],
         payment: {
           status: 'confirmed',
@@ -211,14 +211,14 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
       findFirst: jest.fn().mockImplementation(({ where }) =>
         where.expectedTransactionSignature === VALID_TRANSACTION_SIGNATURE
           ? {
-              id: 'iss_e2e_001',
-              paymentIntentId: 'pi_e2e_001',
-              constructionAccount: validBuyerWallet,
-              expectedTransactionSignature: VALID_TRANSACTION_SIGNATURE,
-              transactionMessageHash: mockE2eMessageHash,
-              lastValidBlockHeight: BigInt(999999),
-              status: 'active',
-            }
+            id: 'iss_e2e_001',
+            paymentIntentId: 'pi_e2e_001',
+            constructionAccount: validBuyerWallet,
+            expectedTransactionSignature: VALID_TRANSACTION_SIGNATURE,
+            transactionMessageHash: mockE2eMessageHash,
+            lastValidBlockHeight: BigInt(999999),
+            status: 'active',
+          }
           : null,
       ),
       findMany: jest.fn().mockResolvedValue([]),
@@ -253,6 +253,11 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
         ),
       })
       .compile();
+
+    // Keep mock payment credentials independent of the local live .env.
+    jest
+      .spyOn(moduleFixture.get(EnvService), 'intentHmacSecret', 'get')
+      .mockReturnValue('solarch-intent-hmac-secret-32-chars-minimum');
 
     app = moduleFixture.createNestApplication({ bodyParser: false });
     configureRequestBodyParsers(app);
@@ -394,6 +399,31 @@ describe('SolArch Marketplace Backend API (e2e)', () => {
   });
 
   describe('Creator Archives & Economics', () => {
+    it('/v1/archives/:id/cover (POST) requires creator authentication', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/v1/archives/arc_e2e_001/cover')
+        .attach('file', Buffer.from([0x89, 0x50, 0x4e, 0x47]), {
+          filename: 'cover.png',
+          contentType: 'image/png',
+        })
+        .expect(401);
+
+      expect(res.body.code).toBe('UNAUTHORIZED');
+    });
+
+    it('/v1/archives/:id/cover (POST) bounds multipart bytes before decoding', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/v1/archives/arc_e2e_001/cover')
+        .set('Authorization', `Bearer ${creatorJwt}`)
+        .attach('file', Buffer.alloc(5 * 1024 * 1024 + 1), {
+          filename: 'cover.png',
+          contentType: 'image/png',
+        })
+        .expect(413);
+
+      expect(res.body.code).toBe('COVER_TOO_LARGE');
+    });
+
     it('/v1/archives (POST) creates archive with frozen 95/5 USDC economics', async () => {
       const res = await request(app.getHttpServer())
         .post('/v1/archives')

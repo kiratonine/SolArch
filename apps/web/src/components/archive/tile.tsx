@@ -38,7 +38,8 @@ export const TILE_HOVER =
  * содержимое нет. Битая ссылка сводится к той же заглушке.
  */
 export function TileCover({ url }: { url: string | null }) {
-  const [broken, setBroken] = useState(false)
+  const [brokenUrl, setBrokenUrl] = useState<string | null>(null)
+  const broken = url !== null && brokenUrl === url
 
   return (
     <div className="border-border bg-secondary relative aspect-[1200/630] overflow-hidden border-b">
@@ -47,10 +48,14 @@ export function TileCover({ url }: { url: string | null }) {
           src={url}
           alt=""
           className="size-full object-cover"
-          onError={() => setBroken(true)}
+          onError={() => setBrokenUrl(url)}
         />
       ) : (
-        <div aria-hidden="true" className="text-foreground/85 grid size-full place-items-center">
+        <div
+          aria-hidden="true"
+          className="text-foreground/85 grid size-full place-items-center"
+          data-testid="cover-fallback"
+        >
           <div className="absolute inset-0 bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] bg-size-[25%_33.34%]" />
           <SealMark className="relative size-10" />
         </div>

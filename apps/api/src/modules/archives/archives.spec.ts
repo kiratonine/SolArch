@@ -3,6 +3,9 @@ import { BadRequestException } from '@nestjs/common';
 import { ArchivesService } from './archives.service';
 import { PrismaService } from '@/common/prisma.service';
 import { EnvService } from '@/config/env.service';
+import { ArchiveCoversService } from './archive-covers.service';
+
+const COVER_KEY = '01234567-89ab-4cde-8fab-0123456789ab.png';
 
 describe('ArchivesService & Economics', () => {
   let service: ArchivesService;
@@ -25,6 +28,13 @@ describe('ArchivesService & Economics', () => {
           provide: EnvService,
           useValue: {
             usdcMint: { toBase58: () => 'USDC_MINT_DEVNET' },
+          },
+        },
+        {
+          provide: ArchiveCoversService,
+          useValue: {
+            publicUrl: (key?: string | null) =>
+              key ? `https://api.solarch.example/v1/marketplace/covers/${key}` : null,
           },
         },
       ],
@@ -88,7 +98,7 @@ describe('ArchivesService & Economics', () => {
       creatorPayoutWallet: 'Wallet1111',
       creatorUsdcAta: 'Ata1111',
       createdAt: new Date('2026-09-01T00:00:00Z'),
-      listing: { slug: 'course-slug', coverStorageKey: 'cover.png' },
+      listing: { slug: 'course-slug', coverStorageKey: COVER_KEY },
       publicFiles: [{ sizeBytes: BigInt(2048) }],
       events: [{ eventType: 'archive_view' }, { eventType: 'archive_download' }],
       payments: [{ status: 'confirmed' }],
@@ -106,6 +116,9 @@ describe('ArchivesService & Economics', () => {
     expect(formatted.metrics.downloads).toBe(1);
     expect(formatted.metrics.paid_unlocks).toBe(1);
     expect(formatted.payout_account_ready).toBe(true);
+    expect(formatted.cover_url).toBe(
+      `https://api.solarch.example/v1/marketplace/covers/${COVER_KEY}`,
+    );
   });
 
   test('findOne throws NotFoundException when caller does not own archive (B8)', async () => {
@@ -118,7 +131,7 @@ describe('ArchivesService & Economics', () => {
     await expect(service.findOne('arc_001', 'usr_other')).rejects.toThrow('Archive not found');
   });
 
-  test('update handles cover_url and maps to coverStorageKey (B9)', async () => {
+  test('metadata update leaves the server-owned cover storage key unchanged', async () => {
     const prisma = (service as any).prisma;
     prisma.archive.findUnique.mockResolvedValue({
       id: 'arc_001',
@@ -129,25 +142,15 @@ describe('ArchivesService & Economics', () => {
     prisma.archive.update.mockResolvedValue({
       id: 'arc_001',
       title: 'New Title',
-      listing: { coverStorageKey: 'covers/my-cover.png' },
+      listing: { coverStorageKey: COVER_KEY },
     });
 
     await service.update('arc_001', 'usr_001', {
       title: 'New Title',
-      cover_url: 'covers/my-cover.png',
     });
 
-    expect(prisma.archive.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          listing: expect.objectContaining({
-            update: expect.objectContaining({
-              coverStorageKey: 'covers/my-cover.png',
-            }),
-          }),
-        }),
-      }),
-    );
+    const update = prisma.archive.update.mock.calls[0][0].data.listing.update;
+    expect(update).not.toHaveProperty('coverStorageKey');
   });
 
   test('publish throws ConflictException when ATA is not ready and skipAtaVerification is false (B5)', async () => {

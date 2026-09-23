@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, delay, http } from 'msw'
 import { describe, expect, it, vi } from 'vitest'
@@ -68,6 +68,55 @@ describe('страница архива автора', () => {
     // Опись приходит с backend отдельным запросом и группируется по display_path.
     expect(await screen.findByText('read-me-first.pdf')).toBeInTheDocument()
     expect(screen.getByText('security/')).toBeInTheDocument()
+  })
+
+  it('показывает preview и загружает обложку без изменения архива', async () => {
+    const user = userEvent.setup()
+    signIn()
+    renderApp({ path: '/dashboard/arc_draft_notes' })
+
+    const chooser = await screen.findByLabelText('Choose cover')
+    const file = new File([new Uint8Array([137, 80, 78, 71])], 'catalog.png', {
+      type: 'image/png',
+    })
+    await user.upload(chooser, file)
+
+    expect(screen.getByText('Selected: catalog.png')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByTestId('cover-preview').querySelector('img')).toHaveAttribute(
+        'src',
+        expect.stringMatching(/^data:image\/png;base64,/),
+      ),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Upload cover' }))
+    expect(await screen.findByText('Cover updated.')).toBeInTheDocument()
+    expect(db.archives.find((item) => item.archive_id === 'arc_draft_notes')?.cover_url).toMatch(
+      /^data:image\/png;base64,/,
+    )
+  })
+
+  it('отклоняет явно неподдерживаемый тип и слишком большой файл до сети', async () => {
+    signIn()
+    renderApp({ path: '/dashboard/arc_draft_notes' })
+
+    const chooser = await screen.findByLabelText('Choose cover')
+    fireEvent.change(chooser, {
+      target: { files: [new File(['<svg/>'], 'cover.svg', { type: 'image/svg+xml' })] },
+    })
+    expect(screen.getByRole('alert')).toHaveTextContent('Choose a PNG, JPEG or WebP image.')
+
+    fireEvent.change(chooser, {
+      target: {
+        files: [
+          new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'huge.png', {
+            type: 'image/png',
+          }),
+        ],
+      },
+    })
+    expect(screen.getByRole('alert')).toHaveTextContent('The cover must be 5 MiB or smaller.')
+    expect(screen.getByRole('button', { name: 'Upload cover' })).toBeDisabled()
   })
 
   it('скачивает собранный .slr запросом с сессией и отдаёт его под именем архива', async () => {

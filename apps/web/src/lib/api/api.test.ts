@@ -15,6 +15,7 @@ import {
   publishArchive,
   unpublishArchive,
   updateArchive,
+  uploadArchiveCover,
 } from './archives'
 import { getSession, logout, requestWalletChallenge, verifyWalletSignature } from './auth'
 import { readAuthToken } from './auth-token'
@@ -374,6 +375,21 @@ describe('creator archives API', () => {
     const updated = await updateArchive(created.archive_id, { title: 'Renamed' })
     expect(updated.title).toBe('Renamed')
     expect(updated.price.amount).toBe('10.00')
+  })
+
+  it('uploads a cover as authenticated multipart data', async () => {
+    await signIn()
+    const archive = db.archives.find((item) => item.archive_id === 'arc_draft_notes')
+    expect(archive?.cover_url).toBeNull()
+
+    const response = await uploadArchiveCover(
+      'arc_draft_notes',
+      new File([new Uint8Array([137, 80, 78, 71])], 'cover.png', { type: 'image/png' }),
+    )
+
+    expect(response.archive_id).toBe('arc_draft_notes')
+    expect(response.cover_url).toMatch(/^data:image\/png;base64,/)
+    expect(archive?.cover_url).toBe(response.cover_url)
   })
 
   it('rejects an invalid price and a bad payout wallet', async () => {

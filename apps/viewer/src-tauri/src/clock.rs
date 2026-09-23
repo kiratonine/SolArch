@@ -4,6 +4,19 @@ use solarch_core::license::ProcessClockSample;
 
 use crate::error::ViewerError;
 
+pub trait ClockSource: Send + Sync {
+    fn sample(&self) -> Result<ProcessClockSample, ViewerError>;
+}
+
+#[derive(Default)]
+pub struct ProcessClockSource;
+
+impl ClockSource for ProcessClockSource {
+    fn sample(&self) -> Result<ProcessClockSample, ViewerError> {
+        process_clock_sample()
+    }
+}
+
 pub fn process_clock_sample() -> Result<ProcessClockSample, ViewerError> {
     static START: OnceLock<Instant> = OnceLock::new();
     let elapsed = START.get_or_init(Instant::now).elapsed().as_millis();

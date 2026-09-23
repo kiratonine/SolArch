@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { fireEvent, screen, within } from '@testing-library/react'
 import { HttpResponse, http } from 'msw'
 import { describe, expect, it } from 'vitest'
 
@@ -195,6 +195,16 @@ describe('обложка', () => {
     const cover = document.querySelector('img[alt=""]')
     expect(cover).not.toBeNull()
     expect(cover?.getAttribute('src')).toMatch(/^data:image\/svg\+xml,/)
+  })
+
+  it('заменяет сломанную публичную обложку безопасной заглушкой', async () => {
+    renderApp({ path: '/archives/nebula-brand-kit' })
+    await screen.findByRole('heading', { level: 1 })
+
+    const cover = document.querySelector<HTMLImageElement>('img[alt=""]')
+    expect(cover).not.toBeNull()
+    fireEvent.error(cover as HTMLImageElement)
+    expect(screen.getByTestId('cover-fallback')).toBeInTheDocument()
   })
 
   it('не рисует пустую рамку, когда обложки нет', async () => {

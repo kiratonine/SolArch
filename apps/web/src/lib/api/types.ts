@@ -219,10 +219,15 @@ export interface UpdateArchiveRequest {
   title?: string
   short_description?: string
   description?: string
-  cover_url?: string | null
   category?: string
   tags?: string[]
 }
+
+export const coverUploadResponseSchema = z.object({
+  archive_id: z.string(),
+  cover_url: z.string().url(),
+})
+export type CoverUploadResponse = z.infer<typeof coverUploadResponseSchema>
 
 /** Архив глазами владельца. */
 export const creatorArchiveSchema = z.object({

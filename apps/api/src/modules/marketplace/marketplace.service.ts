@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma.service';
+import { ArchiveCoversService } from '@/modules/archives/archive-covers.service';
 
 export interface QueryMarketplaceArchives {
   sort?: string;
@@ -11,7 +12,10 @@ export interface QueryMarketplaceArchives {
 
 @Injectable()
 export class MarketplaceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly archiveCovers: ArchiveCoversService,
+  ) {}
 
   async listArchives(query: QueryMarketplaceArchives) {
     const page = Math.max(Number(query.page) || 1, 1);
@@ -92,7 +96,7 @@ export class MarketplaceService {
         slug: arc.listing?.slug || arc.id,
         title: arc.title,
         short_description: arc.shortDescription,
-        cover_url: arc.listing?.coverStorageKey || null,
+        cover_url: this.archiveCovers.publicUrl(arc.listing?.coverStorageKey),
         creator: {
           display_name: arc.creator.wallets[0]?.address
             ? `${arc.creator.wallets[0].address.slice(0, 4)}...${arc.creator.wallets[0].address.slice(-4)}`
@@ -206,7 +210,7 @@ export class MarketplaceService {
       title: arc.title,
       short_description: arc.shortDescription,
       description: arc.description,
-      cover_url: listing.coverStorageKey || null,
+      cover_url: this.archiveCovers.publicUrl(listing.coverStorageKey),
       price: {
         amount: arc.priceAmount,
         currency: arc.priceCurrency,

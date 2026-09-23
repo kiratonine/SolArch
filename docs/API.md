@@ -188,12 +188,49 @@ Owner-only archive detail.
 
 - title;
 - descriptions;
-- cover;
 - tags/category;
 - permitted listing fields;
 - 일부 policy fields only if agreed in SPEC.
 
 Нельзя менять immutable price.
+Обложка меняется только через binary endpoint ниже. `PATCH` не принимает
+клиентские storage keys или `cover_url`.
+
+## POST `/v1/archives/:archiveId/cover`
+
+Owner-only замена необязательной Marketplace-обложки. Request имеет
+`Content-Type: multipart/form-data` и ровно одно поле `file`.
+
+MVP profile:
+
+```text
+encoded size <= 5 MiB
+format = PNG | JPEG | WebP
+width and height = 1..4096 pixels
+decoded pixel count <= 16777216
+single-frame image only
+```
+
+Backend не доверяет filename extension и multipart `Content-Type`: он должен
+декодировать и пересобрать весь image, проверить exact format/dimensions и
+отклонить SVG, HTML, animated/multi-frame и malformed input. Исходные байты
+никогда не публикуются, поэтому trailing/polyglot payload не переносится в обложку. Storage
+key генерирует Backend и никогда не принимает от клиента. Новая обложка
+атомарно заменяет DB reference; при ошибке прежняя обложка остаётся активной.
+
+Response:
+
+```json
+{
+  "archive_id": "arc_...",
+  "cover_url": "https://api.example/v1/marketplace/covers/OPAQUE_KEY.webp"
+}
+```
+
+`cover_url` — контролируемый Backend public URL, а не object-storage path. Live
+environment возвращает HTTPS URL. Invalid image → 400 `INVALID_COVER`, size
+overflow → 413 `COVER_TOO_LARGE`, absent/not-owned archive → 404
+`ARCHIVE_NOT_FOUND`.
 
 ## POST `/v1/archives/:archiveId/publish`
 
@@ -336,6 +373,13 @@ Requirements:
 - returns generated `.slr`;
 - creates qualified `archive_download` event;
 - never returns source ZIP/raw files.
+
+## GET `/v1/marketplace/covers/:coverKey`
+
+Public immutable binary response for the opaque current cover key returned in
+`cover_url`. Unknown, replaced, deleted or unreferenced keys return 404. Response
+uses the server-validated `image/png`, `image/jpeg` or `image/webp` media type,
+`X-Content-Type-Options: nosniff`, and never exposes an internal storage path.
 
 ---
 

@@ -26,6 +26,9 @@ const PRICE_MESSAGES: Record<PriceProblem, string> = {
   notPositive: 'Цена должна быть больше нуля',
 }
 
+const MOCK_COVER =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+
 function slugify(title: string): string {
   return (
     title
@@ -168,10 +171,35 @@ export const archiveHandlers = [
     if (body.title !== undefined) archive.title = body.title
     if (body.short_description !== undefined) archive.short_description = body.short_description
     if (body.description !== undefined) archive.description = body.description
-    if (body.cover_url !== undefined) archive.cover_url = body.cover_url
 
     const { files: _files, ...rest } = archive
     return HttpResponse.json(rest)
+  }),
+
+  http.post(route('/archives/:archiveId/cover'), async ({ params, request }) => {
+    const unauthorized = requireSession(request)
+    if (unauthorized) return unauthorized
+
+    const archive = findOwned(String(params.archiveId))
+    if (!archive) return apiError(404, 'ARCHIVE_NOT_FOUND', 'Архив не найден')
+
+    const body = await request.formData()
+    const file = body.get('file')
+    if (
+      typeof file !== 'object' ||
+      file === null ||
+      !('type' in file) ||
+      !('size' in file) ||
+      !['image/png', 'image/jpeg', 'image/webp'].includes(String(file.type))
+    ) {
+      return apiError(400, 'INVALID_COVER', 'Обложка должна быть PNG, JPEG или WebP')
+    }
+    if (Number(file.size) > 5 * 1024 * 1024) {
+      return apiError(413, 'COVER_TOO_LARGE', 'Обложка больше 5 MiB')
+    }
+
+    archive.cover_url = MOCK_COVER
+    return HttpResponse.json({ archive_id: archive.archive_id, cover_url: MOCK_COVER })
   }),
 
   http.post(route('/archives/:archiveId/publish'), ({ params, request }) => {

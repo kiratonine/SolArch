@@ -123,6 +123,52 @@ export async function apiRequest<T>(path: string, options: RequestOptions<T> = {
 }
 
 /**
+ * Multipart upload through the same authenticated and contract-checked boundary.
+ * The browser owns the multipart boundary, so this deliberately does not set
+ * Content-Type itself.
+ */
+export async function apiMultipart<T>(
+  path: string,
+  body: FormData,
+  schema: z.ZodType<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  const auth = authHeaders()
+  let response: Response
+
+  try {
+    response = await fetch(buildUrl(path), {
+      method: 'POST',
+      signal,
+      headers: { Accept: 'application/json', ...auth },
+      body,
+    })
+  } catch (cause) {
+    if (cause instanceof DOMException && cause.name === 'AbortError') throw cause
+    throw new NetworkError('Не удалось загрузить файл', { cause })
+  }
+
+  if (!response.ok) throw await failure(response, 'Authorization' in auth)
+
+  let payload: unknown
+  try {
+    payload = await response.json()
+  } catch (cause) {
+    throw new NetworkError('Сервер вернул некорректный JSON', { cause })
+  }
+
+  const parsed = schema.safeParse(payload)
+  if (!parsed.success) {
+    throw new ContractError(
+      path,
+      parsed.error.issues.map((issue) => `${issue.path.join('.') || 'root'}: ${issue.message}`),
+    )
+  }
+
+  return parsed.data
+}
+
+/**
  * Файл, который отдают только вошедшему автору.
  *
  * Обычная ссылка не умеет нести заголовок `Authorization`, поэтому такой файл

@@ -1,9 +1,10 @@
 import { queryOptions } from '@tanstack/react-query'
 
-import { apiDownload, apiRequest } from './http'
+import { apiDownload, apiMultipart, apiRequest } from './http'
 import { queryKeys } from './query-keys'
 import {
   createArchiveResponseSchema,
+  coverUploadResponseSchema,
   creatorArchiveListSchema,
   creatorArchiveSchema,
   publicFileListResponseSchema,
@@ -11,6 +12,7 @@ import {
 import type {
   CreateArchiveRequest,
   CreateArchiveResponse,
+  CoverUploadResponse,
   CreatorArchive,
   PublicFileListResponse,
   UpdateArchiveRequest,
@@ -75,6 +77,21 @@ export function updateArchive(
     body: input,
     schema: creatorArchiveSchema,
   })
+}
+
+export function uploadArchiveCover(
+  archiveId: string,
+  file: File,
+  signal?: AbortSignal,
+): Promise<CoverUploadResponse> {
+  const body = new FormData()
+  body.append('file', file)
+  return apiMultipart(
+    `/archives/${encodeURIComponent(archiveId)}/cover`,
+    body,
+    coverUploadResponseSchema,
+    signal,
+  )
 }
 
 /**

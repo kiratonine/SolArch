@@ -40,6 +40,11 @@ export class SolArchExceptionFilter implements ExceptionFilter {
       message = exception.message;
     }
 
+    if (status === HttpStatus.PAYLOAD_TOO_LARGE && request.url.includes('/cover')) {
+      code = 'COVER_TOO_LARGE';
+      message = 'Cover image exceeds the 5 MiB limit';
+    }
+
     // Map common HTTP status to SolArch codes if code is generic or default
     const isViewerRoute = request.url.includes('/viewer') || request.url.includes('/payment-intents') || request.url.includes('/device-licenses');
 
