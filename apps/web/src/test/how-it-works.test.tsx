@@ -52,13 +52,17 @@ describe('как это работает', () => {
     expect(within(section!).getByText(/never holds it and never asks for your keys/)).toBeInTheDocument()
   })
 
-  it('не обещает Viewer, которого ещё негде взять', async () => {
+  it('с любой страницы ведёт к установщику Viewer', async () => {
     renderApp({ path: '/how-it-works' })
     await screen.findByRole('heading', { level: 1, name: 'How it works' })
 
-    // Q6 открыт: ссылки на дистрибутив на сайте нет ни одной, и страница
-    // не должна изображать её раньше времени.
-    expect(screen.queryByRole('link', { name: 'Get the Viewer' })).not.toBeInTheDocument()
+    // Релиза ещё нет (Q6): кнопка шапки ведёт к разделу скачивания на лендинге,
+    // где заглушка объясняет, почему установщика пока нет.
+    const header = screen.getByRole('banner')
+    expect(within(header).getByRole('link', { name: 'Download for Windows' })).toHaveAttribute(
+      'href',
+      '/#download',
+    )
   })
 
   it('открывается из подвала, а не только из шапки', async () => {

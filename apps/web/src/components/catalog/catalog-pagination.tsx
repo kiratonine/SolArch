@@ -38,7 +38,7 @@ export function CatalogPagination({
     >
       {page > 1 ? (
         <Link
-          to="/"
+          to="/catalog"
           search={(prev) => catalogLinkSearch({ ...prev, page: page - 1 })}
           className={linkClass}
         >
@@ -54,7 +54,7 @@ export function CatalogPagination({
 
       {page < pages ? (
         <Link
-          to="/"
+          to="/catalog"
           search={(prev) => catalogLinkSearch({ ...prev, page: page + 1 })}
           className={linkClass}
         >

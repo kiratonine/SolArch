@@ -36,7 +36,7 @@ export function SearchField({ value, className }: { value: string; className?: s
   const commit = useCallback(
     (query: string) => {
       void navigate({
-        to: '/',
+        to: '/catalog',
         search: (prev) => catalogLinkSearch({ ...prev, q: query, page: 1 }),
         replace: true,
         // Ввод не должен утаскивать страницу наверх: человек уже стоит там,

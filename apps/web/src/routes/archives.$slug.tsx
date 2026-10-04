@@ -94,7 +94,7 @@ function ArchivePage() {
             body={t.archive.missing.body}
             action={
               <Link
-                to="/"
+                to="/catalog"
                 className="text-seal-ink text-sm font-medium underline underline-offset-4"
               >
                 {t.archive.back}
@@ -118,7 +118,7 @@ function ArchivePage() {
           как орган управления, а не как подпись. Рамка и радиус те же, что
           у чипов сортировки в каталоге: одна и та же вещь выглядит одинаково. */}
       <Link
-        to="/"
+        to="/catalog"
         className="border-border bg-card text-foreground hover:bg-muted focus-visible:ring-ring/60 inline-flex items-center gap-1.5 rounded-sm border px-2.5 py-1.5 text-[0.8125rem] font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
       >
         <ArrowLeftIcon aria-hidden="true" className="size-3.5" />

@@ -79,6 +79,65 @@ export const en = {
     toCatalog: 'Browse the catalog',
   },
 
+  /**
+   * Установщик Viewer. Одна и та же кнопка стоит в шапке и на лендинге,
+   * поэтому слова у неё общие, а не у каждой страницы свои.
+   */
+  download: {
+    /** Короткая подпись для шапки: рядом стоят переключатели, места мало. */
+    short: 'Download',
+    /** Полное имя действия — для кнопки на лендинге и для скринридера в шапке. */
+    action: 'Download for Windows',
+    /** Заглушка: релиза Viewer ещё нет (Q6). */
+    pending: 'The installer is not published yet. This button starts working with the first Viewer release.',
+  },
+
+  /**
+   * Лендинг. Главная говорит с тем, кто видит SolArch впервые: что это,
+   * как устроено и где взять Viewer. Механику не пересказывает заново —
+   * шаги берёт с `/how-it-works`, условия денег — из `economics`.
+   */
+  landing: {
+    title: 'Files that open only after payment',
+    lead: 'An .slr container downloads for free and travels like any other file. It opens only in the SolArch Viewer, after one payment in USDC on Solana.',
+    toCatalog: 'Browse the catalog',
+
+    sample: {
+      label: 'What everyone sees in an .slr',
+      file: 'field-notes-vol-2.slr',
+      files: [
+        { path: 'notes/01-coastline.pdf', size: '2.4 MB' },
+        { path: 'notes/02-tidal-charts.xlsx', size: '310 KB' },
+        { path: 'photos/estuary-dawn.webp', size: '1.1 MB' },
+        { path: 'photos/estuary-dusk.webp', size: '980 KB' },
+      ],
+      sealed: 'The contents open in the Viewer after payment',
+      price: '12.00 USDC',
+    },
+
+    reader: {
+      title: 'For readers',
+      lead: 'Take the file first, pay when you want to open it.',
+    },
+
+    creator: {
+      title: 'For creators',
+      lead: 'Upload your files, set a price once, and share the archive anywhere. Forwarded copies stay locked, so every copy that spreads can turn into a sale.',
+      split: 'Every sale splits like this',
+      start: 'Start selling',
+    },
+
+    formats: {
+      title: 'What goes inside',
+      list: ['PDF', 'PNG', 'JPG', 'WebP', 'DOCX', 'XLSX'],
+    },
+
+    get: {
+      title: 'Get the SolArch Viewer',
+      lead: 'The Viewer opens .slr files, takes the payment and keeps the license on your device. The website never asks you to pay.',
+    },
+  },
+
   catalog: {
     title: 'Catalog',
     lead: 'Take any archive without an account. Payment happens later, in the desktop Viewer, once the file is already yours.',

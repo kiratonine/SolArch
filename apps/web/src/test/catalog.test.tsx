@@ -57,7 +57,7 @@ describe('каталог', () => {
   })
 
   it('применяет сортировку из адреса', async () => {
-    renderApp({ path: '/?sort=price_asc' })
+    renderApp({ path: '/catalog?sort=price_asc' })
 
     const titles = await cardTitles()
     expect(titles[0]).toBe('Analog Film Pack')
@@ -70,7 +70,7 @@ describe('каталог', () => {
   })
 
   it('переживает выдуманную сортировку в адресе', async () => {
-    renderApp({ path: '/?sort=по-настроению' })
+    renderApp({ path: '/catalog?sort=по-настроению' })
 
     // Мусор гасится до значения по умолчанию, каталог всё равно рисуется.
     expect((await cardTitles()).length).toBeGreaterThan(0)
@@ -93,7 +93,7 @@ describe('каталог', () => {
   })
 
   it('фильтрует каталог запросом из адреса', async () => {
-    renderApp({ path: '/?q=solana' })
+    renderApp({ path: '/catalog?q=solana' })
 
     const titles = await cardTitles()
     expect(titles).toEqual(['Solana Program Security', 'Solana Anchor Cookbook'])
@@ -118,14 +118,14 @@ describe('каталог', () => {
   it('ищет и по полному описанию, а не только по названию', async () => {
     // Как backend (ответ на Q11): название и оба описания. Слово стоит только
     // в полном описании архива.
-    renderApp({ path: `/?q=${encodeURIComponent('токенсейл')}` })
+    renderApp({ path: `/catalog?q=${encodeURIComponent('токенсейл')}` })
 
     await expectTitles(['Web3 Legal Templates'])
   })
 
   it('по имени автора не ищет — как и backend', async () => {
     // У backend имя автора — сокращённый адрес кошелька, и в поиске оно не участвует.
-    renderApp({ path: '/?q=Studio%20Kirn' })
+    renderApp({ path: '/catalog?q=Studio%20Kirn' })
 
     expect(
       await screen.findByRole('heading', { name: 'Nothing matches “Studio Kirn”' }),
@@ -133,7 +133,7 @@ describe('каталог', () => {
   })
 
   it('называет пустую выдачу поиска запросом, а не общей пустотой', async () => {
-    renderApp({ path: '/?q=нетнетнет' })
+    renderApp({ path: '/catalog?q=нетнетнет' })
 
     expect(
       await screen.findByRole('heading', { name: 'Nothing matches “нетнетнет”' }),
@@ -144,7 +144,7 @@ describe('каталог', () => {
 
   it('очищает поиск ссылкой из пустого состояния', async () => {
     const user = userEvent.setup()
-    const { router } = renderApp({ path: '/?q=нетнетнет' })
+    const { router } = renderApp({ path: '/catalog?q=нетнетнет' })
 
     await user.click(await screen.findByRole('link', { name: 'Clear the search' }))
 

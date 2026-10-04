@@ -41,7 +41,7 @@ export function renderWithRouter(
 ): RenderResult {
   const rootRoute = createRootRoute()
   const routes = [
-    createRoute({ getParentRoute: () => rootRoute, path: '/', component: () => ui }),
+    createRoute({ getParentRoute: () => rootRoute, path: '/catalog', component: () => ui }),
     createRoute({
       getParentRoute: () => rootRoute,
       path: '/archives/$slug',
@@ -56,7 +56,7 @@ export function renderWithRouter(
 
   const router = createRouter({
     routeTree: rootRoute.addChildren(routes),
-    history: createMemoryHistory({ initialEntries: ['/'] }),
+    history: createMemoryHistory({ initialEntries: ['/catalog'] }),
   })
 
   return render(
@@ -74,7 +74,7 @@ export function renderWithRouter(
  * адреса, переход из каталога на страницу архива, состояния загрузки и ошибки.
  */
 export function renderApp({
-  path = '/',
+  path = '/catalog',
   locale = 'en',
 }: { path?: string; locale?: Locale } = {}) {
   const queryClient = new QueryClient({

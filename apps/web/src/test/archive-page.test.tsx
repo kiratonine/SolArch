@@ -71,7 +71,7 @@ describe('страница архива', () => {
     expect(
       await screen.findByRole('heading', { name: 'This archive is not available' }),
     ).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Back to the catalog' })).toHaveAttribute('href', '/')
+    expect(screen.getByRole('link', { name: 'Back to the catalog' })).toHaveAttribute('href', '/catalog')
     // Красная плашка ошибки — это про сбой сети или сервера, а не про снятый архив.
     expect(screen.queryByRole('alert')).toBeNull()
   })

@@ -10,13 +10,15 @@ import { LanguageSwitch } from '@/components/layout/language-switch'
 import { ProductNav } from '@/components/layout/product-nav'
 import { SiteMenu } from '@/components/layout/site-menu'
 import { ThemeSwitch } from '@/components/layout/theme-switch'
+import { HeaderDownloadButton } from '@/components/product/viewer-download'
 import { buttonVariants } from '@/components/ui/button'
 import { sessionQuery } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 
 /**
  * Шапка сознательно содержит только то, что действительно существует.
- * `Get the Viewer` появится, когда закроется Q6 (откуда берётся дистрибутив Viewer).
+ * Кнопка установщика Viewer стоит на любой ширине: скачать `.exe` можно с любой
+ * страницы. Пока релиза нет (Q6), она ведёт к разделу скачивания на лендинге.
  *
  * Навигация живёт в двух видах, а не в одном с исчезающими частями. С `lg` она
  * стоит строкой целиком; ниже — уходит в меню (`site-menu.tsx`). Раньше ссылки
@@ -49,6 +51,8 @@ export function SiteHeader() {
         <nav className="ml-auto flex items-center gap-2 sm:gap-4">
           <FullNav wallet={session?.wallet} />
 
+          <HeaderDownloadButton />
+
           <LanguageSwitch />
           <ThemeSwitch className="lg:-mr-1.5" />
 
@@ -80,7 +84,7 @@ function FullNav({ wallet }: { wallet?: string }) {
   return (
     <div className="hidden items-center gap-4 lg:flex">
       <Link
-        to="/"
+        to="/catalog"
         className={navLink}
         activeProps={{ className: navLinkActive }}
         activeOptions={{ exact: true }}

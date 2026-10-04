@@ -25,7 +25,7 @@ export function SiteFooter() {
         {/* Вторая навигация на странице обязана быть названа: без имени
             скринридер объявит два одинаковых ландмарка «навигация». */}
         <nav aria-label={t.nav.pages} className="flex flex-wrap items-center gap-x-5 gap-y-2">
-          <Link to="/" className={footerLink}>
+          <Link to="/catalog" className={footerLink}>
             {t.nav.catalog}
           </Link>
           <ProductNav linkClassName={footerLink} />

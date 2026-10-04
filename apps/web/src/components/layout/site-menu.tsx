@@ -141,7 +141,7 @@ function MenuRows({ wallet, onNavigate }: { wallet?: string; onNavigate: () => v
     <Container wide>
       <nav aria-label={t.nav.menu} className="flex flex-col py-1">
         <Link
-          to="/"
+          to="/catalog"
           className={menuRow}
           activeProps={{ className: menuRowActive }}
           activeOptions={{ exact: true }}

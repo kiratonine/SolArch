@@ -63,7 +63,7 @@ function HowItWorksPage() {
       </section>
 
       <p className="mt-10">
-        <Link to="/" className="text-seal-ink text-sm font-medium underline underline-offset-4">
+        <Link to="/catalog" className="text-seal-ink text-sm font-medium underline underline-offset-4">
           {page.toCatalog}
         </Link>
       </p>

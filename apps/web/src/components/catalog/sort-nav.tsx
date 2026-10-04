@@ -25,7 +25,7 @@ export function SortNav({ active, className }: { active: MarketplaceSort; classN
         return (
           <Link
             key={sort}
-            to="/"
+            to="/catalog"
             // Смена порядка сбрасывает страницу: вторая страница прошлой выдачи
             // к новой не относится.
             search={(prev) => catalogLinkSearch({ ...prev, sort, page: 1 })}
