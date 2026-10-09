@@ -99,6 +99,58 @@ Viewer должен:
 - показывать buyer/license watermark;
 - повторно открывать архив на активированном устройстве.
 
+### 2.5 Localization / i18n
+
+SolArch Viewer для hackathon/MVP должен поддерживать:
+
+```text
+Russian
+English
+```
+
+Windows installer должен до установки предоставить явный выбор:
+
+```text
+Русский
+English
+```
+
+Выбранный язык installer используется как начальный язык Viewer.
+
+Viewer должен локализовать минимум:
+
+- locked/unlocked UI;
+- archive metadata UI;
+- payment flow;
+- payment pending/success/error states;
+- device activation;
+- license states;
+- backend unavailable / device limit / revoked / expired errors;
+- PDF/image/DOCX/XLSX viewer controls;
+- Settings;
+- dialogs и пользовательские уведомления.
+
+Language preference должна сохраняться локально между запусками.
+
+В Settings пользователь должен иметь возможность переключить:
+
+```text
+Russian ↔ English
+```
+
+без переустановки Viewer.
+
+Protected content и creator-provided metadata автоматически не переводятся.
+
+Не переводить автоматически:
+
+- PDF/DOCX/XLSX content;
+- archive title/description автора;
+- file names;
+- file paths.
+
+Localization должна быть реализована через единый i18n layer. Не создавать отдельные Russian/English версии компонентов и не хранить production UI strings непосредственно внутри компонентов.
+
 ---
 
 ## 3. Device-bound license
@@ -234,13 +286,17 @@ Backend должен предоставить контракт, который V
 
 ```text
 GET current archive public metadata
-POST create payment intent
+POST create payment intent with device_public_key
+GET/POST public Solana Pay transaction request from returned solana_pay_url
 GET/POST payment verification status
-POST activate device
-GET/POST license check
+POST initial activation with intent credential
+POST Device A license refresh with secure refresh token
 ```
 
-Точные endpoint names будут зафиксированы в общем `docs/API.md`.
+Exact endpoint names, credentials and 72-hour offline behavior are fixed in
+`docs/API.md`. Buyer account/wallet login or wallet proof is not part of Viewer
+MVP. Viewer stores the device private key and refresh token through Windows secure
+storage and never persists plaintext Content Key.
 
 До появления общего API-файла следует вынести network layer Viewer в отдельный adapter, чтобы endpoint paths можно было поменять без изменения UI/crypto logic.
 
@@ -300,6 +356,9 @@ viewer/
   license/
   device/
   secure-store/
+  i18n/
+    ru/
+    en/
   file-viewers/
     pdf/
     image/
@@ -325,6 +384,10 @@ viewer/
 - path normalization;
 - license signature validation;
 - device key handling helpers.
+- Russian localization resources;
+- English localization resources;
+- localization key consistency;
+- absence of missing required UI translations.
 
 ### Integration
 
@@ -336,20 +399,28 @@ viewer/
 - после mocked license расшифровать содержимое;
 - invalid license не открывает контент;
 - Device B отклоняется при `max_devices = 1`.
+- выбранный installer/initial language применяется в Viewer;
+- language preference сохраняется после restart;
+- переключение Russian ↔ English работает без переустановки;
+- protected content и creator metadata не изменяются при смене языка.
 
 ### Обязательный ручной demo-flow
 
 ```text
-1. Получить готовый .slr.
-2. Открыть в Viewer.
-3. Увидеть Locked.
-4. Пройти реальный backend payment flow.
-5. Получить license.
-6. Открыть PDF/DOCX/XLSX/image.
-7. Увидеть watermark.
-8. Закрыть Viewer.
-9. Открыть снова — доступ сохраняется.
-10. Проверить тот же .slr на другом устройстве — доступ отсутствует.
+1. Установить Viewer и выбрать Russian или English.
+2. Убедиться, что Viewer запускается на выбранном языке.
+3. Получить готовый .slr.
+4. Открыть его в Viewer.
+5. Увидеть Locked.
+6. Пройти реальный backend payment flow.
+7. Получить license.
+8. Открыть PDF/DOCX/XLSX/image.
+9. Увидеть watermark.
+10. Закрыть Viewer.
+11. Открыть снова — доступ и выбранный язык сохраняются.
+12. Переключить Russian ↔ English в Settings без переустановки.
+13. Убедиться, что protected content и creator metadata не переводятся.
+14. Проверить тот же .slr на другом устройстве — доступ отсутствует.
 ```
 
 ---
@@ -370,6 +441,11 @@ viewer/
 - Device A / Device B сценарий работает;
 - есть unit и integration tests;
 - отсутствуют secrets и приватные ключи в git;
+- Windows installer предлагает выбор Russian / English;
+- системный UI Viewer полностью покрыт Russian и English localization;
+- выбранный язык сохраняется между запусками;
+- Russian ↔ English можно изменить в Settings без переустановки;
+- protected content и creator-provided metadata автоматически не переводятся;
 - README ветки содержит команды запуска и тестирования.
 
 ---

@@ -1,21 +1,20 @@
-# dependencies
-node_modules/
-.pnp
-.pnp.js
-
-# builds
-dist/
-build/
-out/
-target/
-*.tsbuildinfo
-
-# env / secrets
+/TODO/
+/.codex/
+/artifacts/
+/target/
+**/node_modules/
+**/dist/
+**/coverage/
 .env
 .env.*
 !.env.example
+*.log
 *.pem
 *.key
+AGENTS.md
+AGENTS_backup.md
+CLAUDE.md
+prompt.md
 secrets/
 
 # test / coverage
@@ -47,6 +46,13 @@ Thumbs.db
 
 # generated artifacts
 *.slr
+storage_data/
 
 # playwright mcp artifacts
 .playwright-mcp/
+
+# vitest json output (rtk hook)
+.vitest/
+
+# tanstack router plugin cache
+.tanstack/

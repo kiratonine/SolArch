@@ -1,50 +1,56 @@
 # SolArch
 
-Платформа для создания, распространения и защищённого открытия цифрового контента.
-
-Контейнер `.slr` можно свободно скачать и переслать, но открыть его содержимое можно только
-в SolArch Viewer — после оплаты в USDC, серверной верификации платежа и активации лицензии,
-привязанной к устройству.
+SolArch is a full-stack platform for creating, publishing, downloading, paying
+for, and viewing protected `.slr` archives.
 
 ```text
-Discover → Inspect → Download .slr → Open in Viewer → Pay USDC
-→ Verify on backend → Entitlement → Device License → Protected View
+Marketplace → Backend-built .slr → Windows Viewer → USDC payment
+→ Entitlement → device-bound license → protected internal rendering
 ```
 
-## Документация
+The frozen cross-component contracts live in [`docs/`](docs/); start with
+[`docs/README.md`](docs/README.md). Historical files under `docs/context/` are
+not authoritative.
 
-Общие договорённости команды — в [`docs/`](docs/). Порядок чтения описан в
-[`docs/README.md`](docs/README.md).
-
-> ⚠️ `docs/context/` — устаревший черновик (прежнее название продукта, прежнее расширение
-> контейнера, устаревшая бизнес-логика). Источником истины не является.
-
-## Структура монорепозитория
+## Monorepo
 
 ```text
-apps/web        Marketplace Frontend   — React + Vite
-apps/api        Marketplace Backend    — NestJS
-apps/viewer     Desktop Viewer         — Tauri
-crates/         solarch-core, solarch-cli — Rust: формат .slr и криптография
-docs/           Общая документация
+apps/web        React + Vite Marketplace Frontend
+apps/api        NestJS Marketplace Backend
+apps/viewer     React + Tauri Windows Viewer
+crates/         solarch-core and solarch-cli
 ```
 
-Зоны ответственности веток зафиксированы в [`docs/INTEGRATION.md`](docs/INTEGRATION.md) §2.
+Node.js 20.19+ or 22.12+ and pnpm 10.32.1 are required (matching Vite 8's
+supported Node.js ranges). `pnpm-lock.yaml` is the only package-manager
+lockfile.
 
-```text
-feat/archive-core-viewer     crates/*, apps/viewer
-feat/marketplace-frontend    apps/web
-feat/marketplace-backend     apps/api, миграции БД
+```sh
+pnpm install --frozen-lockfile
+
+pnpm --filter @solarch/web typecheck
+pnpm --filter @solarch/web lint
+pnpm --filter @solarch/web test
+pnpm --filter @solarch/web build
+
+pnpm --filter @solarch/api lint
+pnpm --filter @solarch/api test
+pnpm --filter @solarch/api build
+
+pnpm --filter @solarch/viewer lint
+pnpm --filter @solarch/viewer test
+pnpm --filter @solarch/viewer build
+
+cargo test --workspace
 ```
 
-## Запуск
+Run Marketplace development against the real Backend with
+`VITE_ENABLE_MSW=false` and an explicit `VITE_API_BASE_URL`. MSW is development
+and unit-test support only; production builds never enable it.
 
-Требуется Node.js 20+.
-
-```bash
-npm install
-npm run web          # dev-сервер фронтенда на http://localhost:5173
-npm run web:build
-npm run web:test
-npm run web:lint
-```
+See [`apps/web/README.md`](apps/web/README.md),
+[`apps/api/README.md`](apps/api/README.md), and the Part reports under
+[`docs/archive-core-viewer/reports/`](docs/archive-core-viewer/reports/) for
+component-specific setup and validation evidence. Never commit `.env` files,
+private keys, payment credentials, plaintext protected content, or generated
+runtime storage.

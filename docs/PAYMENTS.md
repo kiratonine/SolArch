@@ -126,7 +126,7 @@ Payment intent records:
 
 ```text
 archive
-buyer wallet
+device_public_key (immutable Device A)
 total
 creator share
 platform share
@@ -135,9 +135,15 @@ platform ATA
 USDC mint
 reference
 expiration
+confirmed_buyer_wallet nullable
 ```
 
 Amounts and recipients come only from Backend.
+
+Before authoritative verification `confirmed_buyer_wallet` is null/unknown.
+Backend populates it only from the successfully finalized transaction; neither
+Viewer input nor the Solana Pay transaction-request `account` field is a buyer
+identity or authorization claim.
 
 Viewer never constructs trusted economics.
 
@@ -183,9 +189,49 @@ Operational requirement:
 
 ## 9. Solana Pay role
 
-Use Solana Pay transaction-request style flow or equivalent server-prepared transaction flow that allows the backend to define the complete transaction.
+Use the exact Solana Pay transaction-request flow in API.md §7.1. The QR encodes
+`solana:<absolute HTTPS transaction-request endpoint>` and never contains the
+private Payment Intent client secret. Public GET returns wallet display metadata;
+public POST accepts the wallet's construction-time signing `account`.
 
-The QR/deep-link UX is client-facing, while trusted recipients, amounts and fee policy remain server-controlled.
+The 30-minute Payment Intent is longer-lived than an ordinary recent-blockhash
+transaction. Backend therefore creates or reuses one currently valid issuance on
+each allowed POST rather than embedding one transaction in the intent response.
+Each new issuance uses a current recent blockhash/`lastValidBlockHeight`, the
+intent's immutable reference/economics, both 95/5 USDC transfers and SolArch fee
+payer. Backend must partially sign the first required-signature slot with the
+SolArch fee-payer key; wallet POST `account` is the only missing required signer
+and adds its buyer signature without modifying the message. No new issuance is
+created at or after intent expiry.
+
+### Production Solana commitment policy
+
+For MVP, transaction construction and payment authorization use different fixed
+commitment levels:
+
+```text
+getLatestBlockhash:
+commitment = confirmed
+
+payment observed at processed:
+pending/informational only
+
+payment observed at confirmed:
+awaiting_finality only
+
+payment authorization:
+confirmationStatus = finalized
+```
+
+`confirmed` is chosen for fresh transaction construction and does not authorize
+digital access.
+
+Backend MUST NOT create Payment, Entitlement, Device License or release a wrapped
+Content Key while the transaction is only `processed` or `confirmed`.
+
+Only a transaction at Solana `finalized` commitment with `meta.err == null` may
+continue to the complete verification checklist and atomic Payment/Entitlement
+commit.
 
 ---
 
@@ -197,20 +243,25 @@ Backend must verify:
 
 ```text
 transaction exists
-transaction succeeded
+transaction succeeded (`meta.err == null`)
 correct network
 correct configured USDC mint
-buyer source is acceptable for intended purchase
+exactly one canonical buyer wallet owns the debited source USDC token account and
+is a required signer/authority for that debit; Backend derives this wallet from
+the authoritative transaction and never accepts a Viewer-supplied buyer address
 creator recipient == expected creator ATA
 creator amount == expected 95% amount
 platform recipient == expected SolArch ATA
 platform amount == expected 5% amount
 total == immutable archive price
 expected payment reference/intention relation exists
-finality meets configured requirement
+Solana confirmationStatus == finalized
 transaction signature was never consumed before
 payment intent belongs to same archive
-payment intent not expired or invalid under documented policy
+transaction message hash matches a Backend issuance created before intent expiry
+transaction landed/succeeded within that issuance's own blockhash validity
+transaction reference equals the unique immutable Payment Intent reference
+Payment Intent exact device_public_key binding was fixed before payment
 ```
 
 Only then:
@@ -219,7 +270,14 @@ Only then:
 payment.status = confirmed
 marketplace event = payment_confirmed
 Entitlement = created
+Entitlement Device A = Payment Intent device_public_key
+buyer_wallet = Backend-derived transaction payer/source owner
 ```
+
+The payer may scan Device A's QR using another person's wallet. That wallet is
+recorded as `buyer_wallet`, but device access stays bound to Device A from the
+pre-payment intent. Payment confirmation cannot replace this binding. There is no
+buyer SolArch account, wallet login or wallet proof during activation/refresh.
 
 ---
 
@@ -229,12 +287,31 @@ Required:
 
 ```text
 transaction_signature UNIQUE
+payment.payment_intent_id UNIQUE
+entitlement.payment_id UNIQUE
 payment_intent state transition is idempotent
 same tx cannot unlock second archive
 same tx cannot create duplicate Entitlements
+same tx cannot bind a second device
+confirmed intent device_public_key cannot change
 ```
 
-Repeated verify calls should return the same confirmed result, not duplicate side effects.
+Repeated verify calls should return the same confirmed result, not duplicate side
+effects.
+Intent confirmation, Payment, Entitlement with Device A and the durable
+`payment_confirmed` event commit in one database transaction. A commit/service
+failure rolls back and remains `awaiting_finality` for reconciliation; it never
+turns a valid finalized payment into `failed`/`expired`.
+
+An unissued/modified/reference-only transaction has no state effect. An exact
+issued transaction that fails on chain transfers no funds: only that issuance is
+failed, and after authoritative terminal failure the intent may receive a fresh
+issuance before TTL/policy stop without waiting for blockhash expiry. A dropped,
+reorged or non-final observation does not permit replacement until the old window
+closes. Cancellation/block stops new issuance but remains nonterminal while an
+issued transaction can still land or awaits resolution. If it lands within its
+window, Backend completes Payment/Entitlement after finality. Terminal intent
+`failed` requires that no issuance can still land and none is awaiting resolution.
 
 ---
 
@@ -262,7 +339,21 @@ No Entitlement.
 
 ### Expired payment intent
 
-Follow implementation policy; do not silently bind an unrelated transaction.
+Viewer Payment Intent expires exactly 1800 seconds after `created_at`. The
+deadline stops **new transaction issuance**. A transaction issued before the deadline that landed successfully within its
+recorded recent-blockhash/`lastValidBlockHeight` window remains eligible and must
+be tracked until Solana `confirmationStatus == finalized`, even when that
+`finalized` status is reached after `expires_at`.
+
+Backend keeps such a landed transaction in `awaiting_finality`; it creates no Payment or Entitlement until `confirmationStatus == finalized`,
+`meta.err == null`, and the complete verification checklist passes. It keeps an
+unlanded intent `pending` while a pre-expiry issuance can still land. Only after
+all issuance windows close with no eligible transaction does it become
+`expired`. A modified/unissued message, a reference-only unrelated transaction,
+or a transaction landed outside its issued blockhash window is never accepted.
+Issuance, verification and confirmation are idempotent as defined in API.md
+§§7.1–8. An already `confirmed` intent remains available for its initial Device A
+activation under API.md §9.3.
 
 ### Network/RPC temporary error
 

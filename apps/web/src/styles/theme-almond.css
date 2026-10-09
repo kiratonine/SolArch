@@ -1,0 +1,127 @@
+/*
+ * Тема «Almond» — Almond Hearth (#EED3BA) и Obsidian Ink (#151311).
+ *
+ * Бумага тёплая, тонированная; чернила — тёплый почти-чёрный. Акцент остаётся золотым,
+ * и это главное, что тема обязана сохранить: «Sol» — это Solana и солнце, без золота
+ * знак перестаёт быть знаком SolArch.
+ *
+ * Золото на тёплой бумаге живёт не везде, и это не вопрос вкуса, а вопрос светлоты.
+ * Латунь имеет тон 78°, бумага — 66°: одно семейство. Яркая латунь (L≈0.75) даёт
+ * к бумаге 1.8:1 и пропадает — осветление бумаги её не спасает, на самом светлом
+ * тёплом фоне выходит 2.0:1. Поэтому роли разведены жёстко:
+ *
+ *   --seal      яркая латунь. Только заливки и графические метки, и только там,
+ *               где под ней чернила, а не бумага: уголок печати на знаке даёт 7.2:1,
+ *               потому что лежит поверх силуэта. По бумаге эту латунь не пускать.
+ *   --seal-ink  тёмная бронза, 4.8:1 к бумаге (AA). Деньги, ссылки, «Sol» в логотипе.
+ *   --seal-soft тёплая золотая подложка: ::selection и мягкие заливки.
+ *
+ * Сама Almond Hearth — не фон страницы, а ступень поверхности: `--secondary`,
+ * `--accent`, чипы и наведение. Фон на ступень светлее неё, иначе бронзе не хватает
+ * воздуха и она читается как грязь, а не как золото.
+ *
+ * Границы здесь заметно контрастнее, чем в «Paper». Волосяная линия была рассчитана
+ * на белый лист; на тонированной бумаге она пропадает, а теней в дизайн-языке нет —
+ * держать глубину больше нечем.
+ *
+ * Все текстовые токены проверены на контраст к своему фону: минимум 4.5:1 (AA).
+ *
+ * Файл держит ровно палитру. Радиусы, высота шапки и шрифты живут в `index.css`:
+ * при смене темы они не меняются, и разъезжаться им незачем.
+ */
+
+:root {
+    --background: oklch(0.922 0.034 66);
+    --foreground: oklch(0.235 0.012 62);
+    --card: oklch(0.968 0.016 70);
+    --card-foreground: oklch(0.235 0.012 62);
+    --popover: oklch(0.968 0.016 70);
+    --popover-foreground: oklch(0.235 0.012 62);
+    --primary: oklch(0.235 0.012 62);
+    --primary-foreground: oklch(0.968 0.016 70);
+    --secondary: oklch(0.883 0.045 65);
+    --secondary-foreground: oklch(0.235 0.012 62);
+    --muted: oklch(0.895 0.038 65);
+    --muted-foreground: oklch(0.505 0.028 62);
+    --accent: oklch(0.883 0.045 65);
+    --accent-foreground: oklch(0.235 0.012 62);
+    --destructive: oklch(0.5 0.175 32);
+    --border: oklch(0.845 0.048 64);
+    --input: oklch(0.805 0.052 64);
+    --ring: oklch(0.7 0.15 76);
+
+    --seal: oklch(0.745 0.15 78);
+    --seal-ink: oklch(0.505 0.132 68);
+    --seal-soft: oklch(0.9 0.062 76);
+    --seal-foreground: oklch(0.235 0.03 62);
+
+    --state-idle: oklch(0.495 0.018 62);
+    --state-progress: oklch(0.475 0.11 258);
+    --state-ok: oklch(0.455 0.09 148);
+    --state-error: oklch(0.5 0.175 32);
+
+    --chart-1: oklch(0.745 0.15 78);
+    --chart-2: oklch(0.475 0.11 258);
+    --chart-3: oklch(0.455 0.09 148);
+    --chart-4: oklch(0.62 0.045 64);
+    --chart-5: oklch(0.32 0.02 62);
+
+    --sidebar: oklch(0.968 0.016 70);
+    --sidebar-foreground: oklch(0.235 0.012 62);
+    --sidebar-primary: oklch(0.235 0.012 62);
+    --sidebar-primary-foreground: oklch(0.968 0.016 70);
+    --sidebar-accent: oklch(0.883 0.045 65);
+    --sidebar-accent-foreground: oklch(0.235 0.012 62);
+    --sidebar-border: oklch(0.845 0.048 64);
+    --sidebar-ring: oklch(0.7 0.15 76);
+}
+
+/*
+ * Тёмная тема — та, ради которой золото и придумано: на обсидиане латунь ничем
+ * не ограничена, поэтому `--seal` и `--seal-ink` здесь оба яркие и почти совпадают.
+ */
+.dark {
+    --background: oklch(0.188 0.006 68);
+    --foreground: oklch(0.905 0.028 72);
+    --card: oklch(0.235 0.008 66);
+    --card-foreground: oklch(0.905 0.028 72);
+    --popover: oklch(0.235 0.008 66);
+    --popover-foreground: oklch(0.905 0.028 72);
+    --primary: oklch(0.905 0.028 72);
+    --primary-foreground: oklch(0.188 0.006 68);
+    --secondary: oklch(0.285 0.01 66);
+    --secondary-foreground: oklch(0.905 0.028 72);
+    --muted: oklch(0.262 0.009 66);
+    --muted-foreground: oklch(0.705 0.022 70);
+    --accent: oklch(0.305 0.011 66);
+    --accent-foreground: oklch(0.905 0.028 72);
+    --destructive: oklch(0.7 0.16 30);
+    --border: oklch(0.335 0.012 66);
+    --input: oklch(0.365 0.014 66);
+    --ring: oklch(0.8 0.15 76);
+
+    --seal: oklch(0.8 0.15 76);
+    --seal-ink: oklch(0.835 0.13 78);
+    --seal-soft: oklch(0.3 0.055 66);
+    --seal-foreground: oklch(0.2 0.04 68);
+
+    --state-idle: oklch(0.705 0.02 68);
+    --state-progress: oklch(0.72 0.1 255);
+    --state-ok: oklch(0.72 0.11 155);
+    --state-error: oklch(0.7 0.16 30);
+
+    --chart-1: oklch(0.8 0.15 76);
+    --chart-2: oklch(0.72 0.1 255);
+    --chart-3: oklch(0.72 0.11 155);
+    --chart-4: oklch(0.55 0.02 66);
+    --chart-5: oklch(0.905 0.028 72);
+
+    --sidebar: oklch(0.235 0.008 66);
+    --sidebar-foreground: oklch(0.905 0.028 72);
+    --sidebar-primary: oklch(0.8 0.15 76);
+    --sidebar-primary-foreground: oklch(0.2 0.04 68);
+    --sidebar-accent: oklch(0.305 0.011 66);
+    --sidebar-accent-foreground: oklch(0.905 0.028 72);
+    --sidebar-border: oklch(0.335 0.012 66);
+    --sidebar-ring: oklch(0.8 0.15 76);
+}

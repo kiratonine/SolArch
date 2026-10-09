@@ -246,6 +246,62 @@ Viewer должен:
 
 ---
 
+### 7.1 Viewer localization
+
+SolArch Desktop Viewer для hackathon/MVP должен поддерживать два языка интерфейса:
+
+```text
+Russian
+English
+```
+
+Windows installer должен до установки предоставить пользователю явный выбор языка:
+
+```text
+Русский
+English
+```
+
+Выбранный язык installer становится начальным языком SolArch Viewer.
+
+Локализованы должны быть все системные элементы Desktop Viewer, включая:
+
+- installer;
+- first-run UI;
+- locked/unlocked states;
+- archive information UI;
+- payment UI и payment states;
+- device activation UI;
+- license states;
+- error/loading/success states;
+- PDF/image/DOCX/XLSX viewer controls;
+- settings;
+- dialogs и пользовательские уведомления Viewer.
+
+Выбранный язык должен сохраняться между перезапусками приложения.
+
+Пользователь должен иметь возможность позже изменить язык:
+
+```text
+Russian ↔ English
+```
+
+в настройках Viewer без переустановки приложения.
+
+Protected content и creator-provided metadata автоматически не переводятся.
+
+К таким данным относятся:
+
+- содержимое PDF/DOCX/XLSX;
+- изображения;
+- archive title, если он задан автором;
+- archive description, если он задан автором;
+- file names и paths.
+
+Все системные пользовательские строки Viewer должны использовать общий localization/i18n layer. Production UI не должен содержать дублированные Russian/English компоненты или захардкоженные пользовательские строки вне localization resources.
+
+---
+
 ## 8. Licensing model
 
 Строго разделять:
@@ -394,6 +450,18 @@ Public metrics корректно показывают views, downloads и paid 
 ### AC-17
 
 `paid unlocks` увеличивается только после blockchain-verified payment.
+
+### AC-18
+
+При запуске Windows installer пользователь может явно выбрать `Русский` или `English`, и выбранный язык используется installer и становится начальным языком SolArch Viewer.
+
+### AC-19
+
+Выбранный язык сохраняется между перезапусками Viewer, а пользователь может изменить `Russian ↔ English` в Settings без переустановки приложения.
+
+### AC-20
+
+Системный UI Viewer локализован на Russian и English, при этом protected content, creator-provided title/description и file names автоматически не переводятся.
 
 ---
 

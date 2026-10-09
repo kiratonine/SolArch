@@ -1,0 +1,64 @@
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+
+import { QueryClientProvider } from '@tanstack/react-query'
+import { RouterProvider, createRouter } from '@tanstack/react-router'
+
+import { I18nProvider } from '@/lib/i18n'
+import { handleUnauthorized, queryClient } from '@/lib/query-client'
+import { routeTree } from './routeTree.gen'
+
+import './index.css'
+
+const router = createRouter({
+  routeTree,
+  context: { queryClient },
+  defaultPreload: 'intent',
+  scrollRestoration: true,
+})
+
+/**
+ * Истёкшая сессия обнуляется в кеше запросов, а увести человека наружу умеет
+ * только роутер: `invalidate` перезапускает guard кабинета, и дальше срабатывает
+ * тот же путь, что и для обычного гостя.
+ */
+handleUnauthorized(() => {
+  void router.invalidate()
+})
+
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router
+  }
+}
+
+/**
+ * MSW работает только в dev и только если явно не выключен.
+ * Для работы с реальным Backend достаточно выставить VITE_ENABLE_MSW=false.
+ */
+async function enableMocking() {
+  if (!import.meta.env.DEV) return
+  if (import.meta.env.VITE_ENABLE_MSW === 'false') return
+
+  const { worker } = await import('@/mocks/browser')
+  await worker.start({ onUnhandledRequest: 'bypass' })
+
+  // Без расширения в браузере вход пройти нечем, а проверять его надо каждый день.
+  const { registerDemoWallet } = await import('@/mocks/demo-wallet')
+  registerDemoWallet()
+}
+
+const rootElement = document.getElementById('root')
+if (!rootElement) throw new Error('Root element #root not found')
+
+void enableMocking().then(() => {
+  createRoot(rootElement).render(
+    <StrictMode>
+      <I18nProvider>
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </I18nProvider>
+    </StrictMode>,
+  )
+})
