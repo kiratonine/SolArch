@@ -11,7 +11,6 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
 import * as path from 'path';
 import * as fs from 'fs';
 import { UploadsService } from './uploads.service';
@@ -41,7 +40,7 @@ export class UploadsController {
   ) {
     await this.uploadsService.assertUploadOwner(user.id, uploadId);
 
-    const uploadDir = path.join('./storage_data', 'uploads');
+    const uploadDir = this.env.uploadsDirectory;
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
@@ -60,22 +59,7 @@ export class UploadsController {
 
   @Post(':uploadId/file')
   @UseInterceptors(
-    FileInterceptor('file', {
-      storage: diskStorage({
-        destination: (req, file, cb) => {
-          const uploadDir = path.join('./storage_data', 'uploads');
-          if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
-          }
-          cb(null, uploadDir);
-        },
-        filename: (req, file, cb) => {
-          const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
-          cb(null, `${req.params.uploadId}-${uniqueSuffix}${path.extname(file.originalname)}`);
-        },
-      }),
-      limits: { fileSize: 512 * 1024 * 1024 }, // 512 MiB
-    }),
+    FileInterceptor('file'),
   )
   async uploadFile(
     @Param('uploadId') uploadId: string,

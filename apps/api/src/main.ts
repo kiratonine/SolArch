@@ -6,6 +6,7 @@ import { AppModule } from './app.module';
 import { SolArchExceptionFilter } from './common/filters/http-exception.filter';
 import { EnvService } from './config/env.service';
 import { configureRequestBodyParsers } from './common/viewer-request-limits';
+import { corsOptions } from './config/cors';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -16,11 +17,7 @@ async function bootstrap() {
 
   // Security & Middlewares
   app.use(helmet());
-  app.enableCors({
-    origin: true,
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    credentials: true,
-  });
+  app.enableCors(corsOptions(env));
 
   // Global pipes & filters
   app.useGlobalPipes(

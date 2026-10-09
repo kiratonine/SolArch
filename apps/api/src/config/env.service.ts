@@ -1,8 +1,10 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Keypair, PublicKey } from '@solana/web3.js';
-import { existsSync, statSync } from 'fs';
-import { isAbsolute } from 'path';
+import { closeSync, existsSync, mkdirSync, openSync, realpathSync, statSync, unlinkSync, writeSync } from 'fs';
+import { isAbsolute, join, relative, resolve, sep } from 'path';
+import { tmpdir } from 'os';
+import { randomUUID } from 'crypto';
 import * as nacl from 'tweetnacl';
 
 const KEY_ID = /^[a-z0-9_-]{1,32}$/;
@@ -34,7 +36,9 @@ export class EnvService implements OnModuleInit {
   onModuleInit() {
     // Validate an explicitly requested deterministic clock even before any issuance path runs.
     void this.currentTime;
+    void this.webAllowedOrigins;
     if (this.isLiveEnvironment) {
+      this.validateStorage();
       this.validateLiveSecrets();
     }
   }
@@ -130,7 +134,11 @@ export class EnvService implements OnModuleInit {
   }
 
   get port(): number {
-    return this.configService.get<number>('PORT', 3000);
+    const port = Number(this.configService.get<string | number>('PORT', 3000));
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      throw new Error('PORT must be an integer between 1 and 65535');
+    }
+    return port;
   }
 
   get isProduction(): boolean {
@@ -223,7 +231,65 @@ export class EnvService implements OnModuleInit {
   }
 
   get storageRoot(): string {
-    return this.configService.get<string>('STORAGE_LOCAL_ROOT', './storage_data');
+    const configured = this.configService.get<string>('STORAGE_LOCAL_ROOT');
+    if (this.isLiveEnvironment && (!configured || !isAbsolute(configured))) {
+      throw new Error('STORAGE_LOCAL_ROOT must be explicitly configured as an absolute persistent path in live environment');
+    }
+    const root = resolve(configured || './storage_data');
+    if (this.isLiveEnvironment) this.assertPersistentStorage(root);
+    return root;
+  }
+
+  get uploadsDirectory(): string {
+    return join(this.storageRoot, 'uploads');
+  }
+
+  validateStorage(): void {
+    const root = this.storageRoot;
+    let probe: string | undefined;
+    let descriptor: number | undefined;
+    try {
+      mkdirSync(root, { recursive: true });
+      this.assertPersistentStorage(realpathSync(root));
+      probe = join(root, `.solarch-write-probe-${randomUUID()}`);
+      descriptor = openSync(probe, 'wx', 0o600);
+      writeSync(descriptor, Buffer.from('storage readiness'));
+    } catch {
+      throw new Error('STORAGE_LOCAL_ROOT must be a writable persistent directory, not temporary storage');
+    } finally {
+      // Only remove the unique readiness file that this invocation created.
+      if (descriptor !== undefined) {
+        closeSync(descriptor);
+        unlinkSync(probe!);
+      }
+    }
+  }
+
+  private assertPersistentStorage(root: string): void {
+    for (const temporaryRoot of [tmpdir(), '/tmp', '/var/tmp', '/dev/shm', '/run']) {
+      const child = relative(resolve(temporaryRoot), root);
+      if (child === '' || (!child.startsWith(`..${sep}`) && child !== '..' && !isAbsolute(child))) {
+        throw new Error('STORAGE_LOCAL_ROOT must not point to temporary storage');
+      }
+    }
+  }
+
+  get webAllowedOrigins(): string[] {
+    const origins = (this.configService.get<string>('WEB_ALLOWED_ORIGINS', '') || '')
+      .split(',').map((value) => value.trim()).filter(Boolean);
+    for (const origin of origins) {
+      let url: URL;
+      try { url = new URL(origin); } catch {
+        throw new Error('WEB_ALLOWED_ORIGINS must contain comma-separated HTTPS origins');
+      }
+      if (url.protocol !== 'https:' || url.origin !== origin) {
+        throw new Error('WEB_ALLOWED_ORIGINS must contain canonical HTTPS origins without credentials, path, query or fragment');
+      }
+    }
+    if (!this.isLiveEnvironment || this.configService.get<string>('NODE_ENV') === 'development') {
+      origins.push('http://localhost:5173');
+    }
+    return [...new Set(origins)];
   }
 
   get solanaRpcUrl(): string {
