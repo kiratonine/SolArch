@@ -1,0 +1,68 @@
+name: CI Frontend
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  marketplace:
+    name: Marketplace / lint, tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      VITE_API_BASE_URL: https://api.example.invalid
+      VITE_ENABLE_MSW: 'false'
+      VITE_VIEWER_DOWNLOAD_URL: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install dependencies (locked)
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm --filter @solarch/web typecheck
+      - name: Lint
+        run: pnpm --filter @solarch/web lint
+      - name: Unit and component tests
+        run: pnpm --filter @solarch/web test
+      - name: Production build
+        run: pnpm --filter @solarch/web build
+      - name: Production output safety regression (no MSW or dev wallet)
+        run: node --test scripts/web-production-output.test.mjs
+
+  viewer-ui:
+    name: Viewer UI / lint, tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install dependencies (locked)
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck / lint
+        run: pnpm --filter @solarch/viewer lint
+      - name: Unit and component tests
+        run: pnpm --filter @solarch/viewer test
+      - name: Production UI build (not a Windows installer)
+        run: pnpm --filter @solarch/viewer build

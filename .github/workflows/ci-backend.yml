@@ -1,0 +1,65 @@
+name: CI Backend
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: NestJS API / Prisma, lint, tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NODE_ENV: test
+      SOLANA_LIVE_DEVNET: 'false'
+      # Used only for Prisma schema validation/client generation.
+      # No PostgreSQL connection is made by these mocked unit/E2E tests.
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/solarch?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install dependencies (locked)
+        run: pnpm install --frozen-lockfile
+      - name: Validate Prisma schema (no DB migration)
+        run: pnpm --filter @solarch/api exec prisma validate
+      - name: Generate Prisma Client (no DB migration)
+        run: pnpm --filter @solarch/api prisma:generate
+      - name: Lint
+        run: pnpm --filter @solarch/api lint
+      - name: Unit tests
+        run: pnpm --filter @solarch/api test --runInBand
+      - name: Mocked HTTP E2E tests (not real USDC payments)
+        run: pnpm --filter @solarch/api test:e2e --runInBand
+      - name: Production compile
+        run: pnpm --filter @solarch/api build
+
+  archive-core:
+    name: Rust Archive Core / CLI
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Core and CLI unit, integration and security tests
+        run: cargo test --locked -p solarch-core -p solarch-cli
+      - name: Compile CLI
+        run: cargo build --locked -p solarch-cli
+      - name: Static live-Devnet E2E harness tests (no payment/network)
+        run: |
+          node --test scripts/viewer-live-devnet-e2e.test.mjs
