@@ -20,18 +20,18 @@ describe('лендинг', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Catalog' })).toBeInTheDocument()
   })
 
-  it('кнопка установщика — заглушка, пока релиза нет', async () => {
+  it('CTA ведёт на страницу установки без автоматического скачивания', async () => {
     renderApp({ path: '/' })
     await screen.findByRole('heading', { level: 1 })
 
     const section = document.getElementById('download')!
-    const button = within(section).getByRole('button', { name: /Download for Windows/ })
+    const button = within(section).getByRole('link', { name: /Download for Windows/ })
     expect(within(section).getByText('SolArch Viewer_0.1.0_x64-setup.exe')).toBeInTheDocument()
 
     await userEvent.click(button)
-    expect(within(section).getByRole('status')).toHaveTextContent(
-      'The installer is not published yet',
-    )
+    expect(await screen.findByRole('heading', { level: 1, name: 'SolArch Viewer for Windows' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Download for Windows/ })).toBeDisabled()
+    expect(screen.getByRole('status')).toHaveTextContent('The installer is not available yet')
   })
 
   it('говорит по-русски', async () => {
@@ -43,6 +43,6 @@ describe('лендинг', () => {
         name: 'Файлы, которые открываются только после оплаты',
       }),
     ).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /Скачать для Windows/ }).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('link', { name: /Скачать для Windows/ }).length).toBeGreaterThan(0)
   })
 })

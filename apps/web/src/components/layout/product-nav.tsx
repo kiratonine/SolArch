@@ -38,8 +38,14 @@ export function ProductNav({
         {t.nav.howItWorks}
       </Link>
 
-      {/* Вторая ссылка — `t.nav.viewer` на `/download` — встаёт сюда вместе
-          со страницей; ключ для неё уже лежит в обоих словарях. */}
+      <Link
+        to="/download"
+        className={linkClassName}
+        activeProps={{ className: activeClassName }}
+        onClick={onNavigate}
+      >
+        {t.nav.viewer}
+      </Link>
     </>
   )
 }

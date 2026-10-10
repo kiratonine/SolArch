@@ -56,12 +56,11 @@ describe('как это работает', () => {
     renderApp({ path: '/how-it-works' })
     await screen.findByRole('heading', { level: 1, name: 'How it works' })
 
-    // Релиза ещё нет (Q6): кнопка шапки ведёт к разделу скачивания на лендинге,
-    // где заглушка объясняет, почему установщика пока нет.
+    // Header всегда ведёт на страницу релиза, а не на непроверенный бинарник.
     const header = screen.getByRole('banner')
     expect(within(header).getByRole('link', { name: 'Download for Windows' })).toHaveAttribute(
       'href',
-      '/#download',
+      '/download',
     )
   })
 

@@ -4,6 +4,7 @@ import { Container } from '@/components/layout/container'
 import { PageHeader } from '@/components/layout/page-header'
 import { SectionHeading } from '@/components/layout/section-heading'
 import { StepList } from '@/components/product/step-list'
+import { HeaderDownloadButton } from '@/components/product/viewer-download'
 import { useI18n } from '@/lib/i18n'
 
 export const Route = createFileRoute('/how-it-works')({
@@ -26,9 +27,7 @@ export const Route = createFileRoute('/how-it-works')({
  * («автору уходит 95%») говорил не с тем, кто его читал. У покупателя и автора
  * теперь по своему разделу, и текст в них тот же самый.
  *
- * Ссылки на Viewer на странице нет, хотя все три шага на него ссылаются:
- * откуда берётся дистрибутив — открытый вопрос Q6. Она встанет сюда вместе
- * со страницей `/download`, а не заглушкой раньше времени.
+ * Ссылка на /download использует общий CTA, без web payment flow.
  */
 function HowItWorksPage() {
   const { t } = useI18n()
@@ -48,6 +47,7 @@ function HowItWorksPage() {
         <p className="text-muted-foreground mt-4 max-w-[62ch] text-[0.875rem]">
           {t.economics.networkFees}
         </p>
+        <HeaderDownloadButton compact={false} className="mt-5" />
       </section>
 
       <section className="border-border mt-6 border-t pt-6">

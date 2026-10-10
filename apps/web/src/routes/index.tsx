@@ -98,7 +98,7 @@ function LandingPage() {
             </ul>
           </section>
   
-          {/* Якорь `#download`: сюда ведёт кнопка в шапке, пока у установщика нет адреса. */}
+          {/* Сохраняем прежний anchor; CTA ведёт на отдельную /download страницу. */}
           <section
             id="download"
             className="border-border bg-card mt-14 scroll-mt-[calc(var(--header-height)+1.5rem)] rounded-lg border px-5 py-8 sm:px-10 sm:py-10"

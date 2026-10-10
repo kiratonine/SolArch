@@ -89,7 +89,22 @@ export const en = {
     /** Полное имя действия — для кнопки на лендинге и для скринридера в шапке. */
     action: 'Download for Windows',
     /** Заглушка: релиза Viewer ещё нет (Q6). */
-    pending: 'The installer is not published yet. This button starts working with the first Viewer release.',
+    pending: 'The installer is not available yet. Downloading will be enabled after the verified release is published.',
+    title: 'SolArch Viewer for Windows',
+    lead: 'Open protected .slr archives in the desktop Viewer. The archive downloads for free; payment and activation happen inside the Viewer, not on this website.',
+    requirements: 'Windows 10 / 11 · x64',
+    version: 'Version',
+    installTitle: 'Install and open an archive',
+    steps: [
+      { title: 'Install the Viewer', body: 'Run the Windows installer and choose Russian or English. You can change the Viewer language later.' },
+      { title: 'Open your .slr', body: 'Download an archive from the catalog, then double-click it in Explorer or use Open archive inside the Viewer.' },
+      { title: 'Unlock inside the Viewer', body: 'After trusted archive verification, the Viewer shows the price and Solana Pay QR. No buyer account is required.' },
+    ],
+    securityTitle: 'Before you install',
+    security: 'Use only the official release. An unsigned installer may trigger Windows SmartScreen. Do not disable Windows security globally; check the published file and checksum before proceeding.',
+    preview: 'This MVP uses Solana Devnet and test USDC, not real money.',
+    toCatalog: 'Browse the catalog',
+    howItWorks: 'How it works',
   },
 
   /**

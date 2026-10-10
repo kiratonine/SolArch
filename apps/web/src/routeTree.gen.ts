@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as CatalogRouteImport } from './routes/catalog'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as DownloadRouteImport } from './routes/download'
 import { Route as HowItWorksRouteImport } from './routes/how-it-works'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ArchivesSlugRouteImport } from './routes/archives.$slug'
@@ -33,6 +34,11 @@ const CatalogRoute = CatalogRouteImport.update({
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DownloadRoute = DownloadRouteImport.update({
+  id: '/download',
+  path: '/download',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HowItWorksRoute = HowItWorksRouteImport.update({
@@ -76,6 +82,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/catalog': typeof CatalogRoute
   '/dashboard': typeof DashboardRouteWithChildren
+  '/download': typeof DownloadRoute
   '/how-it-works': typeof HowItWorksRoute
   '/login': typeof LoginRoute
   '/archives/$slug': typeof ArchivesSlugRoute
@@ -87,6 +94,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/catalog': typeof CatalogRoute
+  '/download': typeof DownloadRoute
   '/how-it-works': typeof HowItWorksRoute
   '/login': typeof LoginRoute
   '/archives/$slug': typeof ArchivesSlugRoute
@@ -100,6 +108,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/catalog': typeof CatalogRoute
   '/dashboard': typeof DashboardRouteWithChildren
+  '/download': typeof DownloadRoute
   '/how-it-works': typeof HowItWorksRoute
   '/login': typeof LoginRoute
   '/archives/$slug': typeof ArchivesSlugRoute
@@ -114,6 +123,7 @@ export interface FileRouteTypes {
     | '/'
     | '/catalog'
     | '/dashboard'
+    | '/download'
     | '/how-it-works'
     | '/login'
     | '/archives/$slug'
@@ -125,6 +135,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/catalog'
+    | '/download'
     | '/how-it-works'
     | '/login'
     | '/archives/$slug'
@@ -137,6 +148,7 @@ export interface FileRouteTypes {
     | '/'
     | '/catalog'
     | '/dashboard'
+    | '/download'
     | '/how-it-works'
     | '/login'
     | '/archives/$slug'
@@ -150,6 +162,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CatalogRoute: typeof CatalogRoute
   DashboardRoute: typeof DashboardRouteWithChildren
+  DownloadRoute: typeof DownloadRoute
   HowItWorksRoute: typeof HowItWorksRoute
   LoginRoute: typeof LoginRoute
   ArchivesSlugRoute: typeof ArchivesSlugRoute
@@ -176,6 +189,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/download': {
+      id: '/download'
+      path: '/download'
+      fullPath: '/download'
+      preLoaderRoute: typeof DownloadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/how-it-works': {
@@ -252,6 +272,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CatalogRoute: CatalogRoute,
   DashboardRoute: DashboardRouteWithChildren,
+  DownloadRoute: DownloadRoute,
   HowItWorksRoute: HowItWorksRoute,
   LoginRoute: LoginRoute,
   ArchivesSlugRoute: ArchivesSlugRoute,

@@ -115,7 +115,7 @@ describe('сессия автора', () => {
     // Короткий адрес — то, по чему человек узнаёт свой кошелёк среди прочих.
     // Ищем именно в шапке: полный адрес есть ещё и на странице кабинета.
     const header = await screen.findByRole('banner')
-    expect(within(header).getByTitle(MOCK_CREATOR.wallet)).toHaveTextContent('7xKX…gAsU')
+    expect(await within(header).findByTitle(MOCK_CREATOR.wallet)).toHaveTextContent('7xKX…gAsU')
 
     await user.click(screen.getByRole('button', { name: 'Sign out' }))
 
