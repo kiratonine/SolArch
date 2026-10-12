@@ -4,7 +4,7 @@
 
 ## 1. Goal
 
-Тестирование должно доказывать не только работу отдельных компонентов, но и главный продуктовый promise:
+Testing must demonstrate not only that individual components work, but also the core product promise:
 
 ```text
 downloadable/copyable .slr
@@ -12,7 +12,7 @@ downloadable/copyable .slr
 transferable access right
 ```
 
-Главный test target — реальный A-to-Z flow.
+The main test target is a real A-to-Z flow.
 
 ---
 
@@ -27,13 +27,13 @@ Security
 Manual demo
 ```
 
-Каждая ветка отвечает за свои unit/integration tests, но финальный E2E общий.
+Each branch owns its unit/integration tests, but the final E2E is shared.
 
 ---
 
 ## 3. Archive Core unit tests
 
-Покрыть:
+Cover:
 
 - magic/version parser;
 - header serialization;
@@ -52,7 +52,7 @@ Manual demo
 
 ## 4. Viewer tests
 
-Покрыть:
+Cover:
 
 - locked state;
 - public header display;
@@ -70,27 +70,27 @@ Manual demo
 
 ### 4.1 Viewer localization tests
 
-Проверить:
+Verify:
 
-- Russian locale загружается без missing required keys;
-- English locale загружается без missing required keys;
-- обязательные localization keys существуют в обеих locale;
-- locked state корректно отображается на Russian и English;
-- payment states корректно отображаются на Russian и English;
-- device/license states корректно отображаются на Russian и English;
-- backend/error states корректно отображаются на Russian и English;
-- PDF/image/DOCX/XLSX viewer controls корректно отображаются на Russian и English;
-- выбранный язык сохраняется между restart;
-- переключение Russian ↔ English применяется без переустановки;
-- protected content не изменяется при переключении locale;
-- creator-provided title/description/file names не переводятся автоматически;
-- production UI не зависит от отдельной Russian/English версии компонентов.
+- the Russian locale loads without missing required keys;
+- the English locale loads without missing required keys;
+- required localization keys exist in both locales;
+- the locked state displays correctly in Russian and English;
+- payment states display correctly in Russian and English;
+- device/license states display correctly in Russian and English;
+- backend/error states display correctly in Russian and English;
+- PDF/image/DOCX/XLSX viewer controls display correctly in Russian and English;
+- the selected language persists across restarts;
+- switching Russian ↔ English works without reinstallation;
+- protected content does not change when switching locale;
+- creator-provided title/description/file names are not translated automatically;
+- production UI does not depend on separate Russian/English versions of components.
 
 ---
 
 ## 5. Frontend tests
 
-Покрыть:
+Cover:
 
 - archive card;
 - public metrics;
@@ -108,7 +108,7 @@ Manual demo
 
 ## 6. Backend unit tests
 
-Покрыть:
+Cover:
 
 - immutable price enforcement;
 - exact 5% fee calculation;
@@ -320,12 +320,12 @@ Before presentation:
 - sample creator archive prepared;
 - Device B test prepared;
 - no secrets shown on screen.
-- installer предлагает Russian / English;
-- установка с Russian проверена;
-- установка с English проверена;
-- выбранный installer language становится initial Viewer language;
-- language preference сохраняется после restart;
-- Russian ↔ English switch в Settings проверен;
+- the installer offers Russian / English;
+- installation in Russian is verified;
+- installation in English is verified;
+- the selected installer language becomes the initial Viewer language;
+- language preference persists after restart;
+- the Russian ↔ English switch in Settings is verified;
 
 ---
 

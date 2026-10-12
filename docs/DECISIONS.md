@@ -1,10 +1,12 @@
 # SolArch — Architecture & Product Decisions
 
-Этот файл фиксирует решения, которые нельзя менять в одной ветке без согласования команды.
+This file records decisions that must not be changed in a single branch without team agreement.
 
 ---
 
-## ADR-001 — Название и формат
+<a id="adr-001--название-и-формат"></a>
+
+## ADR-001 — Name and format
 
 ```text
 Product = SolArch
@@ -15,33 +17,33 @@ Container extension = .slr
 
 ## ADR-002 — Self-contained container
 
-`.slr` v1 хранит encrypted protected content внутри самого файла.
+`.slr` v1 stores encrypted protected content within the file itself.
 
-Причина: file-first distribution является ключевой ценностью.
+Rationale: file-first distribution is a core value.
 
 ---
 
 ## ADR-003 — USDC only
 
-Hackathon/MVP принимает только USDC.
+The hackathon/MVP accepts USDC only.
 
-Не добавляем SOL price/FX, чтобы избежать oracle/quote/slippage complexity.
+SOL pricing/FX is not added, to avoid oracle/quote/slippage complexity.
 
 ---
 
 ## ADR-004 — Immutable price
 
-Цена archive фиксируется при создании.
+The archive price is fixed at creation.
 
-Изменение цены требует нового archive.
+Changing the price requires a new archive.
 
 ---
 
 ## ADR-005 — Non-custodial creator payout
 
-Creator предоставляет собственный Solana payout wallet.
+The creator provides their own Solana payout wallet.
 
-SolArch не создаёт custodial creator wallet и не хранит creator balance.
+SolArch does not create a custodial creator wallet or store a creator balance.
 
 ---
 
@@ -52,21 +54,21 @@ Creator = 95%
 SolArch = 5%
 ```
 
-Fee snapshot фиксируется при archive create.
+The fee snapshot is fixed at archive creation.
 
 ---
 
 ## ADR-007 — Atomic split payment
 
-Одна purchase transaction включает creator и platform USDC transfers.
+One purchase transaction includes the creator and platform USDC transfers.
 
-Purchase подтверждается только при полном успешном 95/5 split.
+A purchase is confirmed only after the complete 95/5 split succeeds.
 
 ---
 
 ## ADR-008 — SolArch pays network fees
 
-SolArch является fee payer.
+SolArch is the fee payer.
 
 Buyer pays archive price only.
 
@@ -74,7 +76,7 @@ Buyer pays archive price only.
 
 ## ADR-009 — Automatic creator ATA
 
-Если creator USDC ATA отсутствует, SolArch создаёт его автоматически и покрывает associated network/rent cost.
+If the creator USDC ATA is missing, SolArch creates it automatically and covers the associated network/rent cost.
 
 Prefer creation before publication.
 
@@ -82,7 +84,7 @@ Prefer creation before publication.
 
 ## ADR-010 — Payment → Entitlement → Device License
 
-Эти сущности не объединяются.
+These entities remain separate.
 
 ```text
 Payment
@@ -95,7 +97,7 @@ Payment
 
 ## ADR-011 — Device key instead of MAC
 
-Viewer генерирует asymmetric device key pair.
+The Viewer generates an asymmetric device key pair.
 
 Private key remains local.
 
@@ -107,7 +109,7 @@ Private key remains local.
 max_devices = 1
 ```
 
-Это обязательно демонстрируется на Device A / Device B.
+This must be demonstrated on Device A / Device B.
 
 ---
 
@@ -126,7 +128,7 @@ No video/audio.
 
 ## ADR-014 — Internal protected rendering
 
-Protected files не открываются через external applications.
+Protected files are not opened through external applications.
 
 Viewer renders supported formats internally.
 
@@ -169,20 +171,20 @@ It does not guarantee prevention of screenshots, recording, reverse engineering 
 
 ## ADR-018 — Desktop Viewer localization
 
-Hackathon/MVP версия SolArch Desktop Viewer поддерживает два языка:
+The hackathon/MVP version of SolArch Desktop Viewer supports two languages:
 
 ```text
 Russian
 English
 ```
 
-Windows installer обязан предоставить пользователю явный выбор `Русский` / `English` до установки.
+The Windows installer must present an explicit `Русский` / `English` choice before installation.
 
-Выбранный язык installer становится начальной locale Viewer и сохраняется как локальная пользовательская настройка.
+The selected installer language becomes the initial Viewer locale and is saved as a local user preference.
 
-Viewer должен позволять переключать язык между Russian и English после установки без переустановки приложения.
+The Viewer must allow switching between Russian and English after installation without reinstalling the application.
 
-Localization распространяется на системный UI SolArch Viewer:
+Localization applies to SolArch Viewer system UI:
 
 - locked/payment/license states;
 - errors;
@@ -191,9 +193,9 @@ Localization распространяется на системный UI SolArch
 - internal viewer controls;
 - application notifications.
 
-Localization не изменяет protected content или creator-provided metadata.
+Localization does not change protected content or creator-provided metadata.
 
-SolArch не выполняет автоматический перевод:
+SolArch does not automatically translate:
 
 ```text
 PDF/DOCX/XLSX content
@@ -203,9 +205,9 @@ file names
 file paths
 ```
 
-Language preference является локальной настройкой Desktop Viewer и не является частью `.slr` crypto format, Entitlement, Device License или Backend security decision.
+Language preference is a local Desktop Viewer setting, not part of the `.slr` crypto format, Entitlement, Device License or a Backend security decision.
 
-Все production UI strings Viewer должны проходить через единый localization/i18n layer.
+All production Viewer UI strings must use a single localization/i18n layer.
 
 
 ## ADR-019 — Exact `.slr` v1 bytes, signatures and resource profile

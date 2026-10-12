@@ -1,14 +1,18 @@
-# SolArch — общая документация проекта
+<a id="solarch--общая-документация-проекта"></a>
 
-Эта папка содержит общие договорённости команды SolArch. Документы предназначены для всех трёх веток разработки и являются общей точкой согласования интерфейсов между Archive Core/Viewer, Marketplace Frontend и Marketplace Backend.
+# SolArch — Shared Project Documentation
 
-## 1. Проект
+This directory contains the SolArch team's shared agreements. These documents apply to all three development branches and define the shared interfaces between Archive Core/Viewer, Marketplace Frontend and Marketplace Backend.
 
-**Название:** SolArch  
-**Формат защищённого контейнера:** `.slr`  
-**Основной сценарий:** защищённый цифровой контент можно свободно скачать и передать, но открыть его можно только после подтверждённой оплаты, получения Entitlement и активации device-bound license.
+<a id="1-проект"></a>
 
-Ключевая цепочка:
+## 1. Project
+
+**Name:** SolArch  
+**Protected container format:** `.slr`  
+**Primary use case:** protected digital content can be freely downloaded and shared, but can be opened only after confirmed payment, an Entitlement and activation of a device-bound license.
+
+Core flow:
 
 ```text
 Discover
@@ -22,7 +26,9 @@ Discover
 → Protected View
 ```
 
-## 2. Командные ветки
+<a id="2-командные-ветки"></a>
+
+## 2. Team branches
 
 ```text
 feat/archive-core-viewer
@@ -30,36 +36,42 @@ feat/marketplace-frontend
 feat/marketplace-backend
 ```
 
-Зоны ответственности описаны в отдельных role-файлах команды.
+Responsibilities are defined in the team's individual role files.
 
-## 3. Общие документы
+<a id="3-общие-документы"></a>
 
-Читайте в таком порядке:
+## 3. Shared documents
 
-1. `SPEC.md` — утверждённый продуктовый и MVP scope.
-2. `ARCHITECTURE.md` — компоненты, trust boundaries и связи.
-3. `API.md` — контракты Marketplace Frontend и Viewer с Backend.
-4. `SLR_FORMAT.md` — формат `.slr` и требования к контейнеру.
-5. `DATA_MODEL.md` — общая модель PostgreSQL.
-6. `PAYMENTS.md` — USDC payment flow, split 95/5, fee sponsorship и ATA.
-7. `SECURITY.md` — security rules и threat model.
-8. `INTEGRATION.md` — точки интеграции трёх веток.
-9. `TESTING.md` — обязательные unit, integration и end-to-end проверки.
+Read in this order:
 
-## 4. Приоритет документов
+1. `SPEC.md` — approved product and MVP scope.
+2. `ARCHITECTURE.md` — components, trust boundaries and relationships.
+3. `API.md` — Marketplace Frontend and Viewer contracts with Backend.
+4. `SLR_FORMAT.md` — the `.slr` format and container requirements.
+5. `DATA_MODEL.md` — shared PostgreSQL model.
+6. `PAYMENTS.md` — USDC payment flow, 95/5 split, fee sponsorship and ATA.
+7. `SECURITY.md` — security rules and threat model.
+8. `INTEGRATION.md` — integration points between the three branches.
+9. `TESTING.md` — required unit, integration and end-to-end checks.
 
-Если локальное решение в одной ветке противоречит этим общим документам, разработчик не должен молча менять общий контракт.
+<a id="4-приоритет-документов"></a>
 
-Порядок действий:
+## 4. Document precedence
+
+If a local decision in one branch conflicts with these shared documents, the developer must not silently change the shared contract.
+
+Procedure:
 
 ```text
-1. Зафиксировать конфликт.
-2. Согласовать решение всей командой.
-3. Обновить соответствующий общий документ.
-4. Только после этого менять реализацию.
+1. Document the conflict.
+2. Agree on a resolution with the entire team.
+3. Update the relevant shared document.
+4. Only then change the implementation.
 ```
 
-## 5. Неизменяемые продуктовые решения MVP
+<a id="5-неизменяемые-продуктовые-решения-mvp"></a>
+
+## 5. Immutable MVP product decisions
 
 ```text
 Product name = SolArch
@@ -79,9 +91,11 @@ Supported protected content = PDF + images + DOCX + XLSX
 No video/audio in MVP
 ```
 
-## 6. Главный Definition of Done проекта
+<a id="6-главный-definition-of-done-проекта"></a>
 
-Проект готов к hackathon demo, когда команда может показать один реальный A-to-Z flow:
+## 6. Project Definition of Done
+
+The project is ready for a hackathon demo when the team can demonstrate one real A-to-Z flow:
 
 ```text
 Creator creates archive

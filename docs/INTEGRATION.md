@@ -4,7 +4,7 @@
 
 ## 1. Purpose
 
-Этот документ позволяет трём разработчикам работать независимо до merge.
+This document enables three developers to work independently before merging.
 
 Branches:
 
@@ -14,9 +14,9 @@ feat/marketplace-frontend
 feat/marketplace-backend
 ```
 
-Главное правило:
+Core rule:
 
-> Каждая ветка должна зависеть от согласованного интерфейса, а не от незавершённой внутренней реализации другой ветки.
+> Each branch must depend on an agreed interface, not on another branch's unfinished internal implementation.
 
 ---
 
@@ -44,21 +44,21 @@ database migrations
 storage/payment/license server logic
 ```
 
-Общие config/types могут быть вынесены в shared package только после согласования.
+Shared config/types may be moved to a shared package only after agreement.
 
 ---
 
 ## 3. Frontend ↔ Backend integration
 
-Frontend использует отдельный API client.
+Frontend uses a separate API client.
 
-До готового Backend:
+Until Backend is ready:
 
 - mock server;
 - fixtures;
 - typed DTO.
 
-Запрещено в компонентах предполагать DB schema.
+Components must not make assumptions about the DB schema.
 
 Source of truth:
 
@@ -83,7 +83,7 @@ analytics
 
 ## 4. Viewer ↔ Backend integration
 
-Viewer network adapter должен покрывать:
+The Viewer network adapter must cover:
 
 ```text
 get current archive metadata
@@ -93,13 +93,13 @@ activate device
 refresh device license after 72-hour offline window
 ```
 
-До готового Backend:
+Until Backend is ready:
 
 - mock API;
 - deterministic test entitlement/license;
 - fake payment status only inside development test adapter.
 
-Production/demo adapter не должен принимать client-side fake success.
+The production/demo adapter must not accept client-side fake success.
 
 ---
 
@@ -168,7 +168,7 @@ Library interoperability candidates: RustCrypto `chacha20poly1305`, `hkdf`, `sha
 
 ## 7. Public Header ↔ Backend consistency
 
-Archive generation получает immutable snapshot:
+Archive generation receives an immutable snapshot:
 
 ```text
 archive_id

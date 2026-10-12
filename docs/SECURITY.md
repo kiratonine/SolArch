@@ -4,18 +4,18 @@
 
 ## 1. Security posture
 
-SolArch защищает цифровой контент practical DRM-моделью.
+SolArch protects digital content using a practical DRM model.
 
-Цель:
+Goals:
 
-- не хранить decryption key в `.slr`;
-- отделить payment от license;
-- привязать activation к device key;
-- не выдавать raw files через обычный Viewer UI;
-- усложнить несанкционированное распространение;
-- добавить buyer-specific traceability.
+- do not store the decryption key in `.slr`;
+- separate payment from license;
+- bind activation to the device key;
+- do not expose raw files through the standard Viewer UI;
+- make unauthorized distribution harder;
+- add buyer-specific traceability.
 
-Не обещать абсолютную защиту после отображения контента.
+Do not promise absolute protection after content is displayed.
 
 ---
 
@@ -25,7 +25,7 @@ SolArch защищает цифровой контент practical DRM-моде�
 
 Untrusted.
 
-Нельзя доверять:
+Do not trust:
 
 - price;
 - ownership;
@@ -37,13 +37,13 @@ Untrusted.
 
 Partially trusted.
 
-Viewer работает на устройстве пользователя и теоретически может быть модифицирован.
+The Viewer runs on the user's device and can, in principle, be modified.
 
-Поэтому:
+Therefore:
 
-- payment verification серверный;
+- payment verification is server-side;
 - server-signed license;
-- content key выдаётся после server authorization;
+- the content key is released after server authorization;
 - device private key stays local.
 
 ### Backend
@@ -62,15 +62,15 @@ Requires:
 
 ### Object Storage
 
-Не считать plaintext-security boundary для protected buyer content.
+Do not treat it as a plaintext security boundary for protected buyer content.
 
-Generated `.slr` остаётся encrypted.
+Generated `.slr` remains encrypted.
 
 ---
 
 ## 3. Critical secrets
 
-Нельзя логировать/коммитить:
+Do not log/commit:
 
 ```text
 SolArch fee payer private key

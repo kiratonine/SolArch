@@ -9,15 +9,15 @@
 
 ## 1. Product statement
 
-SolArch — платформа для создания, распространения, продажи и защищённого открытия цифрового контента.
+SolArch is a platform for creating, distributing, selling and securely opening digital content.
 
-Главная идея:
+Core idea:
 
-> `.slr` можно свободно скачать и переслать. Сам файл не является покупкой. Покупка создаёт право доступа, а содержимое открывается в SolArch Viewer только после подтверждённой USDC-оплаты, Entitlement и device-bound license.
+> An `.slr` can be freely downloaded and shared. The file itself is not a purchase. A purchase grants access rights; content opens in SolArch Viewer only after confirmed USDC payment, an Entitlement and a device-bound license.
 
-SolArch не позиционируется как обычный ZIP/RAR или простой paywall для ссылки.
+SolArch is not positioned as a conventional ZIP/RAR archive or a simple paywall for a link.
 
-Основная ценность:
+Core value:
 
 ```text
 protected portable container
@@ -29,59 +29,69 @@ protected portable container
 
 ---
 
-## 2. Пользовательские роли
+<a id="2-пользовательские-роли"></a>
 
-### 2.1 Посетитель / покупатель
+## 2. User roles
 
-Без регистрации может:
+<a id="21-посетитель--покупатель"></a>
 
-- открыть Marketplace;
-- просматривать опубликованные архивы;
-- видеть публичное описание;
-- видеть публичный список файлов;
-- видеть цену;
-- видеть public metrics;
-- скачать `.slr`;
-- скачать/открыть SolArch Viewer.
+### 2.1 Visitor / buyer
 
-После открытия `.slr` покупатель:
+Without registration, a visitor can:
 
-- видит locked state;
-- видит цену и правила доступа;
-- оплачивает USDC;
-- получает доступ после backend verification и device activation.
+- open Marketplace;
+- browse published archives;
+- view the public description;
+- view the public file listing;
+- view the price;
+- view public metrics;
+- download `.slr`;
+- download/open SolArch Viewer.
 
-### 2.2 Автор
+After opening `.slr`, the buyer:
 
-После аутентификации может:
+- sees the locked state;
+- sees the price and access rules;
+- pays in USDC;
+- receives access after backend verification and device activation.
 
-- создать архив;
-- загрузить ZIP или отдельные файлы;
-- задать metadata;
-- указать собственный Solana payout wallet;
-- задать цену в USDC;
-- увидеть 95/5 split;
-- настроить разрешённую license policy;
-- дождаться генерации `.slr`;
-- preview публичной карточки;
+<a id="22-автор"></a>
+
+### 2.2 Creator
+
+After authentication, a creator can:
+
+- create an archive;
+- upload a ZIP or individual files;
+- set metadata;
+- specify their own Solana payout wallet;
+- set the price in USDC;
+- view the 95/5 split;
+- configure the permitted license policy;
+- wait for `.slr` generation;
+- preview the public card;
 - publish/unpublish;
-- получить публичную ссылку;
-- скачать собственный `.slr`;
-- видеть analytics.
+- obtain a public link;
+- download their own `.slr`;
+- view analytics.
 
-### 2.3 Администратор
+<a id="23-администратор"></a>
 
-Для MVP нужен минимальный moderation capability:
+### 2.3 Administrator
 
-- скрыть/заблокировать listing;
-- изменить moderation status;
-- запретить public download заблокированного архива.
+The MVP requires minimal moderation capabilities:
 
-Полноценная admin platform не является обязательной.
+- hide/block a listing;
+- change moderation status;
+- prevent public downloads of a blocked archive.
+
+A full admin platform is not required.
 
 ---
 
-## 3. Утверждённая экономика
+<a id="3-утверждённая-экономика"></a>
+
+## 3. Approved economics
 
 ```text
 Payment asset = USDC only
@@ -89,7 +99,7 @@ Platform fee = 5%
 Creator share = 95%
 ```
 
-Пример:
+Example:
 
 ```text
 Archive price:       10.00 USDC
@@ -101,21 +111,21 @@ Network fees:        paid by SolArch
 
 ### 3.1 Non-custodial
 
-SolArch не создаёт автору custodial wallet.
+SolArch does not create a custodial wallet for the creator.
 
-Автор указывает собственный Solana wallet.
+The creator specifies their own Solana wallet.
 
-SolArch не хранит:
+SolArch does not store:
 
 - creator seed phrase;
 - creator private key;
 - custodial creator balance.
 
-В MVP отсутствует withdrawal/payout subsystem.
+The MVP has no withdrawal/payout subsystem.
 
 ### 3.2 Price immutability
 
-Цена задаётся при создании архива и после создания не меняется.
+The price is set at archive creation and does not change after creation.
 
 Immutable:
 
@@ -125,11 +135,13 @@ price_currency
 platform_fee_bps
 ```
 
-Если автор хочет другую цену, он создаёт новый archive.
+If the creator wants a different price, they create a new archive.
 
 ---
 
-## 4. Поддерживаемый контент MVP
+<a id="4-поддерживаемый-контент-mvp"></a>
+
+## 4. Supported MVP content
 
 Protected internal viewing:
 
@@ -142,7 +154,7 @@ DOCX
 XLSX
 ```
 
-Не входит:
+Excluded:
 
 ```text
 video
@@ -153,17 +165,17 @@ legacy XLS
 specialized CAD/PSD/3D
 ```
 
-DOCX/XLSX не должны открываться во внешнем Microsoft Office в режиме protected viewing.
+DOCX/XLSX must not open in external Microsoft Office during protected viewing.
 
 ---
 
 ## 5. `.slr` distribution model
 
-`.slr` v1 является self-contained encrypted container.
+`.slr` v1 is a self-contained encrypted container.
 
-Он должен содержать зашифрованные данные файлов, необходимые для локального protected viewing после получения content key.
+It must contain the encrypted file data required for local protected viewing after obtaining the content key.
 
-Поддерживаются два distribution flow:
+Two distribution flows are supported:
 
 ```text
 Marketplace-first:
@@ -177,9 +189,11 @@ Telegram / Discord / email / Drive / USB → .slr → Viewer
 
 ## 6. Marketplace MVP
 
-### 6.1 Публичные функции
+<a id="61-публичные-функции"></a>
 
-Обязательно:
+### 6.1 Public features
+
+Required:
 
 - landing/catalog;
 - archive cards;
@@ -190,11 +204,11 @@ Telegram / Discord / email / Drive / USB → .slr → Viewer
 - public metrics;
 - guest `.slr` download;
 - Viewer download link;
-- сортировки.
+- sorting.
 
 ### 6.2 Public metrics
 
-Любой посетитель видит:
+Every visitor sees:
 
 ```text
 views
@@ -204,7 +218,7 @@ paid unlocks
 
 ### 6.3 Creator analytics
 
-Автор видит:
+The creator sees:
 
 ```text
 views
@@ -217,7 +231,7 @@ view → download conversion
 download → purchase conversion
 ```
 
-Рекомендуемые периоды:
+Recommended periods:
 
 ```text
 7 days
@@ -229,82 +243,82 @@ all time
 
 ## 7. Viewer MVP
 
-Viewer должен:
+The Viewer must:
 
-- запускаться при открытии `.slr`;
-- читать public header;
-- показывать locked state;
-- показывать текущую цену/policy;
-- показывать payment QR;
-- работать с backend payment flow;
-- генерировать и хранить device key;
-- активировать device-bound license;
-- повторно открывать архив на том же устройстве;
-- рендерить поддерживаемые типы внутри приложения;
-- отображать buyer/license watermark;
-- не иметь стандартного Extract All / Save As / Open External для protected content.
+- launch when an `.slr` is opened;
+- read the public header;
+- display the locked state;
+- display the current price/policy;
+- display the payment QR;
+- use the backend payment flow;
+- generate and store the device key;
+- activate a device-bound license;
+- reopen the archive on the same device;
+- render supported types inside the application;
+- display the buyer/license watermark;
+- provide no standard Extract All / Save As / Open External for protected content.
 
 ---
 
 ### 7.1 Viewer localization
 
-SolArch Desktop Viewer для hackathon/MVP должен поддерживать два языка интерфейса:
+SolArch Desktop Viewer for the hackathon/MVP must support two interface languages:
 
 ```text
 Russian
 English
 ```
 
-Windows installer должен до установки предоставить пользователю явный выбор языка:
+The Windows installer must present an explicit language choice before installation:
 
 ```text
 Русский
 English
 ```
 
-Выбранный язык installer становится начальным языком SolArch Viewer.
+The selected installer language becomes the initial SolArch Viewer language.
 
-Локализованы должны быть все системные элементы Desktop Viewer, включая:
+All Desktop Viewer system elements must be localized, including:
 
 - installer;
 - first-run UI;
 - locked/unlocked states;
 - archive information UI;
-- payment UI и payment states;
+- payment UI and payment states;
 - device activation UI;
 - license states;
 - error/loading/success states;
 - PDF/image/DOCX/XLSX viewer controls;
 - settings;
-- dialogs и пользовательские уведомления Viewer.
+- dialogs and Viewer user notifications.
 
-Выбранный язык должен сохраняться между перезапусками приложения.
+The selected language must persist across application restarts.
 
-Пользователь должен иметь возможность позже изменить язык:
+The user must be able to change the language later:
 
 ```text
 Russian ↔ English
 ```
 
-в настройках Viewer без переустановки приложения.
+in Viewer settings without reinstalling the application.
 
-Protected content и creator-provided metadata автоматически не переводятся.
+Protected content and creator-provided metadata are not translated automatically.
 
-К таким данным относятся:
+This includes:
 
-- содержимое PDF/DOCX/XLSX;
-- изображения;
-- archive title, если он задан автором;
-- archive description, если он задан автором;
-- file names и paths.
+- PDF/DOCX/XLSX content;
+- images;
+- archive title, if provided by the creator;
+- archive description, if provided by the creator;
+- file names and paths.
 
-Все системные пользовательские строки Viewer должны использовать общий localization/i18n layer. Production UI не должен содержать дублированные Russian/English компоненты или захардкоженные пользовательские строки вне localization resources.
+All Viewer system UI strings must use a shared localization/i18n layer. Production UI must not contain duplicate Russian/English components or hard-coded user-facing strings outside localization resources.
 
 ---
 
 ## 8. Licensing model
 
-Строго разделять:
+Keep strictly separate:
 
 ```text
 Payment
@@ -313,14 +327,14 @@ Device License
 Content Key
 ```
 
-Определения:
+Definitions:
 
-- **Payment** — подтверждённый on-chain факт оплаты.
-- **Entitlement** — право buyer на конкретный archive.
-- **Device License** — активация Entitlement на конкретном device public key.
-- **Content Key** — ключ, позволяющий расшифровывать protected content.
+- **Payment** — a confirmed on-chain payment.
+- **Entitlement** — the buyer's access right to a specific archive.
+- **Device License** — activation of an Entitlement for a specific device public key.
+- **Content Key** — the key used to decrypt protected content.
 
-Для MVP:
+For the MVP:
 
 ```text
 max_devices = 1
@@ -330,7 +344,7 @@ max_devices = 1
 
 ## 9. Marketplace sorting
 
-Обязательно:
+Required:
 
 ```text
 popular_week
@@ -340,7 +354,7 @@ price_asc
 price_desc
 ```
 
-Для первой версии допустима формула:
+The following formula is acceptable for the first version:
 
 ```text
 popular_week/month:
@@ -348,13 +362,13 @@ confirmed_payments DESC
 downloads DESC as secondary sort
 ```
 
-с фильтрацией событий по соответствующему периоду.
+with events filtered by the relevant period.
 
 ---
 
 ## 10. Out of scope
 
-Не делать в hackathon MVP:
+Do not implement in the hackathon MVP:
 
 - SOL pricing;
 - dynamic FX;
@@ -385,91 +399,91 @@ downloads DESC as secondary sort
 
 ### AC-01
 
-Гость открывает Marketplace без login и видит опубликованные архивы.
+A guest opens Marketplace without login and sees published archives.
 
 ### AC-02
 
-Гость открывает archive page и видит title, description, price, file listing, access rules и public metrics.
+A guest opens the archive page and sees the title, description, price, file listing, access rules and public metrics.
 
 ### AC-03
 
-Гость скачивает `.slr` без регистрации и оплаты.
+A guest downloads `.slr` without registration or payment.
 
 ### AC-04
 
-Marketplace никогда не выдаёт original ZIP/raw protected files гостю.
+Marketplace never exposes the original ZIP/raw protected files to a guest.
 
 ### AC-05
 
-При открытии unpaid `.slr` Viewer показывает locked state и payment flow.
+When an unpaid `.slr` is opened, the Viewer displays the locked state and payment flow.
 
 ### AC-06
 
-Покупатель платит только USDC archive price.
+The buyer pays only the USDC archive price.
 
 ### AC-07
 
-Одна подтверждённая transaction распределяет 95% creator и 5% SolArch.
+One confirmed transaction distributes 95% to the creator and 5% to SolArch.
 
 ### AC-08
 
-Network fee оплачивает SolArch.
+SolArch pays the network fee.
 
 ### AC-09
 
-После полной backend verification создаётся Entitlement.
+An Entitlement is created after complete backend verification.
 
 ### AC-10
 
-Device A активируется и открывает archive.
+Device A activates and opens the archive.
 
 ### AC-11
 
-Device B отклоняется, если `max_devices = 1`.
+Device B is rejected if `max_devices = 1`.
 
 ### AC-12
 
-PDF/image/DOCX/XLSX открываются внутри Viewer.
+PDF/image/DOCX/XLSX open inside the Viewer.
 
 ### AC-13
 
-Protected content имеет видимый watermark.
+Protected content has a visible watermark.
 
 ### AC-14
 
-Цена archive не может быть изменена после создания.
+The archive price cannot be changed after creation.
 
 ### AC-15
 
-Если creator USDC ATA отсутствует, SolArch создаёт его автоматически.
+If the creator USDC ATA is missing, SolArch creates it automatically.
 
 ### AC-16
 
-Public metrics корректно показывают views, downloads и paid unlocks.
+Public metrics correctly display views, downloads and paid unlocks.
 
 ### AC-17
 
-`paid unlocks` увеличивается только после blockchain-verified payment.
+`paid unlocks` increases only after blockchain-verified payment.
 
 ### AC-18
 
-При запуске Windows installer пользователь может явно выбрать `Русский` или `English`, и выбранный язык используется installer и становится начальным языком SolArch Viewer.
+When the Windows installer starts, the user can explicitly choose `Русский` or `English`; the selected language is used by the installer and becomes the initial SolArch Viewer language.
 
 ### AC-19
 
-Выбранный язык сохраняется между перезапусками Viewer, а пользователь может изменить `Russian ↔ English` в Settings без переустановки приложения.
+The selected language persists across Viewer restarts, and the user can switch `Russian ↔ English` in Settings without reinstalling the application.
 
 ### AC-20
 
-Системный UI Viewer локализован на Russian и English, при этом protected content, creator-provided title/description и file names автоматически не переводятся.
+Viewer system UI is localized in Russian and English, while protected content, creator-provided title/description and file names are not translated automatically.
 
 ---
 
 ## 12. Product limitation
 
-SolArch использует practical DRM и traceability.
+SolArch uses practical DRM and traceability.
 
-Нельзя заявлять абсолютную невозможность:
+Do not claim absolute prevention of:
 
 - screen recording;
 - screenshots;
@@ -477,6 +491,6 @@ SolArch использует practical DRM и traceability.
 - reverse engineering;
 - photographing the screen.
 
-Корректная формулировка:
+Correct wording:
 
-> SolArch снижает риск несанкционированного распространения и делает перенос защищённого файла независимым от права его открыть, но не гарантирует абсолютную DRM-защиту после отображения контента пользователю.
+> SolArch reduces the risk of unauthorized distribution and separates the transfer of a protected file from the right to open it, but does not guarantee absolute DRM protection after content is displayed to the user.

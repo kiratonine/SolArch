@@ -2,9 +2,11 @@
 
 ---
 
-## 1. Архитектурная цель
+<a id="1-архитектурная-цель"></a>
 
-SolArch состоит из трёх независимо разрабатываемых областей:
+## 1. Architectural goal
+
+SolArch consists of three independently developed areas:
 
 ```text
 Archive Core + Desktop Viewer
@@ -12,7 +14,7 @@ Marketplace Frontend
 Marketplace Backend + Solana
 ```
 
-Главный архитектурный принцип:
+Core architectural principle:
 
 ```text
 Frontend and Viewer are not trusted for payment decisions.
@@ -84,7 +86,7 @@ Backend is authoritative for payment verification and access rights.
 
 ### 3.1 Marketplace Frontend
 
-Отвечает за:
+Responsible for:
 
 - public catalog;
 - public archive page;
@@ -95,7 +97,7 @@ Backend is authoritative for payment verification and access rights.
 - creator analytics rendering;
 - auth/session UI.
 
-Не отвечает за:
+Not responsible for:
 
 - blockchain verification;
 - private keys;
@@ -105,7 +107,7 @@ Backend is authoritative for payment verification and access rights.
 
 ### 3.2 Marketplace Backend
 
-Отвечает за:
+Responsible for:
 
 - authentication;
 - ownership;
@@ -126,7 +128,7 @@ Backend is authoritative for payment verification and access rights.
 
 ### 3.3 `solarch-core`
 
-Отвечает за:
+Responsible for:
 
 - `.slr` binary format;
 - manifest;
@@ -138,7 +140,7 @@ Backend is authoritative for payment verification and access rights.
 
 ### 3.4 SolArch Viewer
 
-Отвечает за:
+Responsible for:
 
 - file association;
 - device key;
@@ -188,7 +190,7 @@ analytics source of truth
 
 ### `.slr` contains a signed snapshot
 
-Public header может содержать:
+The public header may contain:
 
 - `archive_id`;
 - title snapshot;
@@ -199,9 +201,9 @@ Public header может содержать:
 
 Final-file fingerprint is not embedded in PublicHeader; Viewer computes it over all finalized bytes and compares Backend metadata. Exact schema is SLR_FORMAT.md.
 
-Но при online first unlock authoritative state получает Viewer с Backend.
+However, during the first online unlock, the Viewer obtains authoritative state from Backend.
 
-Backend является источником истины для:
+Backend is the source of truth for:
 
 ```text
 archive exists
@@ -230,7 +232,7 @@ Creator upload
 → archive technical_status = ready
 ```
 
-До merge Rust-ветки Backend может использовать mock/stub ArchiveBuilder.
+Before the Rust branch is merged, Backend may use a mock/stub ArchiveBuilder.
 
 ---
 
@@ -305,15 +307,15 @@ Original source files are not public buyer assets.
 
 ### Blockchain failure
 
-Не создавать Entitlement.
+Do not create an Entitlement.
 
 ### License activation failure
 
-Payment сохраняется confirmed, но Viewer не должен открывать protected content до valid Device License.
+Payment remains confirmed, but the Viewer must not open protected content until it has a valid Device License.
 
 ### `.slr` corruption
 
-Viewer останавливает parsing/decryption и показывает integrity error.
+The Viewer stops parsing/decryption and displays an integrity error.
 
 ### Backend unavailable after previously activated license
 
@@ -326,13 +328,13 @@ without a trusted-clock guarantee.
 
 ### Archive blocked
 
-Новые public downloads/payment intents запрещаются.
+New public downloads/payment intents are prohibited.
 
 ---
 
 ## 11. Shared interfaces
 
-Главные интерфейсы между ветками:
+Main interfaces between branches:
 
 ```text
 Frontend ↔ Backend:
@@ -351,4 +353,4 @@ Backend ↔ Solana:
 RPC + transaction construction/verification
 ```
 
-Подробности — `API.md` и `INTEGRATION.md`.
+For details, see `API.md` and `INTEGRATION.md`.

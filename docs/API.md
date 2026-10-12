@@ -1,16 +1,18 @@
 # SolArch — Shared API Contract
 
 **Base prefix:** `/v1`  
-**Transport:** HTTPS + JSON, кроме binary download/upload частей.  
-**Status:** общий контракт; конкретные DTO могут уточняться только через командное изменение этого файла.
+**Transport:** HTTPS + JSON, except for binary download/upload payloads.  
+**Status:** shared contract; specific DTOs may be refined only through a team-approved change to this file.
 
 ---
 
-## 1. Общие правила
+<a id="1-общие-правила"></a>
+
+## 1. General rules
 
 ### 1.1 Identifiers
 
-Использовать непрозрачные IDs:
+Use opaque IDs:
 
 ```text
 archive_id
@@ -21,11 +23,11 @@ entitlement_id
 license_id
 ```
 
-Клиент не должен выводить бизнес-логику из формата ID.
+The client must not infer business logic from the ID format.
 
 ### 1.2 Money
 
-USDC amounts передавать как decimal string:
+Transmit USDC amounts as decimal strings:
 
 ```json
 {
@@ -34,11 +36,11 @@ USDC amounts передавать как decimal string:
 }
 ```
 
-Не использовать JavaScript float как источник истины для финансовых вычислений.
+Do not use JavaScript floating-point numbers as the source of truth for financial calculations.
 
 ### 1.3 Error shape
 
-Рекомендуемый единый формат:
+Recommended common format:
 
 ```json
 {
@@ -50,15 +52,15 @@ USDC amounts передавать как decimal string:
 
 ### 1.4 Public vs authenticated
 
-Public endpoints не требуют creator login.
+Public endpoints do not require creator login.
 
-Creator endpoints требуют auth и ownership check.
+Creator endpoints require authentication and an ownership check.
 
-В MVP buyer account/login отсутствует. Viewer не открывает SolArch auth page, не
-подключает buyer wallet и не выполняет wallet challenge/signMessage для payment
-activation или последующих открытий. `buyer_wallet` определяется Backend только
-из authoritative подтверждённой USDC transaction и никогда не принимается от
-Viewer как доказательство ownership или authorization.
+The MVP has no buyer account/login. The Viewer does not open a SolArch auth page,
+connect a buyer wallet or perform a wallet challenge/signMessage for payment
+activation or subsequent opens. Backend derives `buyer_wallet` only from the
+authoritative confirmed USDC transaction and never accepts it from the Viewer
+as proof of ownership or authorization.
 
 ---
 
@@ -85,8 +87,8 @@ Response:
 
 ## POST `/v1/auth/wallet/verify`
 
-Этот endpoint относится только к creator auth. Он не используется Viewer или
-покупателем при payment, activation либо refresh Device License.
+This endpoint is for creator authentication only. It is not used by the Viewer or
+buyer for payment, activation or Device License refresh.
 
 Request:
 
@@ -168,7 +170,7 @@ Response:
 
 ### Immutable fields
 
-После create обычный update не может менять:
+After creation, a regular update cannot change:
 
 ```text
 price.amount
@@ -184,7 +186,7 @@ Owner-only archive detail.
 
 ## PATCH `/v1/archives/:archiveId`
 
-Можно менять editable metadata, например:
+Editable metadata may be changed, for example:
 
 - title;
 - descriptions;
@@ -192,14 +194,14 @@ Owner-only archive detail.
 - permitted listing fields;
 - 일부 policy fields only if agreed in SPEC.
 
-Нельзя менять immutable price.
-Обложка меняется только через binary endpoint ниже. `PATCH` не принимает
-клиентские storage keys или `cover_url`.
+The immutable price must not be changed.
+The cover is changed only through the binary endpoint below. `PATCH` does not
+accept client-provided storage keys or `cover_url`.
 
 ## POST `/v1/archives/:archiveId/cover`
 
-Owner-only замена необязательной Marketplace-обложки. Request имеет
-`Content-Type: multipart/form-data` и ровно одно поле `file`.
+Owner-only replacement of the optional Marketplace cover. The request uses
+`Content-Type: multipart/form-data` and exactly one `file` field.
 
 MVP profile:
 
@@ -211,12 +213,12 @@ decoded pixel count <= 16777216
 single-frame image only
 ```
 
-Backend не доверяет filename extension и multipart `Content-Type`: он должен
-декодировать и пересобрать весь image, проверить exact format/dimensions и
-отклонить SVG, HTML, animated/multi-frame и malformed input. Исходные байты
-никогда не публикуются, поэтому trailing/polyglot payload не переносится в обложку. Storage
-key генерирует Backend и никогда не принимает от клиента. Новая обложка
-атомарно заменяет DB reference; при ошибке прежняя обложка остаётся активной.
+Backend does not trust the filename extension or multipart `Content-Type`: it must
+decode and rebuild the entire image, check the exact format/dimensions and
+reject SVG, HTML, animated/multi-frame and malformed input. Original bytes are
+never published, so trailing/polyglot payloads are not carried into the cover. Backend
+generates the storage key and never accepts it from the client. The new cover
+atomically replaces the DB reference; on failure, the previous cover remains active.
 
 Response:
 
@@ -227,8 +229,8 @@ Response:
 }
 ```
 
-`cover_url` — контролируемый Backend public URL, а не object-storage path. Live
-environment возвращает HTTPS URL. Invalid image → 400 `INVALID_COVER`, size
+`cover_url` is a Backend-controlled public URL, not an object-storage path. A live
+environment returns an HTTPS URL. Invalid image → 400 `INVALID_COVER`, size
 overflow → 413 `COVER_TOO_LARGE`, absent/not-owned archive → 404
 `ARCHIVE_NOT_FOUND`.
 
@@ -255,9 +257,9 @@ Owner download of generated `.slr`.
 
 # 4. Upload API
 
-Для MVP допускается simple upload или multipart, но API должен скрывать storage implementation.
+The MVP permits simple upload or multipart, but the API must hide the storage implementation.
 
-Минимальный контракт:
+Minimum contract:
 
 ## POST `/v1/uploads/init`
 
@@ -271,7 +273,7 @@ Owner download of generated `.slr`.
 
 ## POST/PUT upload data
 
-Конкретный transport может быть signed upload URL.
+The transport may use a signed upload URL.
 
 ## POST `/v1/uploads/:uploadId/complete`
 
@@ -385,7 +387,7 @@ uses the server-validated `image/png`, `image/jpeg` or `image/webp` media type,
 
 # 6. Viewer Public Metadata API
 
-Viewer должен получать authoritative metadata до payment. `archive_fingerprint` below is a shape-only all-zero example; production returns the actual finalized-file SHA-256 from SLR_FORMAT.md. Response also requires `platform_fee_bps: 500` for snapshot comparison.
+The Viewer must obtain authoritative metadata before payment. `archive_fingerprint` below is a shape-only all-zero example; production returns the actual finalized-file SHA-256 from SLR_FORMAT.md. Response also requires `platform_fee_bps: 500` for snapshot comparison.
 
 ## GET `/v1/viewer/archives/:archiveId`
 
@@ -500,7 +502,7 @@ activation; its client secret remains valid through first activation and the
 denial or credential revocation occurs. The recovery window starts only after
 first successful activation.
 
-Frontend/Viewer не должен менять trusted amounts/recipients.
+Frontend/Viewer must not change trusted amounts/recipients.
 
 ## 7.1 GET/POST `/v1/solana-pay/payment-intents/:paymentIntentId/transaction`
 
@@ -745,7 +747,7 @@ success observed at `awaiting_finality` stays reconcilable until authoritative
 success or authoritative chain evidence that it did not finalize; internal/RPC/DB
 errors remain retryable.
 
-Backend обязан проверить все условия из `PAYMENTS.md`.
+Backend must verify all conditions in `PAYMENTS.md`.
 
 Terminal expired/failed intent returns 410 `PAYMENT_INTENT_EXPIRED` or 403
 `PAYMENT_FAILED`; wrong key returns 409 `DEVICE_BINDING_MISMATCH`; bad/missing
